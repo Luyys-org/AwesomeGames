@@ -1,0 +1,232 @@
+---
+description: Leaders core game rules and mechanics. Use when implementing or changing game logic, rules engine, board state, or character abilities.
+globs: "**/game/**/*.tsx
+alwaysApply: false
+---
+
+# Leaders — game mechanics (authoritative for agents)
+
+**Leaders** is a 1v1, turn-based strategy game inspired by the board game *Leaders*, played on a hex grid. Your side is **black**, the opponent **white**.
+
+When this rule applies: implement **only** what is specified here. If behavior is missing or ambiguous, **stop and ask** — do not infer from other games.
+
+---
+
+## Board
+
+| Property | Specification |
+|----------|----------------|
+| Topology | **37 cells** in a hex-shaped board; row sizes **4-5-6-7-6-5-4** (top → bottom), **6-neighbor** adjacency |
+| Reference | Match the physical *Leaders* board layout (corner thrones, outer-edge recruitment band); use product reference art for UX |
+| Lines | **Straight lines** = the **3 axial directions** on the hex grid |
+| Crowns | **Fixed** throne cells at the **two tips** of the board (one per player, **mirrored** through the board center), each on the **corner cell facing that player** |
+| Board config | Canonical cell IDs, coordinates, crown cells, and recruitment-zone membership live in **board configuration** |
+
+### Recruitment placement zone
+
+During Recruitment, place the figure on an **empty** cell on **both outer borders of the board that meet at that player's corner** (the corner where their crown sits). If no such cell is empty, that recruitment is **illegal**.
+
+---
+
+## Movement and occupancy (global)
+
+- **No jumping** over other characters and **no overlapping** two characters on one cell, **except** where a character ability **explicitly** allows it.
+- **Explicit exceptions in this ruleset:** Shaman **FROG** (may pass through occupied cells while moving); **ACROBAT** (jumps **over** exactly one **adjacent** character per jump; **landing cell must be empty**).
+- All other moves (including **RIDER**, **NEMESIS** forced move, **ROYAL GUARD** chain, default 1-step move) require every entered cell to be **empty** before the move.
+
+---
+
+## Pieces, cards, and setup
+
+1. Each player selects a **Leader** (may be the **same** Leader type).
+2. Place each Leader on their crown cell; place the Leader **card** in front of that player.
+3. Build the deck: **exactly one** card per **non-Leader** character type; remove both Leaders from the deck; **shuffle**.
+4. Reveal **3** face-up cards beside the deck; after each recruitment, reveal from the deck so **3** face-up cards remain when the deck allows.
+5. **First player** is chosen **at random**.
+
+**Card limit:** At most **5** character cards in front of a player (**Leader included**). If they already have 5, **skip** Recruitment.
+
+---
+
+## Turn structure
+
+Each turn:
+
+1. **Action Phase**
+2. **Recruitment Phase** (unless skipped)
+
+Then the opponent's turn.
+
+### Second player compensation (turn 1 only)
+
+**Player 2** on their **first** turn: **Action Phase → Recruitment Phase → Recruitment Phase**.
+
+### Action Phase
+
+- Each of **your** characters may perform **at most one** action this phase — **optional** (you may **skip** any character).
+- Per character that acts: **either**
+  - **move** to an **adjacent empty** cell, **or**
+  - use **Active Ability** (if any),
+  - unless **Special** / passive rules replace movement (see characters).
+- You choose **order**; you may **end the phase early** (remaining characters skipped).
+- **Default move:** **1** step to an **adjacent empty** hex.
+
+### Recruitment Phase
+
+- Skip if you already have **5** cards (Leader included).
+- You **must** choose a **legal** face-up card only (illegal offers are not selectable).
+- If **no** face-up card is legal to recruit, **skip** Recruitment.
+- Place the figure on an **empty** cell in the **recruitment zone**.
+- Reveal from deck to restore **3** face-up offers when possible.
+
+**HERMIT & CUB:** One legal pick recruits **both**. Allowed only if you can place **two** figures and have **fewer than 4 non-Leader** cards in front of you. In Action Phase you may act with **Hermit**, **Cub**, or **both** consecutively (each at most one action).
+
+---
+
+## Win, loss, and check timing
+
+### Victory conditions
+
+Opponent **Leader** is defeated if:
+
+- **Captured:** qualifying captors per **Capture helpers**, or
+- **Surrounded:** **zero** empty adjacent hexes (occupants may be any mix; only empties matter).
+
+### When checks run
+
+| Trigger | When |
+|---------|------|
+| **SNIPER** passive | **Start of your turn**, before Action Phase — if true, **match ends immediately** |
+| **Capture / surround** (actions, recruitment, other passives e.g. **ASSASSIN**, **ARCHER**) | **End of active player's full turn** (after Action and all Recruitment phase(s) for that turn) |
+
+### Leader safety (active player)
+
+You **must not** complete any action you control (moves, abilities, pushes, swaps, recruitment placement, etc.) that would leave **your** Leader **captured** or **surrounded** at **end of your full turn**, except **NEMESIS** (below). Illegal actions are **rejected** by the rules engine.
+
+---
+
+## Global definitions
+
+| Term | Meaning |
+|------|---------|
+| **Character** | Any figure on the board |
+| **Ally / Enemy** | Relative to the acting player |
+| **Move** | Any effect that changes a character's cell |
+| **Visible** | Same **straight hex line**, **no character** on cells **strictly between** |
+| **Adjacent** | Distance **1** (shares an edge) |
+| **Clear line** | No character occupies any cell **strictly between** the relevant endpoints on that straight line (used by **CLAW LAUNCHER** and similar) |
+
+### Capture helpers
+
+- **Standard capture:** **two enemy** characters **adjacent** to the enemy Leader.
+- **ARCHER:** **2** hexes on a straight line; may help even if not **visible**; **not** if Archer is **adjacent**; counts as **one** captor — **second captor still required**.
+- **ASSASSIN:** **Adjacent** to enemy Leader ⇒ capture **without** a second captor (checked at **end of turn** unless state already decisive).
+- **SNIPER:** **3+** hexes on a straight line; visibility **not** required; **no** ally help required — **immediate** win at turn start when true.
+- **Never count as captors** (even if adjacent or on line): **FROG**, **WILL-O'-THE-WISP**, **CUB** — they **never** contribute to capture conditions.
+
+---
+
+## Characters
+
+- **Active:** instead of default move that action (unless stated otherwise).
+- **Passive:** while in play; timing as stated.
+- **Special:** may replace normal movement rules.
+
+### LEADER
+
+No special ability. Default move; **VIZIER** may add one step.
+
+### SHAMAN
+
+- **Active:** **Visible** **non-Leader** on a straight line becomes **FROG** until after the **opponent's next full turn** (their Action + Recruitment), then **reverts** before your following turn.
+- **FROG:** Move up to **2** spaces; may **pass through** occupied cells; **never** helps capture; if the piece **already acted** this Action Phase, it **cannot** act again as Frog.
+
+### SNIPER
+
+- **Passive:** At **start of your turn**, before Action Phase — if enemy Leader is **3+** away on a straight line, **you win immediately**.
+
+### TACTICIAN
+
+- **Active:** If an **ally** is **adjacent** to **enemy Leader**: move a **non-Leader ally** **1** space; that ally **cannot** use **active** ability this turn.
+
+### WILL-O'-THE-WISP
+
+- **Special:** Move to **any empty** cell; **never** helps capture.
+
+### ACROBAT
+
+- **Active:** Jump in a straight line **over** one **adjacent** character; **landing empty**; may jump **twice**; second jump may use a **different** straight direction; still **one** adjacent character jumped per jump.
+
+### RIDER
+
+- **Active:** Move **2** spaces in one straight line; **both** intermediate (if any) and destination must be **empty**.
+
+### BRUISER
+
+- **Active:** Enter **adjacent enemy's** cell (enemy **pushed**); **acting player** chooses which of the **three** opposite hexes the enemy occupies (must be **legal**: empty, on board).
+
+### ROYAL GUARD
+
+- **Active:** Move to an **empty** cell **adjacent to your Leader**; then optionally **1** more space to an **empty** cell.
+
+### ILLUSIONIST
+
+- **Active:** **Swap** with **non-adjacent**, **visible** character on a straight line.
+
+### CLAW LAUNCHER
+
+- **Active** (choose one; line must be **clear** — no characters between endpoints that the motion uses):
+  - **Advance:** Move along straight line toward a **visible** character to the **empty** cell **adjacent** to them on that line (cannot overlap).
+  - **Drag:** Pull that **visible** character along the line toward you until **adjacent** to you; cells they cross must be **clear**; **Claw Launcher does not move**.
+
+### MANIPULATOR
+
+- **Active:** **Visible** **non-adjacent enemy** on straight line moves **1** space along that line; **acting player** chooses **toward** or **away** from Manipulator; destination must be **empty** and on board.
+
+### WANDERER
+
+- **Active:** Move to any **empty** cell **not adjacent** to any **enemy**.
+
+### BREWMASTER
+
+- **Active:** Move an **adjacent ally** **1** space to an **empty** cell.
+
+### ARCHER
+
+- **Passive:** Helps capture from **2** spaces on straight line (see helpers); not if adjacent.
+
+### ASSASSIN
+
+- **Passive:** Adjacent to enemy Leader ⇒ capture without second captor (end-of-turn check).
+
+### JAILOR
+
+- **Passive:** **Adjacent enemies** cannot use **Active** abilities.
+
+### PROTECTOR
+
+- **Passive:** **Enemy** abilities cannot **move** Protector or **adjacent allies**.
+
+### VIZIER
+
+- **Passive:** Your Leader may move **1 additional** empty step during its action (Leader safety still applies).
+
+### NEMESIS
+
+- **Special:** No voluntary move in your Action Phase.
+- When **enemy Leader moves**, Nemesis **must** move **2** spaces ending on a **different empty** cell (standard occupancy rules on path).
+- **Only Nemesis** may break Leader safety mid-resolution; **capture/surround** for **both** Leaders is checked **after** Nemesis's forced move, not before.
+
+### HERMIT & CUB
+
+- See Recruitment and Action Phase above; **Cub** **never** helps capture.
+
+---
+
+## Rules engine expectations
+
+- Single source of truth for board, hands, face-up offers, phase, and frog timers.
+- Validate before mutate; reject illegal moves.
+- Resolution order: **Sniper** (immediate win) → Action Phase (player order) → Recruitment(s) → **end-of-turn** capture/surround (+ Leader safety already enforced).
+- Shared hex primitives: `neighbors`, `line`, `visibility`, `clearLine`, `distance`, `occupancy`, `push`, `swap`.
+- Board topology **37 cells** / recruitment zones must match configuration, not an ad-hoc grid.

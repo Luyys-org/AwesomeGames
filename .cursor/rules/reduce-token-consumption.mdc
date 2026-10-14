@@ -1,0 +1,56 @@
+---
+description: Keep agent context and replies lean without sacrificing correctness
+alwaysApply: true
+---
+
+# Reduce token consumption
+
+Apply these habits on every turn. **Never skip steps or omit needed context to save tokens**—optimize *how* you gather and present information, not whether the task is done properly.
+
+## Context gathering
+
+- **Search before read**: Prefer `Grep`, `Glob`, and scoped searches over opening whole trees or large files.
+- **Read narrowly**: Use `offset`/`limit` on large files; re-read only the ranges that changed or that you still need.
+- **One pass**: Cache what you already learned this session; do not re-run the same command or re-read the same file without a new reason.
+- **Parallelize**: Batch independent tool calls in one message instead of serial discovery loops.
+- **Skip noise**: Do not read `node_modules`, build output, vendored deps, binaries, or huge lockfiles unless the task requires it.
+
+## Exploration depth
+
+- Match effort to the question: a pinpoint fix needs one file and a few references, not a repo tour.
+- Use subagents (`explore`, `generalPurpose`) for broad or ambiguous searches; handle narrow, known paths yourself.
+- Cap search output with `head_limit` when you only need a sample of matches.
+
+## Terminal and tools
+
+- Prefer focused commands with clear filters over verbose dumps (`git diff` on a path, not the whole repo).
+- Summarize command results for the user; paste full logs only when debugging or when the user asks.
+- Do not start long-running processes or re-run builds unless needed to verify a change.
+
+## Code in chat
+
+- Cite existing code with `startLine:endLine:filepath` blocks; do not paste entire files the user can open.
+- In suggestions, show only the changed hunks; use `// ...` for omitted context.
+- Avoid duplicating the same snippet in prose and in a fence.
+
+## Edits
+
+- Smallest correct diff; do not refactor or reformat unrelated code.
+- After edits, run linters/tests only when they add signal for this change—not by default on every file touch.
+
+## Skills, rules, and docs
+
+- Read a skill file only when the task matches its description; read the sections you need, not the whole doc when a partial read suffices.
+- Do not quote long external docs back; distill the decision that affects the code.
+
+## Replies to the user
+
+- Lead with the answer or outcome; keep explanations proportional to task complexity.
+- Skip restating the full conversation, the user's rules, or tool names unless clarifying a decision.
+- Use links and citations instead of copying large URLs or file bodies.
+
+## When *not* to cut corners
+
+- Security, auth, migrations, and data-loss paths: read enough to be sure.
+- If unsure after a cheap search, widen scope once rather than guessing.
+- When the user asks for verbosity, a review, or a full plan, honor that over brevity.

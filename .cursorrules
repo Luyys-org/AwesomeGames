@@ -1,0 +1,93 @@
+# Commit messages (Conventional Commits)
+
+When the user asks you to **draft, suggest, or write a git commit message**, follow [Conventional Commits](https://www.conventionalcommits.org/) unless they specify otherwise.
+
+## Format
+
+```
+<type>[optional scope][optional !]: <description>
+```
+
+- **Subject line**: imperative mood (“add” not “added”), no trailing period, ≤72 characters (aim for ≤50).
+
+## Types
+
+| Type       | Use when |
+|------------|----------|
+| `feat`     | New user-facing behavior or capability |
+| `fix`      | Bug fix |
+| `docs`     | Documentation only |
+| `style`    | Formatting, whitespace; no logic change |
+| `perf`     | Performance improvement |
+| `refactor` | Code change that is neither feat nor fix |
+| `test`     | Tests only |
+| `build`    | Build system or dependencies (e.g. Maven, Docker) |
+| `ci`       | CI configuration and scripts |
+| `chore`    | Maintenance that doesn’t fit above (tooling, misc) |
+| `revert`   | Reverts a prior commit; subject should mention reverted SHA or summary |
+
+Do not invent other types unless the user requests a custom scheme.
+
+## Scope (optional)
+
+Use a short, stable noun: feature or area name (e.g. `oauth2`, `postgres`, `security`, `websocket`, `config`). Omit scope when the change spans many areas or scope adds no clarity. Lowercase; no spaces.
+
+## Breaking changes
+
+- Append `!` after type/scope: `feat(api)!: remove legacy status endpoint`
+- And/or footer: `BREAKING CHANGE: <what changed and how to migrate>`
+
+## Footers
+
+- **Issues**: `Closes #123`, `Fixes #456` (when applicable).
+- **Breaking**: `BREAKING CHANGE: ...` as above.
+- Match existing project trailer style if present in recent history.
+
+## Do not
+
+- Commit secrets, credentials, or `.env` with real values.
+- Use vague subjects: “fix stuff”, “updates”, “WIP”.
+- Repeat the diff in the subject; one clear outcome per commit.
+- Combine unrelated changes in one message; suggest splitting when needed.
+
+## Examples
+
+**Good**
+
+```
+feat(oauth2): add client registration use case
+
+Expose registration through the inbound port so adapters stay thin
+and domain rules live in application services.
+```
+
+```
+fix(postgres): handle probe timeout as degraded status
+
+Previously an SQLException surfaced as 500; callers now get a
+consistent health payload.
+```
+
+```
+refactor(security): align filters with hexagonal inbound adapters
+```
+
+```
+chore(deps): bump spring-boot-starter-parent to 3.4.2
+```
+
+**Avoid**
+
+```
+Fixed bug
+Updated files
+Refactor PostgreSQL and OAuth2 features to align with hexagonal architecture. Introduce new use cases...
+```
+
+(Long single-line subjects and past-tense/generic titles.)
+
+## When committing for the user
+
+1. Inspect staged changes (`git diff --staged`) and match **one logical change** per commit.
+2. Propose a subject that passes the rules above; add body only when it clarifies **why** or migration notes.
+3. Prefer the repository’s recent tone for body length; default to conventional subject + short body when the change is non-trivial.

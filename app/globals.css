@@ -1,0 +1,270 @@
+@import "tailwindcss";
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --surface: #18181b;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --muted: #a1a1aa;
+  --primary: #f59e0b;
+  --primary-hover: #fbbf24;
+  --on-primary: #09090b;
+  --ring: #f59e0b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@layer components {
+  .page-shell {
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .panel-accent {
+    border-color: var(--primary);
+  }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    flex: 1;
+    margin-bottom: -1px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.25rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+
+  .tab:hover {
+    color: var(--foreground);
+  }
+
+  .tab.is-active {
+    color: var(--foreground);
+    border-bottom-color: var(--primary);
+  }
+
+  .field {
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: var(--background);
+    padding: 8px 12px;
+    color: var(--foreground);
+    outline: none;
+  }
+
+  .field::placeholder {
+    color: #52525b;
+  }
+
+  .field:focus {
+    outline: 2px solid var(--ring);
+  }
+
+  .field:disabled {
+    opacity: 0.6;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.25rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: var(--on-primary);
+    border: 1px solid transparent;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: #e4e4e7;
+    border: 1px solid var(--border-strong);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    border-color: #71717a;
+    color: var(--foreground);
+  }
+
+  .overlay {
+    background: rgba(9, 9, 11, 0.8);
+  }
+
+  .badge {
+    display: inline-block;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25rem;
+  }
+
+  .badge-ready {
+    background: rgba(16, 185, 129, 0.2);
+    color: #a7f3d0;
+  }
+
+  .badge-idle {
+    background: var(--border);
+    color: var(--muted);
+  }
+
+  .tooltip {
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .offer-choice:hover:not(:disabled) {
+    outline: 1px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .stats-backdrop {
+    animation: stats-backdrop-in 200ms ease-out forwards;
+  }
+
+  .stats-backdrop.is-exiting {
+    animation: stats-backdrop-out 180ms ease-in forwards;
+  }
+
+  .stats-panel {
+    animation: stats-panel-in 220ms ease-out forwards;
+  }
+
+  .stats-panel.is-exiting {
+    animation: stats-panel-out 180ms ease-in forwards;
+  }
+
+  .game-hud-panel {
+    animation: game-hud-in 180ms ease-out forwards;
+  }
+
+  .game-phase-action {
+    animation: game-action-in 180ms ease-out forwards;
+  }
+
+  .game-hud-label {
+    animation: game-hud-label-in 160ms ease-out forwards;
+  }
+}
+
+@keyframes stats-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes stats-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes stats-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes stats-panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes game-hud-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes game-action-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes game-hud-label-in {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}

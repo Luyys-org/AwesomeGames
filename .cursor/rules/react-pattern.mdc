@@ -1,0 +1,96 @@
+---
+description: React UI, hooks, services, and dependency rules.
+globs: **/*.tsx,**/*.jsx,**/*.ts,**/*.js
+alwaysApply: false
+---
+
+# React development
+
+Ask the user for architecture and conventions before you assume a stack, folder layout, state library, or data-fetching approach. Use repo rules, ADRs, and existing code when they already answer this. If something is still unclear, ask.
+
+Before adding code, search the repo for pages, components, hooks, and services you can reuse or extend. Do not rebuild what already exists.
+
+## Layers
+
+Each UI piece has one owner for data, loading, errors, and handlers.
+
+- Page: route data and layout. Pages may hold more logic.
+- Feature: one user-facing capability—loading data, user actions, and UI flow. No business rules or domain calculations.
+- UI: presentational; props in, markup out; no domain stores inside.
+- Primitive: design-system atoms only; no domain.
+
+Do not put feature logic in UI components. Example to avoid: a card that reads a global user store instead of taking user as a prop.
+
+## Where state lives
+
+- Local useState or useReducer: short-lived UI such as open menus, draft text, animation. Keep it next to where it is used.
+- Shared client state: user, theme, cart, and similar cross-cutting data. Use whatever store or context the project already uses.
+- Server data from APIs: use a cache layer. TanStack Query v5 is appropriate only if the project already uses it or the user approves adding it.
+- URL: filters, pagination, and sort when reload should keep the value. Do not put that in local state or a global store.
+
+## Components
+
+Pick the layer and the owner of data and handlers. Reuse or wrap existing components first. Use interface for props and DTOs that may grow; use type for unions and non-object shapes. Match nearby files. Prefer satisfies over as for config and variant maps. One main component per file unless the repo does otherwise. Prefer composition and small prop surfaces over copying files.
+
+## Hooks
+
+If a component has about thirty lines of logic outside JSX, move that logic into a custom hook. Name hooks after behavior. Put them next to the feature or in the project hooks folder. Return a small stable API: data, status, handlers. Hooks must not render JSX unless the repo already allows that. Use useEffect for real side effects; prefer handlers for user actions. Use useMemo only for costly work such as large lists. Use useCallback when a child is memoized or an effect depends on the function. Hooks call services or approved data hooks; do not scatter fetch calls in UI when a service exists.
+
+## Services
+
+Services are plain modules for HTTP and presentation mapping. Extend an existing client or service before creating a new one. One domain per file with typed requests and responses. No React imports and no hooks. Return errors in a shape pages and hooks can show in the UI. Split presentation mappers from transport when that helps testing.
+
+## Business logic stays on the backend
+
+The frontend must not implement or duplicate **business logic** or **domain computation**. That is the backend’s responsibility. The client displays what the API returns and sends user intent back; it does not decide outcomes, permissions, or valid state transitions.
+
+**Belongs on the backend** (request API support if missing—see *When the fix belongs on the backend*):
+
+- Domain rules, validation of business invariants, eligibility, and authorization decisions.
+- Calculations: totals, scores, rankings, derived fields, aggregations, and “what happens next” logic.
+- Orchestrating multi-step domain workflows and enforcing consistency across entities.
+- Persisting or mutating authoritative game/room/user state.
+
+**Allowed on the frontend** (presentation and UX only):
+
+- Rendering labels, layout, empty/loading/error states, and accessibility.
+- Local UI state: modals, drafts, focus, animations, and optimistic UI **only** when the API documents idempotency or the user explicitly accepts the risk.
+- Input formatting for UX (masks, trimming) without redefining server validation rules.
+- Mapping API DTOs to view models: rename fields for components, format dates/numbers/currency for display, sort or filter **only** when the API already returns the full set and ordering is purely cosmetic.
+
+If you catch yourself encoding product rules in a hook, reducer, or `useMemo` (“if X and Y then Z”, recomputing totals, inferring game phase), stop. Either consume a field or endpoint the backend should expose, or write a backend/API change summary instead of adding client-side business code.
+
+## Backend API reference
+
+The file at **`/docs/api-docs.json`** is the authoritative backend API reference. Read it when adding or changing services, endpoints, request bodies, or response types instead of guessing from memory or external docs.
+
+## When the fix belongs on the backend
+
+Do not implement frontend workarounds when the straightforward fix is a backend or API change. Workarounds include duplicating server rules in the client, stitching many calls where one endpoint should exist, parsing unstable or undocumented fields, caching stale data to hide missing endpoints, or reshaping payloads in hooks because the contract is wrong.
+
+Before writing that kind of code, read **`/docs/api-docs.json`** and confirm whether the API already supports the behavior. If it does not, or the existing contract forces awkward client logic, **stop and do not ship a workaround**. Instead, give the user a **detailed backend/API change summary** they can hand to whoever owns the API.
+
+The summary must be concrete enough to implement without guessing. Include:
+
+- **Problem**: what the UI needs and why the current API is insufficient (missing endpoint, wrong shape, wrong semantics, performance, auth, idempotency, etc.).
+- **Current behavior**: relevant paths, methods, and payloads from **`/docs/api-docs.json`** (or note “not documented / not present”).
+- **Proposed change**: new or updated endpoint(s), HTTP method, path, query params, and auth requirements.
+- **Request contract**: JSON schema or example body; required vs optional fields; validation rules that belong on the server.
+- **Response contract**: success payload with field names and types; error codes and messages the UI should handle.
+- **Edge cases**: empty states, partial data, concurrency, retries, and idempotency keys if applicable.
+- **Performance**: expected latency, pagination, batching, or limits if the feature would otherwise require many round trips.
+- **Frontend follow-up**: what service/hook changes you will make **after** the API exists (file names or domains only—no workaround code in the meantime).
+
+If a small frontend change is clearly correct (e.g. mapping a documented DTO to props), do that. When in doubt, prefer the API summary over client-side complexity.
+
+## Dependencies
+
+Do not add or import a new npm package without user approval. State the package, version, and why. Prefer what is already in package.json. If you propose something new, use a current maintained release and avoid versions with critical CVEs. Do not replace router, state, or UI libraries without approval.
+
+## TypeScript
+
+Use satisfies instead of as for literals and maps. Use interface for extendable objects and type for unions. Type hook and service inputs and outputs narrowly. Avoid any unless the codebase already does.
+
+## Before finishing
+
+Confirm architecture or ask. Reuse existing code. Put state in the right place. Extract hooks when orchestration grows—not to host business rules. Route API work through services. Keep business logic and computation on the backend; the UI only presents and submits. Prefer a backend/API change summary over frontend workarounds when the API is the right fix. Get approval before new dependencies. Keep UI presentational; pages and features own data and handlers.
