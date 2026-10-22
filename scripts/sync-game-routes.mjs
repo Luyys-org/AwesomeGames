@@ -1,3 +1,14 @@
+/**
+ * Syncs generated routes and the dashboard catalog with game manifests on disk.
+ *
+ * Finds top-level directories whose `manifest.json` has `kind: "game"`. For each
+ * page under `<slug>/app`, writes a re-export at `app/game/<slug>/`, deletes
+ * shims whose source page is gone, and rewrites `common/games.generated.ts`.
+ * The dashboard imports that catalog instead of scanning the filesystem at runtime.
+ *
+ * `npm run dev` and `npm run build` run this before Next.js. `scripts/create-game.mjs`
+ * runs it again after scaffolding a game.
+ */
 import fs from "node:fs";
 import path from "node:path";
 

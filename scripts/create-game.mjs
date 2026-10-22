@@ -1,3 +1,12 @@
+/**
+ * Scaffolds a new game and registers it with the app.
+ *
+ * Writes `<slug>/manifest.json`, `<slug>/paths.ts`, and `<slug>/app/page.tsx`,
+ * then runs `scripts/sync-game-routes.mjs` so `/game/<slug>` and the dashboard
+ * catalog include the new game.
+ *
+ * A developer runs this with `npm run create-game -- <slug>`.
+ */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
