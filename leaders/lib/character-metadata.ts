@@ -34,10 +34,10 @@ export function characterPortraitPath(
   options?: { frog?: boolean },
 ): string {
   if (options?.frog) {
-    return "/characters/frog.png";
+    return "/leaders/characters/frog.png";
   }
 
-  return `/characters/${characterImageFileSlug(type)}.png`;
+  return `/leaders/characters/${characterImageFileSlug(type)}.png`;
 }
 
 export interface CharacterAbilityCopy {

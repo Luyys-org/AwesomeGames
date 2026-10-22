@@ -1,10 +1,9 @@
-name: GitHub Release
+name: (Automated) GitHub Release
 
 on:
   pull_request:
     types: [closed]
     branches: [main]
-  workflow_dispatch:
 
 concurrency:
   group: github-release
@@ -15,7 +14,7 @@ permissions: {}
 jobs:
   release:
     name: Create GitHub release
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
