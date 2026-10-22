@@ -1,4 +1,4 @@
-name: Release PR
+name: Generate release PR
 
 on:
   workflow_dispatch:
