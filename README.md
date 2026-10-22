@@ -1,6 +1,6 @@
 # Awesome Games
 
-One Next.js app, one origin. Each game is a top-level directory. The dashboard discovers games from disk. Shared code lives in `common/`.
+One Next.js app, one origin. Each game is a top-level directory. The dashboard lists games from a generated catalog. Shared code lives in `common/`.
 
 ## Run
 
@@ -15,7 +15,7 @@ Open [http://localhost:3000](http://localhost:3000). `/` redirects to `/dashboar
 | Path | Role |
 |---|---|
 | `app/` | URL shell: root layout, `/`, `/dashboard`, and generated `/game/...` pages |
-| `dashboard/` | Game grid. It does not list games in source |
+| `dashboard/` | Game grid. It reads the generated catalog, not the filesystem |
 | `leaders/` | The Leaders game: rules, lobby, and UI |
 | `common/` | Code shared by games, including P2P |
 | `public/` | Static files. Next serves only this folder |
@@ -23,7 +23,7 @@ Open [http://localhost:3000](http://localhost:3000). `/` redirects to `/dashboar
 
 A game is any immediate child directory whose `manifest.json` has `"kind": "game"`. The directory name is the URL slug. `dashboard/` is not a game.
 
-Routable screens live in `<slug>/app/**/page.tsx` and are mirrored under `/game/<slug>/`. `npm run dev` and `npm run build` run `scripts/sync-game-routes.mjs` first. That script writes one-line re-exports in `app/game/` and deletes shims whose source page is gone.
+Routable screens live in `<slug>/app/**/page.tsx` and are mirrored under `/game/<slug>/`. `npm run dev` and `npm run build` run `scripts/sync-game-routes.mjs` first. That script writes `common/games.generated.ts` from each game `manifest.json`, writes one-line re-exports in `app/game/`, and deletes shims whose source page is gone.
 
 ## URLs
 

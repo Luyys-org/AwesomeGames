@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  outputFileTracingIncludes: {
-    "/dashboard": ["*/manifest.json"],
-  },
   redirects: async () => [
     { source: "/play", destination: "/game/leaders", permanent: true },
     { source: "/lobby", destination: "/game/leaders", permanent: true },
