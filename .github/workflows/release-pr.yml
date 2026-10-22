@@ -1,0 +1,132 @@
+name: Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semver bump to apply to package.json
+        required: true
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  create-pr:
+    name: Create develop → main PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Fetch main
+        run: git fetch origin refs/heads/main:refs/remotes/origin/main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bump version
+        id: bump
+        env:
+          REQUESTED_BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+
+          old_version="$(node -p "require('./package.json').version")"
+
+          bump="$REQUESTED_BUMP"
+          if [[ "$bump" == "auto" ]]; then
+            log_subjects="$(git log origin/main..HEAD --pretty=%s)"
+            log_bodies="$(git log origin/main..HEAD --pretty=%B)"
+            if echo "$log_bodies" | grep -qE 'BREAKING CHANGE:'; then
+              bump=major
+            elif echo "$log_subjects" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
+              bump=major
+            elif echo "$log_subjects" | grep -qE '^feat(\([^)]+\))?:'; then
+              bump=minor
+            else
+              bump=patch
+            fi
+          fi
+
+          npm version "$bump" --no-git-tag-version
+
+          version="$(node -p "require('./package.json').version")"
+          title="v${version}"
+
+          {
+            echo "old_version=$old_version"
+            echo "version=$version"
+            echo "bump=$bump"
+            echo "title=$title"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        env:
+          TITLE: ${{ steps.bump.outputs.title }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package.json package-lock.json
+          git commit -m "chore(release): ${TITLE}"
+          git push origin develop
+
+      - name: Create or update pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: ${{ steps.bump.outputs.title }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          OLD_VERSION: ${{ steps.bump.outputs.old_version }}
+          BUMP: ${{ steps.bump.outputs.bump }}
+        run: |
+          set -euo pipefail
+
+          commits="$(git log origin/main..HEAD --pretty=format:'- %s (%h)' --reverse)"
+          if [[ -z "$commits" ]]; then
+            commits="- chore(release): ${TITLE}"
+          fi
+
+          {
+            echo "## ${TITLE}"
+            echo
+            echo "Bumps \`package.json\` from \`${OLD_VERSION}\` to \`${VERSION}\` (\`${BUMP}\`)."
+            echo
+            echo "Merge with a **merge commit** (not squash) so \`develop\` and \`main\` stay aligned."
+            echo
+            echo "### Commits"
+            echo "$commits"
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          head_ref="${GITHUB_REPOSITORY_OWNER}:develop"
+          pr_number="$(gh pr list --base main --head "$head_ref" --state open --json number --jq '.[0].number // empty')"
+
+          if [[ -n "$pr_number" ]]; then
+            gh pr edit "$pr_number" --title "$TITLE" --body-file "$RUNNER_TEMP/pr-body.md"
+            url="$(gh pr view "$pr_number" --json url --jq .url)"
+            echo "Updated existing PR: $url"
+          else
+            url="$(gh pr create --base main --head develop --title "$TITLE" --body-file "$RUNNER_TEMP/pr-body.md")"
+            echo "Created PR: $url"
+          fi
+
+          echo "PR: $url" >> "$GITHUB_STEP_SUMMARY"

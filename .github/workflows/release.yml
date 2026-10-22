@@ -1,0 +1,56 @@
+name: GitHub Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: github-release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release:
+    name: Create GitHub release
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || 'main' }}
+
+      - name: Read version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          TARGET: ${{ github.event.pull_request.merge_commit_sha || 'main' }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; skipping."
+            echo "Skipped existing release \`$TAG\`." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          url="$(gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            --target "$TARGET")"
+
+          echo "Created release: $url"
+          echo "Release: $url" >> "$GITHUB_STEP_SUMMARY"
