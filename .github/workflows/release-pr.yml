@@ -34,8 +34,10 @@ jobs:
           ref: develop
           fetch-depth: 0
 
-      - name: Fetch main
-        run: git fetch origin refs/heads/main:refs/remotes/origin/main
+      - name: Fetch main and tags
+        run: |
+          git fetch origin refs/heads/main:refs/remotes/origin/main
+          git fetch origin '+refs/tags/*:refs/tags/*'
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -51,10 +53,47 @@ jobs:
 
           old_version="$(node -p "require('./package.json').version")"
 
+          # Tip of develop that already shipped in old_version. Commits at or
+          # before this point were part of that release and must not drive the
+          # bump or the PR notes (a squash onto main leaves them off main).
+          since=""
+          tag="v${old_version}"
+          if git rev-parse --verify --quiet "refs/tags/${tag}^{commit}" >/dev/null; then
+            parents="$(git rev-list --parents -n 1 "$tag")"
+            if [[ "$(wc -w <<< "$parents")" -ge 3 ]]; then
+              since="$(git rev-parse "${tag}^2")"
+            fi
+          fi
+          if [[ -z "$since" ]]; then
+            while IFS=$'\t' read -r sha subject; do
+              if [[ "$subject" == "$tag" || "$subject" == "$tag (#"* ]]; then
+                parents="$(git rev-list --parents -n 1 "$sha")"
+                if [[ "$(wc -w <<< "$parents")" -ge 3 ]]; then
+                  since="$(git rev-parse "${sha}^2")"
+                  break
+                fi
+              fi
+            done < <(git log origin/main --merges --format='%H%x09%s')
+          fi
+          if [[ -z "$since" ]]; then
+            while IFS=$'\t' read -r sha subject; do
+              if [[ "$subject" == "chore(release): ${tag}" ]]; then
+                since="$sha"
+                break
+              fi
+            done < <(git log HEAD --format='%H%x09%s')
+          fi
+
+          if [[ -n "$since" ]]; then
+            range=("${since}..HEAD" --not origin/main --no-merges)
+          else
+            range=(origin/main..HEAD --no-merges)
+          fi
+
           bump="$REQUESTED_BUMP"
           if [[ "$bump" == "auto" ]]; then
-            log_subjects="$(git log origin/main..HEAD --pretty=%s)"
-            log_bodies="$(git log origin/main..HEAD --pretty=%B)"
+            log_subjects="$(git log "${range[@]}" --pretty=%s)"
+            log_bodies="$(git log "${range[@]}" --pretty=%B)"
             if echo "$log_bodies" | grep -qE 'BREAKING CHANGE:'; then
               bump=major
             elif echo "$log_subjects" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
@@ -76,6 +115,7 @@ jobs:
             echo "version=$version"
             echo "bump=$bump"
             echo "title=$title"
+            echo "since=$since"
           } >> "$GITHUB_OUTPUT"
 
       - name: Commit and push
@@ -98,10 +138,15 @@ jobs:
           VERSION: ${{ steps.bump.outputs.version }}
           OLD_VERSION: ${{ steps.bump.outputs.old_version }}
           BUMP: ${{ steps.bump.outputs.bump }}
+          SINCE: ${{ steps.bump.outputs.since }}
         run: |
           set -euo pipefail
 
-          commits="$(git log origin/main..HEAD --pretty=format:'- %s (%h)' --reverse)"
+          if [[ -n "$SINCE" ]] && git rev-parse --verify --quiet "${SINCE}^{commit}" >/dev/null; then
+            commits="$(git log "${SINCE}..HEAD" --not origin/main --no-merges --pretty=format:'- %s (%h)' --reverse)"
+          else
+            commits="$(git log origin/main..HEAD --no-merges --pretty=format:'- %s (%h)' --reverse)"
+          fi
           if [[ -z "$commits" ]]; then
             commits="- chore(release): ${TITLE}"
           fi
