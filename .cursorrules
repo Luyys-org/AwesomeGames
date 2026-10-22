@@ -5,7 +5,7 @@ When the user asks you to **draft, suggest, or write a git commit message**, fol
 ## Format
 
 ```
-<type>[optional scope][optional !]: <description>
+<type>[scope]: <description>
 ```
 
 - **Subject line**: imperative mood (“add” not “added”), no trailing period, ≤72 characters (aim for ≤50).
@@ -28,14 +28,9 @@ When the user asks you to **draft, suggest, or write a git commit message**, fol
 
 Do not invent other types unless the user requests a custom scheme.
 
-## Scope (optional)
+## Scope
 
-Use a short, stable noun: feature or area name (e.g. `oauth2`, `postgres`, `security`, `websocket`, `config`). Omit scope when the change spans many areas or scope adds no clarity. Lowercase; no spaces.
-
-## Breaking changes
-
-- Append `!` after type/scope: `feat(api)!: remove legacy status endpoint`
-- And/or footer: `BREAKING CHANGE: <what changed and how to migrate>`
+Use the game name as a scope, or something more generic like "architecture" if it is not related directly to a game.
 
 ## Footers
 
@@ -55,17 +50,11 @@ Use a short, stable noun: feature or area name (e.g. `oauth2`, `postgres`, `secu
 **Good**
 
 ```
-feat(oauth2): add client registration use case
-
-Expose registration through the inbound port so adapters stay thin
-and domain rules live in application services.
+feat(leaders): add client registration use case
 ```
 
 ```
 fix(postgres): handle probe timeout as degraded status
-
-Previously an SQLException surfaced as 500; callers now get a
-consistent health payload.
 ```
 
 ```
