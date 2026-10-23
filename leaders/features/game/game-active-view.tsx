@@ -485,7 +485,7 @@ export function GameActiveView({
     actionHintText !== null && pendingRecruitOfferIndex === null;
 
   return (
-    <div className="relative flex min-h-0 w-full flex-1 flex-col">
+    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col">
       <div className="pointer-events-none absolute left-2 top-2 z-30 sm:left-4 sm:top-4">
         <div className="pointer-events-auto game-hud-panel">
           <GameTurnStatus

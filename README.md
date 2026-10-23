@@ -49,5 +49,3 @@ The slug is lowercase letters, digits, and single hyphens. The command writes `<
 `common/p2p` is the Trystero mesh. `openMesh` joins a room, waits for a signaling relay, watches ICE, and exposes one request channel and one broadcast channel. The caller names the app id, the room code, and the channel names, and handles the handshake.
 
 Leaders keeps lobby and match rules in `leaders/services/room-connection.ts`. That module calls `openMesh` with app id `app.dirigeant` and channels `lobby-intent` and `lobby-feed`. Seat, chat, ready, and game commands stay there.
-
-The behavior contract for that lobby and the rules engine is [docs/p2p-client-port.md](docs/p2p-client-port.md).
