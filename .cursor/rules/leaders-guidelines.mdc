@@ -1,6 +1,6 @@
 ---
 description: Leaders core game rules and mechanics. Use when implementing or changing game logic, rules engine, board state, or character abilities.
-globs: "**/game/**/*.tsx
+globs: leaders/**/*.tsx
 alwaysApply: false
 ---
 
