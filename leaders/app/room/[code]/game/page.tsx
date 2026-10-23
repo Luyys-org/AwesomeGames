@@ -99,7 +99,7 @@ export default function GamePage() {
         {isLoading ? (
           <GameLoadingSpinner label="Loading game board" />
         ) : game ? (
-          <div className="relative min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <GameActiveView
               game={game}
               playerId={playerId}
