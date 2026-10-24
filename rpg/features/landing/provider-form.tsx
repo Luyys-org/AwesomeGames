@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   type ProviderHealthStatus,
@@ -35,16 +35,46 @@ export function ProviderForm({
   const [modelName, setModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const health = useProviderHealth(linked);
-  const hydrated = useRef(false);
-  const checking = health.status === "checking";
+  const [editing, setEditing] = useState(false);
+  const { status, detail, check, reset } = useProviderHealth(linked);
+  const [hydrated, setHydrated] = useState(false);
+  const checking = status === "checking";
+  const locked = status === "reachable" && !editing;
+  const fieldsDisabled = !ready || checking || locked;
 
-  useEffect(() => {
-    if (!ready || hydrated.current) return;
-    hydrated.current = true;
+  if (ready && !hydrated) {
+    setHydrated(true);
     if (provider) setSelectedProvider(provider);
     if (model) setModelName(model);
-  }, [ready, provider, model]);
+  }
+
+  useEffect(() => {
+    if (!ready || !linked || editing) return;
+    void check();
+  }, [ready, linked, editing, check]);
+
+  function beginEdit() {
+    if (provider) setSelectedProvider(provider);
+    if (model) setModelName(model);
+    setApiKey("");
+    setError(null);
+    setEditing(true);
+    reset();
+  }
+
+  function clearProvider() {
+    const message = remove();
+    if (message) {
+      setError(message);
+      return;
+    }
+    reset();
+    setEditing(false);
+    setSelectedProvider("");
+    setModelName("");
+    setApiKey("");
+    setError(null);
+  }
 
   return (
     <section aria-labelledby="provider-heading" className="panel p-6">
@@ -78,7 +108,8 @@ export function ProviderForm({
           }
 
           setApiKey("");
-          void health.check();
+          setEditing(false);
+          void check();
         }}
       >
         <div className="grid gap-4 sm:grid-cols-3">
@@ -87,7 +118,7 @@ export function ProviderForm({
             <select
               required
               value={selectedProvider}
-              disabled={!ready || checking}
+              disabled={fieldsDisabled}
               onChange={(event) => {
                 const value = event.target.value;
                 setSelectedProvider(isAiProvider(value) ? value : "");
@@ -111,7 +142,7 @@ export function ProviderForm({
               required
               autoComplete="off"
               spellCheck={false}
-              disabled={!ready || checking}
+              disabled={fieldsDisabled}
               placeholder={
                 AI_PROVIDERS.find((entry) => entry.id === selectedProvider)?.modelPlaceholder ??
                 "gpt-4o"
@@ -132,9 +163,9 @@ export function ProviderForm({
               required={!linked}
               autoComplete="off"
               spellCheck={false}
-              disabled={!ready || checking}
-              placeholder={linked ? "Blank keeps the saved key" : ""}
-              value={apiKey}
+              disabled={fieldsDisabled}
+              placeholder={linked && !locked ? "Blank keeps the saved key" : ""}
+              value={locked ? "••••••••" : apiKey}
               onChange={(event) => {
                 setApiKey(event.target.value);
                 setError(null);
@@ -154,36 +185,50 @@ export function ProviderForm({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={!ready || checking} className="btn btn-primary">
-            {linked ? "Update provider" : "Link provider"}
-          </button>
-          {linked ? (
-            <button
-              type="button"
-              disabled={checking}
-              className="btn btn-secondary"
-              onClick={() => {
-                const message = remove();
-                if (message) {
-                  setError(message);
-                  return;
-                }
-                health.reset();
-                setSelectedProvider("");
-                setModelName("");
-                setApiKey("");
-                setError(null);
-              }}
-            >
-              Remove
-            </button>
-          ) : null}
-          {linked && provider ? (
+          {locked ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary size-9 p-0"
+                aria-label="Edit provider"
+                title="Edit provider"
+                onClick={beginEdit}
+              >
+                <PencilIcon />
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary size-9 p-0"
+                aria-label="Delete provider"
+                title="Delete provider"
+                onClick={clearProvider}
+              >
+                <TrashIcon />
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="submit" disabled={!ready || checking} className="btn btn-primary">
+                {linked ? "Update provider" : "Link provider"}
+              </button>
+              {linked ? (
+                <button
+                  type="button"
+                  disabled={checking}
+                  className="btn btn-secondary"
+                  onClick={clearProvider}
+                >
+                  Remove
+                </button>
+              ) : null}
+            </>
+          )}
+          {linked && provider && !locked ? (
             <p className="min-w-0 text-sm break-all text-zinc-300">
               Linked · {providerLabel(provider)} · {model}
             </p>
           ) : null}
-          <ProviderHealth status={health.status} detail={health.detail} />
+          <ProviderHealth status={status} detail={detail} />
         </div>
       </form>
     </section>
@@ -218,6 +263,37 @@ function ProviderHealth({
       <HealthIcon ok={ok} />
       <span className="min-w-0 break-words">{label}</span>
     </p>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4">
+      <path
+        d="M9.2 2.4 13.6 6.8 5.2 15.2H1v-4.2L9.2 2.4Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M7.6 4 12 8.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4">
+      <path d="M3 4.5h10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M6.5 2.5h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M4.5 4.5 5.2 13h5.6l.7-8.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

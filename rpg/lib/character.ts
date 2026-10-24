@@ -1,24 +1,8 @@
+import {
+  readAssignedStats,
+  type CharacterOptions,
+} from "@/rpg/lib/character-options";
 import { createCharacterId, createClaimCode } from "@/rpg/lib/ids";
-
-export type AbilityId =
-  | "fighter"
-  | "shooter"
-  | "sneak"
-  | "medic"
-  | "scholar"
-  | "face"
-  | "pilot"
-  | "tech";
-
-export type StatName = "might" | "finesse" | "wits";
-
-export type StatValue = 0 | 1 | 2;
-
-export interface Stats {
-  might: StatValue;
-  finesse: StatValue;
-  wits: StatValue;
-}
 
 export type Owner = "host" | "peer";
 
@@ -27,16 +11,18 @@ export type Wound = "hurt" | "impaired" | "down";
 export interface CharacterDraft {
   name: string;
   abilityId: string;
-  might: string;
-  finesse: string;
-  wits: string;
+  classId: string;
+  raceId: string;
+  stats: Record<string, string>;
 }
 
 export interface TableCharacter {
   id: string;
   name: string;
-  abilityId: AbilityId;
-  stats: Stats;
+  abilityId: string;
+  classId: string;
+  raceId: string;
+  stats: Record<string, number>;
   wounds: Wound[];
   claimCode: string;
   owner: Owner;
@@ -44,28 +30,18 @@ export interface TableCharacter {
   inScene: boolean;
 }
 
-export const ABILITIES: { id: AbilityId; label: string; stat: string; applies: string }[] = [
-  { id: "fighter", label: "Fighter", stat: "Might", applies: "fight, break, lift, or endure" },
-  { id: "shooter", label: "Shooter", stat: "Finesse", applies: "make a ranged attack or a precise shot" },
-  { id: "sneak", label: "Sneak", stat: "Finesse", applies: "hide, sneak, or steal" },
-  { id: "medic", label: "Medic", stat: "Wits", applies: "treat wounds or diagnose" },
-  { id: "scholar", label: "Scholar", stat: "Wits", applies: "recall, research, or decipher" },
-  { id: "face", label: "Face", stat: "Wits", applies: "persuade, deceive, or calm" },
-  { id: "pilot", label: "Pilot", stat: "Finesse", applies: "drive, pilot, or navigate a vehicle" },
-  { id: "tech", label: "Tech", stat: "Wits", applies: "use, repair, or bypass a machine" },
-];
-
 const NAME_PATTERN = /^[A-Za-z0-9 '\-]+$/;
 const MAX_LIVING = 6;
 
-export function abilityLabel(id: AbilityId): string {
-  return ABILITIES.find((entry) => entry.id === id)?.label ?? id;
+export function abilityLabel(id: string, options?: CharacterOptions): string {
+  return options?.skills.find((entry) => entry.id === id)?.label ?? id;
 }
 
 export function characterError(
   characters: { name: string; owner: Owner; archived: boolean }[],
   draft: CharacterDraft,
   owner: Owner,
+  options: CharacterOptions,
 ): string | null {
   if (owner === "host" && characters.some((character) => character.owner === "host" && !character.archived)) {
     return "You already have a character.";
@@ -78,9 +54,15 @@ export function characterError(
   const name = readName(draft.name, characters);
   if (!name.ok) return name.error;
 
-  if (!ABILITIES.some((entry) => entry.id === draft.abilityId)) return "Choose an ability.";
+  if (!options.skills.some((entry) => entry.id === draft.abilityId)) return "Choose a skill.";
+  if (options.classes.length > 0 && !options.classes.some((entry) => entry.id === draft.classId)) {
+    return "Choose a class.";
+  }
+  if (options.races.length > 0 && !options.races.some((entry) => entry.id === draft.raceId)) {
+    return "Choose a race.";
+  }
 
-  const stats = readStats(draft);
+  const stats = readAssignedStats(options, draft.stats);
   if (!stats.ok) return stats.error;
 
   return null;
@@ -90,14 +72,15 @@ export function addCharacter(
   characters: TableCharacter[],
   draft: CharacterDraft,
   owner: Owner,
+  options: CharacterOptions,
 ): { ok: true; character: TableCharacter } | { ok: false; error: string } {
-  const error = characterError(characters, draft, owner);
+  const error = characterError(characters, draft, owner, options);
   if (error) return { ok: false, error };
 
   const name = readName(draft.name, characters);
-  const ability = ABILITIES.find((entry) => entry.id === draft.abilityId);
-  const stats = readStats(draft);
-  if (!name.ok || !ability || !stats.ok) return { ok: false, error: "Choose an ability." };
+  const ability = options.skills.find((entry) => entry.id === draft.abilityId);
+  const stats = readAssignedStats(options, draft.stats);
+  if (!name.ok || !ability || !stats.ok) return { ok: false, error: "Choose a skill." };
 
   return {
     ok: true,
@@ -105,6 +88,8 @@ export function addCharacter(
       id: createCharacterId(),
       name: name.value,
       abilityId: ability.id,
+      classId: options.classes.some((entry) => entry.id === draft.classId) ? draft.classId : "",
+      raceId: options.races.some((entry) => entry.id === draft.raceId) ? draft.raceId : "",
       stats: stats.value,
       wounds: [],
       claimCode: createClaimCode(),
@@ -148,25 +133,3 @@ function readName(
   return { ok: true, value: name };
 }
 
-function readStats(
-  draft: CharacterDraft,
-): { ok: true; value: Stats } | { ok: false; error: string } {
-  const might = readStat(draft.might);
-  const finesse = readStat(draft.finesse);
-  const wits = readStat(draft.wits);
-  if (might === null || finesse === null || wits === null) {
-    return { ok: false, error: "Assign 2, 1, and 0 across Might, Finesse, and Wits." };
-  }
-
-  const sorted = [might, finesse, wits].sort((left, right) => left - right);
-  if (sorted[0] !== 0 || sorted[1] !== 1 || sorted[2] !== 2) {
-    return { ok: false, error: "Assign 2, 1, and 0 across Might, Finesse, and Wits." };
-  }
-
-  return { ok: true, value: { might, finesse, wits } };
-}
-
-function readStat(value: string): StatValue | null {
-  if (value === "0" || value === "1" || value === "2") return Number(value) as StatValue;
-  return null;
-}

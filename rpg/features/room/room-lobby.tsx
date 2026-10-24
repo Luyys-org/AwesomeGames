@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { abilityLabel } from "@/rpg/lib/character";
+import { characterSummary } from "@/rpg/lib/character-options";
 import { CharacterForm, ClaimForm } from "@/rpg/features/room/character-form";
 import { useRoom } from "@/rpg/features/room/use-room";
 
@@ -102,8 +102,7 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
                     {yours ? " (you)" : ""}
                   </p>
                   <p className="mt-1 text-sm text-zinc-400">
-                    {abilityLabel(character.abilityId)} · Might {character.stats.might}, Finesse{" "}
-                    {character.stats.finesse}, Wits {character.stats.wits}
+                    {view?.characterOptions ? characterSummary(character, view.characterOptions) : ""}
                   </p>
                   {yours && view?.seat ? (
                     <p className="mt-1 font-mono text-sm text-zinc-300">
@@ -135,7 +134,9 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
               ? "Create your character to open the lobby."
               : "Create the character you will play."}
           </p>
-          <CharacterForm onSubmit={createCharacter} />
+          {view?.characterOptions ? (
+            <CharacterForm options={view.characterOptions} onSubmit={createCharacter} />
+          ) : null}
         </section>
       ) : null}
 

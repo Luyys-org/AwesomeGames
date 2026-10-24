@@ -161,21 +161,21 @@ function applyRecruit(
   }
 
   const offer = state.faceUpOffers[offerIndex];
+  if (offer === "CUB") {
+    throw new IllegalGameMoveException("Cub cannot be recruited");
+  }
+
   state.faceUpOffers.splice(offerIndex, 1);
   refillOffers(state);
   placePiece(state, offer, color, targetCellId, rng.nextId());
   hand.push(offer);
 
   if (offer === "HERMIT") {
-    if (nonLeaderCount(hand) >= 4) {
-      throw new IllegalGameMoveException("Hermit recruitment not allowed");
-    }
     const cubCell = cubPlacementCell(state, color, targetCellId);
     if (cubCell == null) {
       throw new IllegalGameMoveException("No cub placement available");
     }
     placePiece(state, "CUB", color, cubCell, rng.nextId());
-    hand.push("CUB");
   }
 
   consumeRecruitment(state, before);
@@ -203,15 +203,15 @@ function consumeRecruitment(state: GameState, before: GameState): void {
 }
 
 export function canRecruitOffer(state: GameState, color: PieceColor, offer: PieceType): boolean {
+  if (offer === "CUB") {
+    return false;
+  }
   const emptyZone = [...recruitmentZone(color)].filter((cellId) => !isOccupied(state, cellId));
   if (emptyZone.length === 0) {
     return false;
   }
   if (offer !== "HERMIT") {
     return true;
-  }
-  if (nonLeaderCount(handOf(state, color)) >= 4) {
-    return false;
   }
   return emptyZone.some((cellId) => cubPlacementCell(state, color, cellId) != null);
 }
@@ -234,10 +234,6 @@ function refillOffers(state: GameState): void {
       state.faceUpOffers.push(next);
     }
   }
-}
-
-function nonLeaderCount(hand: readonly PieceType[]): number {
-  return hand.filter((type) => type !== "LEADER").length;
 }
 
 function applyDefault(state: GameState, color: PieceColor, command: ResolvedCommand): void {
@@ -368,7 +364,7 @@ function maybeArmNemesis(state: GameState, mover: GameState["pieces"][string], f
     return;
   }
   const nemesis = findPieceOfType(state, opponent(mover.owner), "NEMESIS");
-  if (!nemesis || nemesisLandingCells(state, nemesis).length === 0) {
+  if (!nemesis || nemesis.frog || nemesisLandingCells(state, nemesis).length === 0) {
     return;
   }
   state.resolvingNemesis = true;
@@ -395,7 +391,7 @@ function applyActive(state: GameState, color: PieceColor, command: ResolvedComma
     if (state.activeAbilityBlockedThisPhase.includes(piece.id)) {
       throw new IllegalGameMoveException("Active ability blocked this turn");
     }
-    if (enemyJailorAdjacent(state, piece)) {
+    if (piece.type !== "WILL_O_THE_WISP" && enemyJailorAdjacent(state, piece)) {
       throw new IllegalGameMoveException("Jailor blocks active abilities");
     }
     if (state.pendingAbility) {
@@ -422,6 +418,9 @@ function applyNemesis(state: GameState, actorPlayerId: string, command: Resolved
   }
   if (piece.type !== "NEMESIS") {
     throw new IllegalGameMoveException("Not Nemesis");
+  }
+  if (piece.frog) {
+    throw new IllegalGameMoveException("Frogged Nemesis cannot use its passive");
   }
 
   const target = command.targetCellId;

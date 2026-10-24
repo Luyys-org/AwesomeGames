@@ -60,8 +60,9 @@ const PIECE_ABILITY_COPY = {
     ],
   },
   SNIPER: {
-    summary: "Passive: At turn start, win if enemy Leader is 3+ away on a straight line.",
-    rules: ["Checked before Action Phase.", "Instant win when true."],
+    summary:
+      "Passive: At turn start, win if enemy Leader is 3+ away on a straight line with every hex between you empty.",
+    rules: ["Checked before Action Phase.", "A character on any hex between you blocks the win.", "Instant win when true."],
   },
   TACTICIAN: {
     summary:
@@ -75,7 +76,7 @@ const PIECE_ABILITY_COPY = {
   ACROBAT: {
     summary: "Active: Jump in a straight line over one adjacent character to an empty cell.",
     rules: [
-      "May jump twice in one action.",
+      "May jump once or twice. The second jump is optional.",
       "Second jump may use a different straight direction.",
       "Still one adjacent character jumped per jump.",
     ],
@@ -112,11 +113,8 @@ const PIECE_ABILITY_COPY = {
   },
   MANIPULATOR: {
     summary:
-      "Active: A visible non-adjacent enemy on a straight line moves 1 space along that line.",
-    rules: [
-      "You choose toward or away from the Manipulator.",
-      "Destination must be empty and on the board.",
-    ],
+      "Active: A visible non-adjacent enemy on a straight line moves 1 space to any empty adjacent hex.",
+    rules: ["Destination must be empty and on the board."],
   },
   WANDERER: {
     summary: "Active: Move to any empty cell not adjacent to any enemy.",
@@ -136,7 +134,7 @@ const PIECE_ABILITY_COPY = {
   },
   JAILOR: {
     summary: "Passive: Adjacent enemies cannot use Active abilities.",
-    rules: [],
+    rules: ["Passive and special abilities still trigger."],
   },
   PROTECTOR: {
     summary: "Passive: Enemy abilities cannot move the Protector or adjacent allies.",
@@ -150,21 +148,22 @@ const PIECE_ABILITY_COPY = {
     summary: "Special: No voluntary move during your Action Phase.",
     rules: [
       "When the enemy Leader moves, Nemesis must move 2 hexes in a straight, clear line to a different empty cell.",
+      "This does not trigger while Nemesis is a frog.",
       "Standard occupancy rules apply on the path.",
       "Only Nemesis may break Leader safety mid-resolution.",
       "Capture and surround are checked after Nemesis's forced move.",
     ],
   },
   HERMIT: {
-    summary: "Recruited with Cub; act with Hermit, Cub, or both in Action Phase.",
+    summary: "Recruited with Cub as one card. Act with Hermit, Cub, or both in Action Phase.",
     rules: [
-      "One recruitment pick places both figures.",
-      "Requires two legal placements and fewer than 4 non-Leader cards.",
+      "One Hermit pick places both figures and adds only Hermit to your hand.",
+      "Cub is placed on an empty recruitment hex adjacent to the Hermit.",
       "Cub never helps capture.",
     ],
   },
   CUB: {
-    summary: "Recruited together with Hermit.",
+    summary: "Placed with Hermit. Not a recruitment card.",
     rules: ["Never helps capture.", "See Hermit for recruitment and action rules."],
   },
 } as const satisfies Record<PieceType, CharacterAbilityCopy>;

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { readBrowserSave, startLobbyFromSave } from "@/rpg/lib/host-save";
 import { isRoomCode } from "@/rpg/lib/room-code";
 import { paths } from "@/rpg/paths";
 
@@ -16,9 +17,36 @@ interface SessionPanelsProps {
 
 export function SessionPanels({ ready, linked }: SessionPanelsProps) {
   const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [roomCode, setRoomCode] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [loadingSave, setLoadingSave] = useState(false);
+
+  function openSave(raw: string) {
+    const result = startLobbyFromSave(raw);
+    if (!result.ok) {
+      setCreateError(result.error);
+      return;
+    }
+    router.push(paths.room(result.roomCode));
+  }
+
+  function loadExistingSave() {
+    if (!linked) {
+      setCreateError("Link an AI provider before you load a save.");
+      return;
+    }
+
+    setCreateError(null);
+    const stored = readBrowserSave();
+    if (stored) {
+      openSave(stored);
+      return;
+    }
+
+    fileRef.current?.click();
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -53,8 +81,48 @@ export function SessionPanels({ ready, linked }: SessionPanelsProps) {
           >
             Create game
           </button>
+          <button
+            type="button"
+            disabled={!ready || !linked || loadingSave}
+            className="btn btn-secondary w-full"
+            onClick={loadExistingSave}
+          >
+            Load existing save
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".rpg.json,.json,application/json"
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => {
+              const input = event.target;
+              const file = input.files?.[0];
+              input.value = "";
+              if (!file) return;
+
+              setLoadingSave(true);
+              setCreateError(null);
+              void file.text().then(
+                (raw) => {
+                  setLoadingSave(false);
+                  openSave(raw);
+                },
+                () => {
+                  setLoadingSave(false);
+                  setCreateError("The save could not be read.");
+                },
+              );
+            }}
+          />
           {ready && !linked ? (
-            <p className="text-sm text-zinc-400">Link an AI provider to create a game.</p>
+            <p className="text-sm text-zinc-400">Link an AI provider to create or load a game.</p>
+          ) : null}
+          {linked ? (
+            <p className="text-sm text-zinc-400">
+              Loads the save in this browser, or a file when there is none.
+            </p>
           ) : null}
         </div>
       </section>

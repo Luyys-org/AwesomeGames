@@ -40,7 +40,9 @@ export function legalActionsFor(state: GameState): GameLegalAction[] {
     for (const candidate of defaultCandidates(piece)) {
       accept(state, candidate, piece, playerIdFor(state, state.activeColor), actions, seen);
     }
-    if (piece.frog || state.activeAbilityBlockedThisPhase.includes(piece.id) || enemyJailorAdjacent(state, piece)) {
+    const jailorBlocksActive =
+      piece.type !== "WILL_O_THE_WISP" && enemyJailorAdjacent(state, piece);
+    if (piece.frog || state.activeAbilityBlockedThisPhase.includes(piece.id) || jailorBlocksActive) {
       continue;
     }
     for (const params of activeCandidateParams(state, piece)) {

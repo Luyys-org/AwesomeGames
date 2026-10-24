@@ -1,11 +1,15 @@
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import {
-  ABILITIES,
+  characterOptionsFor,
+  coreCharacterOptions,
+  parseCharacterOptions,
+  parseStatBlock,
+  type CharacterOptions,
+} from "@/rpg/lib/character-options";
+import {
   addCharacter,
-  type AbilityId,
   type CharacterDraft,
   type Owner,
-  type Stats,
   type TableCharacter,
   type Wound,
 } from "@/rpg/lib/character";
@@ -25,8 +29,10 @@ export interface TableState {
 export interface PublicCharacter {
   id: string;
   name: string;
-  abilityId: AbilityId;
-  stats: Stats;
+  abilityId: string;
+  classId: string;
+  raceId: string;
+  stats: Record<string, number>;
   wounds: Wound[];
   owner: Owner;
   archived: boolean;
@@ -49,6 +55,7 @@ export interface TableSnapshot {
   enemyDifficulty: CampaignSettings["enemyDifficulty"];
   lootRarity: CampaignSettings["lootRarity"];
   playerFreedom: CampaignSettings["playerFreedom"];
+  characterOptions: CharacterOptions;
   scene: number;
   situation: string;
   characters: PublicCharacter[];
@@ -80,7 +87,11 @@ export function commitCharacter(
     return { ok: false, error: "The lobby is not open yet." };
   }
 
-  const created = addCharacter(table.characters, draft, owner);
+  const options =
+    table.settings.characterOptions ??
+    characterOptionsFor(table.settings.universe) ??
+    coreCharacterOptions();
+  const created = addCharacter(table.characters, draft, owner, options);
   if (!created.ok) return created;
 
   const opening = table.phase === "waiting";
@@ -116,6 +127,10 @@ export function toSnapshot(table: TableState): TableSnapshot | null {
     enemyDifficulty: table.settings.enemyDifficulty,
     lootRarity: table.settings.lootRarity,
     playerFreedom: table.settings.playerFreedom,
+    characterOptions:
+      table.settings.characterOptions ??
+      characterOptionsFor(table.settings.universe) ??
+      coreCharacterOptions(),
     scene: table.scene,
     situation: table.situation,
     characters: table.characters.map(toPublicCharacter),
@@ -130,6 +145,8 @@ export function toPublicCharacter(character: TableCharacter): PublicCharacter {
     id: character.id,
     name: character.name,
     abilityId: character.abilityId,
+    classId: character.classId || "",
+    raceId: character.raceId || "",
     stats: character.stats,
     wounds: character.wounds,
     owner: character.owner,
@@ -146,9 +163,12 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
   if (typeof value.playerCount !== "number") return null;
   if (!Array.isArray(value.characters)) return null;
 
+  const characterOptions = resolveSnapshotOptions(value.universe, value.characterOptions);
+  if (!characterOptions) return null;
+
   const characters: PublicCharacter[] = [];
   for (const entry of value.characters) {
-    const character = parsePublicCharacter(entry);
+    const character = parsePublicCharacter(entry, characterOptions);
     if (!character) return null;
     characters.push(character);
   }
@@ -171,6 +191,7 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
     enemyDifficulty: isEnemyDifficulty(value.enemyDifficulty) ? value.enemyDifficulty : "standard",
     lootRarity: isLootRarity(value.lootRarity) ? value.lootRarity : "uncommon",
     playerFreedom: isPlayerFreedom(value.playerFreedom) ? value.playerFreedom : "guided",
+    characterOptions,
     scene: typeof value.scene === "number" ? value.scene : 1,
     situation: typeof value.situation === "string" ? value.situation : "",
     characters,
@@ -180,29 +201,44 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
   };
 }
 
-function parsePublicCharacter(value: unknown): PublicCharacter | null {
+function resolveSnapshotOptions(universe: unknown, value: unknown): CharacterOptions | null {
+  if (value === undefined) {
+    return characterOptionsFor(typeof universe === "string" ? universe : "") ?? coreCharacterOptions();
+  }
+  return parseCharacterOptions(value);
+}
+
+function parsePublicCharacter(value: unknown, options: CharacterOptions): PublicCharacter | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || typeof value.name !== "string") return null;
-  const ability = ABILITIES.find((entry) => entry.id === value.abilityId);
-  if (!ability) return null;
+  if (typeof value.abilityId !== "string" || !options.skills.some((entry) => entry.id === value.abilityId)) {
+    return null;
+  }
   if (value.owner !== "host" && value.owner !== "peer") return null;
-  if (!isRecord(value.stats)) return null;
-
-  const might = readStat(value.stats.might);
-  const finesse = readStat(value.stats.finesse);
-  const wits = readStat(value.stats.wits);
-  if (might === null || finesse === null || wits === null) return null;
+  const stats = parseStatBlock(value.stats, options);
+  if (!stats) return null;
+  const classId = readTraitId(value.classId, options.classes);
+  const raceId = readTraitId(value.raceId, options.races);
+  if (classId === null || raceId === null) return null;
 
   return {
     id: value.id,
     name: value.name,
-    abilityId: ability.id,
-    stats: { might, finesse, wits },
+    abilityId: value.abilityId,
+    classId,
+    raceId,
+    stats,
     wounds: readWounds(value.wounds),
     owner: value.owner,
     archived: value.archived === true,
     inScene: value.inScene !== false,
   };
+}
+
+function readTraitId(value: unknown, traits: { id: string }[]): string | null {
+  if (value === undefined || value === "") return "";
+  if (typeof value !== "string" || !traits.some((entry) => entry.id === value)) return null;
+  return value;
 }
 
 function readWounds(value: unknown): Wound[] {
@@ -214,11 +250,6 @@ function readWounds(value: unknown): Wound[] {
     wounds.push(allowed[index]);
   }
   return wounds;
-}
-
-function readStat(value: unknown): 0 | 1 | 2 | null {
-  if (value === 0 || value === 1 || value === 2) return value;
-  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

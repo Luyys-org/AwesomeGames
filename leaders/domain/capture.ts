@@ -61,7 +61,7 @@ export function isLeaderDown(state: GameState, color: PieceColor): boolean {
   return isLeaderCaptured(state, color) || isLeaderSurrounded(state, color);
 }
 
-/** First sniper of that color, straight line, distance 3 or more. Visibility is not required. */
+/** Straight line, distance 3 or more, and every hex strictly between the sniper and the enemy Leader empty. */
 export function sniperWins(state: GameState, color: PieceColor): boolean {
   const sniper = findPieceOfType(state, color, "SNIPER");
   if (!sniper) {
@@ -72,11 +72,11 @@ export function sniperWins(state: GameState, color: PieceColor): boolean {
   if (!leader) {
     return false;
   }
-  if (!isStraightLine(sniper.cellId, leader.cellId)) {
+  if (axialDistance(sniper.cellId, leader.cellId) < 3) {
     return false;
   }
 
-  return axialDistance(sniper.cellId, leader.cellId) >= 3;
+  return isVisible(sniper.cellId, leader.cellId, (cellId) => isOccupied(state, cellId));
 }
 
 export function enemyJailorAdjacent(state: GameState, piece: BoardPiece): boolean {

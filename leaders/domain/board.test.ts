@@ -22,13 +22,15 @@ describe("BoardTopologyTests", () => {
   });
 
   it("recruitmentZonesMatchCanonicalCornerEdges", () => {
-    expect(WHITE_RECRUITMENT_ZONE).toEqual([1, 2, 3, 4, 9, 15]);
-    expect(BLACK_RECRUITMENT_ZONE).toEqual([33, 34, 35, 32, 27, 21]);
+    expect(WHITE_RECRUITMENT_ZONE).toEqual([0, 1, 2, 3, 4, 9, 15]);
+    expect(BLACK_RECRUITMENT_ZONE).toEqual([36, 33, 34, 35, 32, 27, 21]);
   });
 
-  it("crownCellsAreNotRecruitmentCells", () => {
-    expect(isRecruitmentCell("WHITE", WHITE_CROWN_CELL_ID)).toBe(false);
-    expect(isRecruitmentCell("BLACK", BLACK_CROWN_CELL_ID)).toBe(false);
+  it("crownCellsAreThatPlayersRecruitmentCells", () => {
+    expect(isRecruitmentCell("WHITE", WHITE_CROWN_CELL_ID)).toBe(true);
+    expect(isRecruitmentCell("BLACK", BLACK_CROWN_CELL_ID)).toBe(true);
+    expect(isRecruitmentCell("WHITE", BLACK_CROWN_CELL_ID)).toBe(false);
+    expect(isRecruitmentCell("BLACK", WHITE_CROWN_CELL_ID)).toBe(false);
   });
 
   it("farBorderCellIsNotRecruitmentZone", () => {

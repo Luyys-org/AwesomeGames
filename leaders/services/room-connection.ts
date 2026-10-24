@@ -1046,9 +1046,13 @@ function handleFeed(session: Session, data: JsonValue): void {
     if (typeof record.guestReady === "boolean") {
       session.guestReady = record.guestReady;
     }
-    const game = parseGameState(record.game);
-    if (game) {
-      applyRemoteGame(session, game);
+    if (Object.prototype.hasOwnProperty.call(record, "game")) {
+      const game = parseGameState(record.game);
+      if (game) {
+        applyRemoteGame(session, game);
+      } else {
+        session.game = null;
+      }
     }
     const snapshotRecord = parseRoomRecord(record.record);
     if (snapshotRecord) {
