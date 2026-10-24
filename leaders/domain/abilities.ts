@@ -4,6 +4,7 @@ import type { ResolvedCommand } from "@/leaders/domain/action-key";
 import {
   areAdjacent,
   axialDistance,
+  CELLS,
   directionIndex,
   isOnBoard,
   isVisible,
@@ -93,12 +94,11 @@ export function applyCharacterAbility(
 
 export function nemesisLandingCells(state: GameState, nemesis: BoardPiece): number[] {
   const landings: number[] = [];
-  for (const cell of neighborIds(nemesis.cellId)) {
-    const beyond = stepBeyond(nemesis.cellId, cell);
-    if (beyond == null || isOccupied(state, cell) || isOccupied(state, beyond)) {
+  for (const cell of CELLS) {
+    if (cell.id === nemesis.cellId || isOccupied(state, cell.id)) {
       continue;
     }
-    landings.push(beyond);
+    landings.push(cell.id);
   }
   return landings;
 }
@@ -107,9 +107,6 @@ function shaman(state: GameState, piece: BoardPiece, params: Params): void {
   const target = requirePiece(state, requirePieceId(params));
   if (target.type === "LEADER") {
     throw new IllegalGameMoveException("Cannot frog the leader");
-  }
-  if (target.owner === piece.owner) {
-    throw new IllegalGameMoveException("Target must be enemy");
   }
   if (!isVisible(piece.cellId, target.cellId, (cellId) => isOccupied(state, cellId))) {
     throw new IllegalGameMoveException("Target not visible");

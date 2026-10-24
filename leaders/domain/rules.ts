@@ -8,9 +8,7 @@ import {
   BLACK_CROWN_CELL_ID,
   isOnBoard,
   isRecruitmentCell,
-  lineBetween,
   neighborIds,
-  pathClearExceptOrigin,
   recruitmentZone,
   WHITE_CROWN_CELL_ID,
 } from "@/leaders/domain/board";
@@ -240,7 +238,7 @@ function applyDefault(state: GameState, color: PieceColor, command: ResolvedComm
   if (state.phase !== "ACTION") {
     throw new IllegalGameMoveException("Not in action phase");
   }
-  if (!command.pieceId || command.targetCellId == null) {
+  if (!command.pieceId) {
     throw new IllegalGameMoveException("Invalid move command");
   }
 
@@ -253,6 +251,24 @@ function applyDefault(state: GameState, color: PieceColor, command: ResolvedComm
   }
   if (state.actedThisPhase.includes(piece.id)) {
     throw new IllegalGameMoveException("Piece already acted");
+  }
+
+  if (
+    state.pendingAbility?.abilityId === "LEADER_VIZIER" &&
+    state.pendingAbility.pieceId === piece.id &&
+    command.abilityParams.completeVizier === true
+  ) {
+    if (piece.type !== "LEADER") {
+      throw new IllegalGameMoveException("Not a leader");
+    }
+    state.pendingAbility = null;
+    markActed(state, piece.id);
+    maybeArmNemesis(state, piece, -1);
+    return;
+  }
+
+  if (command.targetCellId == null) {
+    throw new IllegalGameMoveException("Invalid move command");
   }
 
   const target = command.targetCellId;
@@ -433,13 +449,8 @@ function applyNemesis(state: GameState, actorPlayerId: string, command: Resolved
   if (target === piece.cellId) {
     throw new IllegalGameMoveException("Nemesis must move to a different cell");
   }
-
-  const line = lineBetween(piece.cellId, target);
-  if (line.length === 0 || axialDistance(piece.cellId, target) !== 2) {
-    throw new IllegalGameMoveException("Nemesis moves 2 in a straight line");
-  }
-  if (!pathClearExceptOrigin(line, (cellId) => isOccupied(state, cellId))) {
-    throw new IllegalGameMoveException("Path must be clear");
+  if (isOccupied(state, target)) {
+    throw new IllegalGameMoveException("Cell occupied");
   }
 
   relocate(state, piece.id, target);

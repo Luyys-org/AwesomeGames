@@ -46,6 +46,23 @@ describe("CharacterLegalActionsTest", () => {
     expect(action?.targetPieceId).toBe("rider");
   });
 
+  it("shamanCanFrogAnAlly", () => {
+    const state = board();
+    const shaman = put(state, "SHAMAN", "BLACK", at(0, 0), "shaman");
+    const ally = put(state, "RIDER", "BLACK", at(0, -2), "ally");
+    const next = apply(
+      state,
+      command({
+        type: "ACTIVE_ABILITY",
+        pieceId: shaman.id,
+        abilityParams: { targetPieceId: ally.id },
+      }),
+      "black",
+    );
+    expect(next.pieces[ally.id].frog).toBe(true);
+    expect(next.frogExpiresAfterOpponentTurn[ally.id]).toBe(state.turnNumber + 2);
+  });
+
   it("sniperHasDefaultMoveOnly", () => {
     const state = board();
     const sniper = put(state, "SNIPER", "BLACK", at(1, 0), "sniper");
@@ -179,6 +196,27 @@ describe("CharacterLegalActionsTest", () => {
       (entry) => entry.targetPieceId === "rider",
     );
     expect(action?.targetPieceId).toBe("rider");
+  });
+
+  it("illusionistCanSwapWithAnAlly", () => {
+    const state = board();
+    const illusionist = put(state, "ILLUSIONIST", "BLACK", at(0, 0), "illusionist");
+    const ally = put(state, "RIDER", "BLACK", at(0, -2), "ally");
+    const action = actionsFor(illusionist.id, legalActionsFor(state)).find(
+      (entry) => entry.targetPieceId === ally.id,
+    );
+    expect(action?.targetPieceId).toBe(ally.id);
+    const next = apply(
+      state,
+      command({
+        type: "ACTIVE_ABILITY",
+        pieceId: illusionist.id,
+        abilityParams: { targetPieceId: ally.id },
+      }),
+      "black",
+    );
+    expect(next.pieces[illusionist.id].cellId).toBe(at(0, -2));
+    expect(next.pieces[ally.id].cellId).toBe(at(0, 0));
   });
 
   it("clawLauncherHasAdvanceOrDragChoiceGroup", () => {

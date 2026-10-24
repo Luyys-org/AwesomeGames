@@ -32,7 +32,8 @@ During Recruitment, place the figure on an **empty** cell on **both outer border
 
 - **No jumping** over other characters and **no overlapping** two characters on one cell, **except** where a character ability **explicitly** allows it.
 - **Explicit exceptions in this ruleset:** Shaman **FROG** (may pass through occupied cells while moving); **ACROBAT** (jumps **over** exactly one **adjacent** character per jump; **landing cell must be empty**).
-- All other moves (including **RIDER**, **NEMESIS** forced move, **ROYAL GUARD** chain, default 1-step move) require every entered cell to be **empty** before the move.
+- All other moves (including **RIDER**, **ROYAL GUARD** chain, default 1-step move) require every entered cell to be **empty** before the move.
+- **NEMESIS** does not travel a path: it relocates to **any other empty** cell on the board.
 
 ---
 
@@ -120,7 +121,7 @@ You **must not** complete any action you control (moves, abilities, pushes, swap
 ### Capture helpers
 
 - **Standard capture:** **two enemy** characters **adjacent** to the enemy Leader.
-- **ARCHER:** **2** hexes on a straight line; may help even if not **visible**; **not** if Archer is **adjacent**; counts as **one** captor — **second captor still required**.
+- **ARCHER:** **2** hexes on a straight line; a character on the hex between the Archer and the enemy Leader does **not** block this; **not** if Archer is **adjacent**; counts as **one** captor — **second captor still required**.
 - **ASSASSIN:** **Adjacent** to enemy Leader ⇒ capture **without** a second captor (checked at **end of turn** unless state already decisive).
 - **SNIPER:** **3+** hexes on a straight line with **no character between**; **no** ally help required — **immediate** win at turn start when true. A figure on any hex strictly between the Sniper and the enemy Leader blocks the win, including a **FROG**.
 - **Never count as captors** (even if adjacent or on line): **FROG**, **WILL-O'-THE-WISP**, **CUB** — they **never** contribute to capture conditions.
@@ -139,7 +140,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### SHAMAN
 
-- **Active:** **Visible** **non-Leader** on a straight line becomes **FROG** until after the **opponent's next full turn** (their Action + Recruitment), then **reverts** before your following turn. When it reverts, capture and surround are checked immediately.
+- **Active:** **Visible** **non-Leader** (**ally or enemy**) on a straight line becomes **FROG** until after the **opponent's next full turn** (their Action + Recruitment), then **reverts** before your following turn. When it reverts, capture and surround are checked immediately. Leaders cannot be frogged.
 - **FROG:** Move up to **2** spaces; may **pass through** occupied cells; **never** helps capture; if the piece **already acted** this Action Phase, it **cannot** act again as Frog.
 
 ### SNIPER
@@ -172,7 +173,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### ILLUSIONIST
 
-- **Active:** **Swap** with **non-adjacent**, **visible** character on a straight line.
+- **Active:** **Swap** with a **non-adjacent**, **visible** **ally or enemy** on a straight line.
 
 ### CLAW LAUNCHER
 
@@ -194,7 +195,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### ARCHER
 
-- **Passive:** Helps capture from **2** spaces on straight line (see helpers); not if adjacent.
+- **Passive:** Helps capture from **2** spaces on a straight line even when the hex between the Archer and the enemy Leader is occupied (see helpers); not if adjacent.
 
 ### ASSASSIN
 
@@ -211,11 +212,13 @@ No special ability. Default move; **VIZIER** may add one step.
 ### VIZIER
 
 - **Passive:** Your Leader may move **1 additional** empty step during its action (Leader safety still applies).
+- If the Leader **stops after one step**, the Vizier **can still move** this phase.
+- If the Leader **moves twice** (the extra step, or one leap of two hexes), the Vizier **cannot move** this phase.
 
 ### NEMESIS
 
 - **Special:** No voluntary move in your Action Phase.
-- When **enemy Leader moves**, Nemesis **must** move **2** spaces ending on a **different empty** cell (standard occupancy rules on path).
+- When **enemy Leader moves**, Nemesis **must** move to **any other empty** cell on the board. The destination does not have to be in a straight line, and pieces between the cells do not block it.
 - While **FROG**, Nemesis does **not** make this forced move. After it reverts, the passive works again.
 - **Only Nemesis** may break Leader safety mid-resolution; **capture/surround** for **both** Leaders is checked **after** Nemesis's forced move, not before.
 
