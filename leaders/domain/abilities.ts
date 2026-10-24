@@ -4,11 +4,8 @@ import type { ResolvedCommand } from "@/leaders/domain/action-key";
 import {
   areAdjacent,
   axialDistance,
-  cellAt,
   directionIndex,
-  getCell,
   isOnBoard,
-  isStraightLine,
   isVisible,
   lineBetween,
   neighborIds,
@@ -444,19 +441,9 @@ function manipulator(state: GameState, piece: BoardPiece, params: Params, cell: 
     return;
   }
 
-  const destinations = manipulatorDestinations(state, piece.cellId, target.cellId);
-  if (!isStraightLine(piece.cellId, target.cellId) && !destinations.includes(cell)) {
-    throw new IllegalGameMoveException("Target not on line");
-  }
-  if (destinations.length === 0) {
-    throw new IllegalGameMoveException("Target cannot be moved");
-  }
+  const destinations = manipulatorDestinations(state, target.cellId);
   if (!destinations.includes(cell)) {
-    const line = lineBetween(piece.cellId, target.cellId);
-    if (!line.includes(cell)) {
-      throw new IllegalGameMoveException("Destination must be on line to target");
-    }
-    throw new IllegalGameMoveException("Manipulator may only move target one step on the line");
+    throw new IllegalGameMoveException("Destination must be an empty adjacent hex");
   }
 
   if (target.owner !== piece.owner) {
@@ -515,33 +502,13 @@ function validateManipulatorTarget(state: GameState, piece: BoardPiece, target: 
     throw new IllegalGameMoveException("Target not visible");
   }
   assertProtectorAllows(state, target);
-  if (manipulatorDestinations(state, piece.cellId, target.cellId).length === 0) {
+  if (manipulatorDestinations(state, target.cellId).length === 0) {
     throw new IllegalGameMoveException("Target cannot be moved");
   }
 }
 
-function manipulatorDestinations(state: GameState, fromId: number, targetCell: number): number[] {
-  const line = lineBetween(fromId, targetCell);
-  if (line.length < 3) {
-    return [];
-  }
-
-  const destinations: number[] = [];
-  const toward = line[line.length - 2];
-  if (!isOccupied(state, toward)) {
-    destinations.push(toward);
-  }
-
-  const target = getCell(targetCell);
-  const previous = getCell(toward);
-  if (target && previous) {
-    const away = cellAt(target.q + (target.q - previous.q), target.r + (target.r - previous.r));
-    if (away && !isOccupied(state, away.id)) {
-      destinations.push(away.id);
-    }
-  }
-
-  return destinations;
+function manipulatorDestinations(state: GameState, targetCell: number): number[] {
+  return neighborIds(targetCell).filter((cellId) => !isOccupied(state, cellId));
 }
 
 function acrobatLanding(fromId: number, overId: number): number | null {

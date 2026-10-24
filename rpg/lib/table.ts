@@ -1,0 +1,293 @@
+import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
+import {
+  characterOptionsFor,
+  coreCharacterOptions,
+  parseCharacterOptions,
+  parseStatBlock,
+  type CharacterOptions,
+} from "@/rpg/lib/character-options";
+import {
+  addCharacter,
+  type CharacterDraft,
+  type Owner,
+  type TableCharacter,
+  type Wound,
+} from "@/rpg/lib/character";
+
+export interface TableState {
+  roomCode: string;
+  roomStatus: "open" | "closed";
+  phase: "waiting" | "lobby";
+  settings: CampaignSettings;
+  objectiveStatus: "active" | "complete" | "failed";
+  scene: number;
+  situation: string;
+  revision: number;
+  characters: TableCharacter[];
+}
+
+export interface PublicCharacter {
+  id: string;
+  name: string;
+  abilityId: string;
+  classId: string;
+  raceId: string;
+  stats: Record<string, number>;
+  wounds: Wound[];
+  owner: Owner;
+  archived: boolean;
+  inScene: boolean;
+}
+
+export interface TableSnapshot {
+  revision: number;
+  roomCode: string;
+  roomStatus: "open" | "closed";
+  phase: "lobby";
+  campaignName: string;
+  universe: CampaignSettings["universe"];
+  universeLabel: string | null;
+  universeType: CampaignSettings["universeType"];
+  playerCount: number;
+  objective: string;
+  objectiveStatus: TableState["objectiveStatus"];
+  deathPenalty: CampaignSettings["deathPenalty"];
+  enemyDifficulty: CampaignSettings["enemyDifficulty"];
+  lootRarity: CampaignSettings["lootRarity"];
+  playerFreedom: CampaignSettings["playerFreedom"];
+  characterOptions: CharacterOptions;
+  scene: number;
+  situation: string;
+  characters: PublicCharacter[];
+  transcript: [];
+  openCheck: null;
+  intentQueue: [];
+}
+
+export function createTable(roomCode: string, settings: CampaignSettings): TableState {
+  return {
+    roomCode,
+    roomStatus: "open",
+    phase: "waiting",
+    settings,
+    objectiveStatus: "active",
+    scene: 1,
+    situation: "",
+    revision: 0,
+    characters: [],
+  };
+}
+
+export function commitCharacter(
+  table: TableState,
+  draft: CharacterDraft,
+  owner: Owner,
+): { ok: true; table: TableState; character: TableCharacter } | { ok: false; error: string } {
+  if (owner === "peer" && table.phase !== "lobby") {
+    return { ok: false, error: "The lobby is not open yet." };
+  }
+
+  const options =
+    table.settings.characterOptions ??
+    characterOptionsFor(table.settings.universe) ??
+    coreCharacterOptions();
+  const created = addCharacter(table.characters, draft, owner, options);
+  if (!created.ok) return created;
+
+  const opening = table.phase === "waiting";
+
+  return {
+    ok: true,
+    character: created.character,
+    table: {
+      ...table,
+      phase: "lobby",
+      revision: opening ? 1 : table.revision + 1,
+      characters: [...table.characters, created.character],
+    },
+  };
+}
+
+export function toSnapshot(table: TableState): TableSnapshot | null {
+  if (table.phase !== "lobby" || table.revision < 1) return null;
+
+  return {
+    revision: table.revision,
+    roomCode: table.roomCode,
+    roomStatus: table.roomStatus,
+    phase: "lobby",
+    campaignName: table.settings.campaignName,
+    universe: table.settings.universe,
+    universeLabel: table.settings.universeLabel,
+    universeType: table.settings.universeType,
+    playerCount: table.settings.playerCount,
+    objective: table.settings.objective,
+    objectiveStatus: table.objectiveStatus,
+    deathPenalty: table.settings.deathPenalty,
+    enemyDifficulty: table.settings.enemyDifficulty,
+    lootRarity: table.settings.lootRarity,
+    playerFreedom: table.settings.playerFreedom,
+    characterOptions:
+      table.settings.characterOptions ??
+      characterOptionsFor(table.settings.universe) ??
+      coreCharacterOptions(),
+    scene: table.scene,
+    situation: table.situation,
+    characters: table.characters.map(toPublicCharacter),
+    transcript: [],
+    openCheck: null,
+    intentQueue: [],
+  };
+}
+
+export function toPublicCharacter(character: TableCharacter): PublicCharacter {
+  return {
+    id: character.id,
+    name: character.name,
+    abilityId: character.abilityId,
+    classId: character.classId || "",
+    raceId: character.raceId || "",
+    stats: character.stats,
+    wounds: character.wounds,
+    owner: character.owner,
+    archived: character.archived,
+    inScene: character.inScene,
+  };
+}
+
+export function parseSnapshot(value: unknown): TableSnapshot | null {
+  if (!isRecord(value)) return null;
+  if (value.phase !== "lobby") return null;
+  if (typeof value.revision !== "number" || typeof value.roomCode !== "string") return null;
+  if (typeof value.campaignName !== "string" || typeof value.objective !== "string") return null;
+  if (typeof value.playerCount !== "number") return null;
+  if (!Array.isArray(value.characters)) return null;
+
+  const characterOptions = resolveSnapshotOptions(value.universe, value.characterOptions);
+  if (!characterOptions) return null;
+
+  const characters: PublicCharacter[] = [];
+  for (const entry of value.characters) {
+    const character = parsePublicCharacter(entry, characterOptions);
+    if (!character) return null;
+    characters.push(character);
+  }
+
+  return {
+    revision: value.revision,
+    roomCode: value.roomCode,
+    roomStatus: value.roomStatus === "closed" ? "closed" : "open",
+    phase: "lobby",
+    campaignName: value.campaignName,
+    universe: isUniverse(value.universe) ? value.universe : "custom",
+    universeLabel: typeof value.universeLabel === "string" ? value.universeLabel : null,
+    universeType: isUniverseType(value.universeType) ? value.universeType : "fantasy",
+    playerCount: value.playerCount,
+    objective: value.objective,
+    objectiveStatus: value.objectiveStatus === "complete" || value.objectiveStatus === "failed"
+      ? value.objectiveStatus
+      : "active",
+    deathPenalty: isDeathPenalty(value.deathPenalty) ? value.deathPenalty : "wounded",
+    enemyDifficulty: isEnemyDifficulty(value.enemyDifficulty) ? value.enemyDifficulty : "standard",
+    lootRarity: isLootRarity(value.lootRarity) ? value.lootRarity : "uncommon",
+    playerFreedom: isPlayerFreedom(value.playerFreedom) ? value.playerFreedom : "guided",
+    characterOptions,
+    scene: typeof value.scene === "number" ? value.scene : 1,
+    situation: typeof value.situation === "string" ? value.situation : "",
+    characters,
+    transcript: [],
+    openCheck: null,
+    intentQueue: [],
+  };
+}
+
+function resolveSnapshotOptions(universe: unknown, value: unknown): CharacterOptions | null {
+  if (value === undefined) {
+    return characterOptionsFor(typeof universe === "string" ? universe : "") ?? coreCharacterOptions();
+  }
+  return parseCharacterOptions(value);
+}
+
+function parsePublicCharacter(value: unknown, options: CharacterOptions): PublicCharacter | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string" || typeof value.name !== "string") return null;
+  if (typeof value.abilityId !== "string" || !options.skills.some((entry) => entry.id === value.abilityId)) {
+    return null;
+  }
+  if (value.owner !== "host" && value.owner !== "peer") return null;
+  const stats = parseStatBlock(value.stats, options);
+  if (!stats) return null;
+  const classId = readTraitId(value.classId, options.classes);
+  const raceId = readTraitId(value.raceId, options.races);
+  if (classId === null || raceId === null) return null;
+
+  return {
+    id: value.id,
+    name: value.name,
+    abilityId: value.abilityId,
+    classId,
+    raceId,
+    stats,
+    wounds: readWounds(value.wounds),
+    owner: value.owner,
+    archived: value.archived === true,
+    inScene: value.inScene !== false,
+  };
+}
+
+function readTraitId(value: unknown, traits: { id: string }[]): string | null {
+  if (value === undefined || value === "") return "";
+  if (typeof value !== "string" || !traits.some((entry) => entry.id === value)) return null;
+  return value;
+}
+
+function readWounds(value: unknown): Wound[] {
+  if (!Array.isArray(value)) return [];
+  const allowed = ["hurt", "impaired", "down"] as const;
+  const wounds: Wound[] = [];
+  for (let index = 0; index < value.length && index < allowed.length; index += 1) {
+    if (value[index] !== allowed[index]) break;
+    wounds.push(allowed[index]);
+  }
+  return wounds;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isUniverse(value: unknown): value is CampaignSettings["universe"] {
+  return (
+    value === "star-wars" ||
+    value === "dungeons-and-dragons" ||
+    value === "alien" ||
+    value === "custom"
+  );
+}
+
+function isUniverseType(value: unknown): value is CampaignSettings["universeType"] {
+  return (
+    value === "fantasy" ||
+    value === "science-fiction" ||
+    value === "horror" ||
+    value === "modern" ||
+    value === "historical" ||
+    value === "post-apocalyptic"
+  );
+}
+
+function isDeathPenalty(value: unknown): value is CampaignSettings["deathPenalty"] {
+  return value === "wounded" || value === "out-of-scene" || value === "new-character";
+}
+
+function isEnemyDifficulty(value: unknown): value is CampaignSettings["enemyDifficulty"] {
+  return value === "easy" || value === "standard" || value === "hard" || value === "severe";
+}
+
+function isLootRarity(value: unknown): value is CampaignSettings["lootRarity"] {
+  return value === "scarce" || value === "uncommon" || value === "common" || value === "abundant";
+}
+
+function isPlayerFreedom(value: unknown): value is CampaignSettings["playerFreedom"] {
+  return value === "narrow" || value === "guided" || value === "open";
+}

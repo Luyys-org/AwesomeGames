@@ -362,9 +362,6 @@ export function HexGameBoard({
                     }}
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (isAbilityTargetPiece && onAbilityTargetPieceClick) {
-                        onAbilityTargetPieceClick(sourceId, piece.id);
-                      }
                     }}
                     className={
                       piece.owner === viewerColor &&

@@ -1,0 +1,315 @@
+---
+description: Co-op RPG implementation rules for session flow, d20 checks, the AI game master, and host authority.
+globs: rpg/**/*.ts,rpg/**/*.tsx,app/game/rpg/**/*.ts,app/game/rpg/**/*.tsx
+alwaysApply: false
+---
+
+# RPG — co-op rules (authoritative for agents)
+
+This is a cooperative text RPG for **2–6 living player characters**. The creator is one of them. The game master is an AI seat with no character. Play is a shared transcript. A preset universe sets fiction, party defaults, and the character options below. A custom universe lets the creator replace those character options.
+
+When this rule applies: implement this ruleset as written. It is closed.
+
+---
+
+## Authority
+
+| Role | What it does |
+|------|----------------|
+| Host | The creator's browser. The only client that calls the model, rolls, validates, and writes the save |
+| Peer | Joins with the room code, submits a character and intents, and renders host snapshots |
+| Game master | Model output. Proposes fiction and check fields. Applies no state |
+
+The host player's intents use the same queue as peers. Host-only controls are: provider, save, load, start, roll commit, `abilityApplies` correction, scene confirm, rest, objective confirm, forced-check confirm, and end session.
+
+A snapshot carries an integer `revision`, starting at **1** when the campaign exists and increasing by **1** on each committed change. Peers apply a snapshot only when its `revision` is strictly greater than the last one applied. The host browser is the source of truth.
+
+---
+
+## Provider
+
+The host sets `provider`, `model`, and `apiKey` before situation generation and before play from a save. `model` and `apiKey` are non-empty strings. `provider` is `openai`, `anthropic` or `grok`.
+
+| Provider | Call |
+|----------|------|
+| `openai` | `POST https://api.openai.com/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
+| `anthropic` | `POST https://api.anthropic.com/v1/messages`. Headers `x-api-key: <apiKey>`, `anthropic-version: 2023-06-01`, `content-type: application/json`. Body `model`, `max_tokens: 1024`, `temperature`, top-level `system`, and one `user` message. Read the concatenated `text` blocks of `content` |
+| `grok` | `POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
+
+Temperature is **0** for situation generation and check proposals. Temperature is **0.7** for outcome narration and new-scene prose. No tools, no function calls.
+
+The API key may live in host memory and in `localStorage` key `rpg.host.ai` as `{ "provider", "model", "apiKey" }`. It is never written into the save, a snapshot, a log, or a prompt.
+
+A transport failure or an empty body leaves state unchanged. The host shows one error string and may resend.
+
+Every model request uses this system text, plus the schema and limits in the user message:
+
+- You are the game master and you have no player character.
+- Use the stats, skills, classes, races, and modifiers from the user message. Do not invent different ones. Difficulties, wounds, and the death penalty stay as the user message states.
+- Reply with JSON only, matching the schema in the user message.
+- Do not write a die result, a total, or a success word.
+- Do not change the objective, the death penalty, enemy difficulty, loot rarity, player freedom, stats, abilities, or wounds.
+- Follow the enemy difficulty, loot rarity, and player freedom in the user message. They add no die, item, or wound.
+- Player characters are allies. Harm applies only where the user message allows it.
+- Keep setup and narration inside the character limits in the user message.
+
+Model context is the campaign settings, living character sheets, archived names, the current situation, and the last **20** transcript entries. Claim codes and the API key are omitted. Before parsing, if the body begins with a markdown fence, remove that opening line and one closing fence. Then parse JSON. One retry includes the validation error. A second invalid body cancels that model step.
+
+Truncate in code, with no ellipsis added: situation **800** characters, setup **280**, narration **600**.
+
+---
+
+## Campaign
+
+Settings are required for a new campaign and immutable after generation. The host collects them in three steps: universe (`campaignName`, `universe`, and when `universe` is `custom` also `universeLabel` and `universeType`), team (`playerCount`, `deathPenalty`), and game (`objective`, `enemyDifficulty`, `lootRarity`, `playerFreedom`). Every field on the current step is required before the next step.
+
+| Field | Rule |
+|-------|------|
+| `campaignName` | Trimmed, 1–60 characters, no CR or LF |
+| `universe` | `star-wars`, `dungeons-and-dragons`, `alien`, or `custom` |
+| `universeLabel` | `null`, or 1–40 trimmed characters when `universe` is `custom`. Display labels for the presets are Star Wars, Dungeons & Dragons, and Alien |
+| `universeType` | `fantasy`, `science-fiction`, `horror`, `modern`, `historical`, or `post-apocalyptic`. The host chooses it only when `universe` is `custom`. A preset sets it from the table below |
+| `playerCount` | Integer 2–6, including the host. The game master is told this count. It does not change the 2–6 living-character limits |
+| `objective` | Trimmed, 1–280 characters, no CR or LF |
+| `objectiveStatus` | Starts `active`. Later `complete` or `failed` |
+| `deathPenalty` | `wounded`, `out-of-scene`, or `new-character` |
+| `enemyDifficulty` | `easy`, `standard`, `hard`, or `severe`. The game master prefers check difficulty 8, 10, 12, or 15 in that order. Another legal difficulty is still allowed when the fiction requires it |
+| `lootRarity` | `scarce`, `uncommon`, `common`, or `abundant`. How often useful gear appears in the fiction. There is no inventory and no loot roll |
+| `playerFreedom` | `narrow`, `guided`, or `open`. `narrow` permits only actions inside the current situation. `guided` permits any action the scene can contain. `open` permits any action the character could attempt. The host still accepts a well-formed intent. The attempt can still fail |
+
+Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `universeType`, `playerCount`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, and `playerFreedom`, replacing any previous values. `custom` clears those fields and does not fill them. `campaignName`, `universeLabel`, and `objective` are never filled or cleared by a universe change. The host may edit a filled value before generation, except the character options. Those stay with the preset. `custom` leaves them empty for the creator to fill.
+
+| Universe | `universeType` | `playerCount` | `deathPenalty` | `enemyDifficulty` | `lootRarity` | `playerFreedom` |
+|----------|----------------|---------------|----------------|-------------------|--------------|-----------------|
+| `star-wars` | `science-fiction` | 4 | `wounded` | `standard` | `uncommon` | `open` |
+| `dungeons-and-dragons` | `fantasy` | 4 | `new-character` | `standard` | `common` | `guided` |
+| `alien` | `horror` | 3 | `new-character` | `severe` | `scarce` | `narrow` |
+
+Choosing a preset also writes that universe's character options. The point pool is **3**. The stats are Might, Finesse, and Wits. Players assign **2**, **1**, and **0**, each once. The skills are the eight in the ability table. Each universe has its own classes and races. A class or race modifier adds its amount to that stat, or to the roll when the check uses that stat. An empty roll stat applies to every roll. Amounts are **+1** or **−1** on the presets.
+
+`custom` does not fill character options. The creator sets a point pool from **1** to **12**, **1–6** stats, **1–12** skills, **1–8** classes, and **1–8** races. Players assign whole numbers from **0** through the pool, and the sum cannot exceed the pool. Each class and race has up to **4** modifiers. A modifier is `stat` or `roll`, from **−3** to **+3**, excluding **0**. A roll modifier names a stat, or applies to every roll when the stat is empty. Names are trimmed, 1–24 characters, unique in their list ignoring case. A skill names one of those stats and a 1–80 character description of when it applies.
+
+The host requests `{ "situation": string }` at temperature 0. An empty situation after trim is invalid. If both attempts fail, the host stays on settings and no campaign is stored. Scene **1** is that situation. The host then creates their character and the lobby opens.
+
+---
+
+## Characters
+
+Each living character has one owner (`host` or `peer`), one name, one skill, one class, one race, and one stat assignment. A campaign with no classes or races, used only when loading an older custom game, does not require a class or race.
+
+| Field | Rule |
+|-------|------|
+| `id` | `pc_` plus 8 lowercase hex digits from 4 `crypto.getRandomValues` bytes |
+| `name` | Trimmed, 1–24 characters, matching `^[A-Za-z0-9 '\-]+$`, unique ignoring case, including archived names |
+| `stats` | One whole number per campaign stat. On a preset, the values are a permutation of `2`, `1`, and `0`. On a custom universe, each value is from `0` through the point pool and the sum does not exceed the pool |
+| `abilityId` | One skill id from the campaign, immutable |
+| `classId` | One class id from the campaign, immutable. Empty only when the campaign has no classes |
+| `raceId` | One race id from the campaign, immutable. Empty only when the campaign has no races |
+| `claimCode` | 4 characters from the room-code alphabet |
+| `wounds` | A prefix of `["hurt", "impaired", "down"]`, including `[]` |
+| `archived` | `true` only after the `new-character` penalty |
+| `inScene` | `true` from creation. Penalties and replacements change it as below |
+
+A create that would make a **7th** non-archived character is rejected. In `lobby`, a connection with no seat creates one character. In `play`, the only create the host accepts is from the connection whose seat is an archived character. The replacement copies `owner`, receives a new `id` and `claimCode`, has wounds `[]`, has `inScene: false`, and enters on the next scene start. Living count returns to what it was before that death.
+
+---
+
+## Abilities
+
+Skills are these abilities, unless the universe is custom and the creator replaced the list. A matching skill adds **+2** to the check. `abilityApplies` is true only when the skill's stat equals the check's stat and the host keeps it true. The host may set it false before the roll. The host may set it true before the roll only when the stats match. Class and race modifiers are separate and always apply.
+
+| Id | Line name | Stat | Applies when the intent is to |
+|----|-----------|------|-------------------------------|
+| `fighter` | Fighter | Might | fight, break, lift, or endure |
+| `shooter` | Shooter | Finesse | make a ranged attack or a precise shot |
+| `sneak` | Sneak | Finesse | hide, sneak, or steal |
+| `medic` | Medic | Wits | treat wounds or diagnose |
+| `scholar` | Scholar | Wits | recall, research, or decipher |
+| `face` | Face | Wits | persuade, deceive, or calm |
+| `pilot` | Pilot | Finesse | drive, pilot, or navigate a vehicle |
+| `tech` | Tech | Wits | use, repair, or bypass a machine |
+
+---
+
+## Wounds and death
+
+Boxes fill in order and are never skipped. **Hurt** has no modifier. **Impaired** is **−2** on every check. **Down** cannot act, assist, or be the actor of a check.
+
+Apply `n` wounds (`1` or `2`) in a loop. Each pass appends the next box. When the box just appended is `down`, apply the campaign death penalty once and stop. Further wounds in that result do nothing. A character who is already Down takes no additional box.
+
+| Penalty | When Down is first reached |
+|---------|----------------------------|
+| `wounded` | Stays in the scene and Down. A successful treat from another character removes only `down`. `impaired` remains |
+| `out-of-scene` | `inScene` becomes false immediately. At the next scene start, wounds become `["hurt", "impaired"]` and `inScene` becomes true |
+| `new-character` | `archived` becomes true and `inScene` becomes false. The name stays reserved. That player submits a replacement, which enters on the next scene start with `[]` wounds. Living count does not increase |
+
+---
+
+## Lobby, claim, and start
+
+The room code is **6** characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (31 symbols). Draw each character with `crypto.getRandomValues`: read a `uint32`, reject values at or above `floor(2^32 / 31) * 31`, then take `mod 31`. A new code is issued on every host session, including after load. Regenerating before start invalidates the previous code. The code is fixed once play starts. The code is not stored in the save. The snapshot includes it.
+
+| Phase | Entry |
+|-------|-------|
+| `lobby` | Host character exists. Peers join and create characters. Each creator is claimed on that connection |
+| `play` | Host starts. Every non-archived character gets `inScene: true`. The situation is the first transcript entry |
+| `ended` | Host confirms `complete` or `failed` |
+
+Start is enabled only when the phase is `lobby`, at least **2** characters are non-archived, and every connected joiner has finished creation. A connected joiner with no character blocks start. After start, a new connection cannot create a character. Load restores each stored `inScene` value. The start transition is the only time every non-archived character is set in scene together.
+
+On a loaded game, unclaimed characters block nobody. They cannot act until a connection claims them with the name, ignoring case, and the exact case-sensitive `claimCode`. Claim works for an archived character. Peers see only their own claim code, delivered in a seat message `{ "characterId", "claimCode", "status": "active" | "replaced" }`. Snapshots omit every claim code. One live connection per character: a successful claim sends the previous connection `status: "replaced"`, and that connection submits nothing until it claims again. The loading host claims the non-archived `owner: "host"` character locally. While that character is archived and the replacement is unsubmitted, the host has no seat and uses the host controls only.
+
+---
+
+## Play loop
+
+Intents are resolved one at a time, in the order the host accepted them. The host's own intents use that queue. A peer intent is `{ "kind": "act" | "treat", "text", "targetCharacterId" }`. The host sets `characterId` from that connection's seat and ignores a payload whose seat does not match. `text` is trimmed and 1–400 characters. The actor is in scene, not archived, and not Down. While `openCheck` is set, later intents stay queued. When it is null, the host takes the next intent.
+
+| Kind | Target | Resolution |
+|------|--------|------------|
+| `act` | `null` | Model proposes the check. Wounds from the result apply only to the actor |
+| `treat` | Another in-scene, non-archived character with at least one wound | Host forces the check fields below. A treat never wounds anyone |
+
+Treat fields the host writes, including when the model call fails: `risky: true`, `stat: "wits"`, `difficulty: 12`, `failure: "setback"`, `abilityApplies: true` only for `medic`, setup `Treat <target name>.` when the model supplies no valid setup. One success removes the last wound box. If the target is Down under `wounded`, success removes only `down`.
+
+An `act` proposal is this JSON:
+
+```json
+{
+  "risky": true,
+  "stat": "might",
+  "difficulty": 12,
+  "failure": "harm",
+  "abilityApplies": true,
+  "setup": "The lock is rusted shut."
+}
+```
+
+`stat` is `might`, `finesse`, or `wits`. `difficulty` is **8**, **10**, **12**, or **15** (easy, standard, hard, severe). `failure` is `setback`, `harm`, or `severe`. When `risky` is false, `stat`, `difficulty`, and `failure` are null, `abilityApplies` is false, and `setup` is the whole outcome. No roll and no wound. Any other shape is invalid.
+
+When the outcome call fails twice, or a proposal fails twice, the mechanical result already committed stays. If no roll was committed, there is no wound. A system transcript entry records `The game master returned an unreadable result.` The player may submit a new intent.
+
+The host requests a forced-check proposal only when the phase is `play`, `openCheck` is null, and the intent queue is empty. The model returns `{ "force": false }` or `{ "force": true, "targetCharacterId", "stat", "difficulty", "failure", "abilityApplies", "setup" }`. The target is in scene, not archived, not Down, and absent from `forcedCheckCharacterIds`. The host confirms before the check exists. Confirm appends the target id to that list and opens the check. Reject discards the proposal. The list survives reload and clears on the next scene. A confirmed check stays spent if a later narration fails. Wounds from it apply only to that target. A `force: true` body without the check fields is invalid.
+
+---
+
+## The d20
+
+The host rolls. The model does not. Draw a `uint32` with `crypto.getRandomValues`, reject values at or above `floor(2^32 / 20) * 20` (`4294967280`), then use `(n % 20) + 1`.
+
+**Total** = natural + assigned stat + class and race stat modifiers for that stat + ability (`0` or `+2`) + assist (`0` or `+2`) + class and race roll modifiers − `2` when the rolling character's wounds include `impaired`. A roll modifier counts when its stat is empty or equals the check's stat. A stat modifier counts only for its stat.
+
+Success means total ≥ difficulty, with two exceptions. Natural **20** succeeds and applies no wound. Natural **1** fails, and a `severe` failure on a natural 1 has a margin of at least 5.
+
+| Failure | On a failed roll |
+|---------|------------------|
+| `setback` | No wound |
+| `harm` | 1 wound |
+| `severe` | 1 wound, or 2 when `difficulty - total >= 5` |
+
+Before commit, the snapshot shows stat, difficulty, failure, `abilityApplies`, assist state, and setup. It omits the natural roll, the total, success, and the outcome prose.
+
+The rolling character's player names at most one ally, who is in scene, not Down, and not the roller. The host's own roller records that choice locally. A peer sends `nameAssist`. That ally accepts or declines. The roller may clear that ally before commit. A replaced or disconnected ally is a decline. Assist is `+2` only when the status is `accepted`. The host commits when assist is null, `accepted`, or `declined`. A `pending` assist blocks commit. The roller is the actor on `act` and `treat`, and the target on a forced check. The impairment modifier uses the roller's wounds from before this check applies new ones.
+
+The committed line uses an em dash and this order, omitting a `0` stat modifier and any unused bonus:
+
+`Might 14 vs 12 — success (d20 12, +2 stat, +2 Fighter, −2 impaired)`
+
+Stat names on the line are Might, Finesse, and Wits. The impairment sign is the Unicode minus `−`. After commit, the host applies wounds, appends the line, then requests outcome JSON `{ "narration": string, "sceneBreak": boolean, "objective": null | "complete" | "failed" }` at temperature 0.7. The user message includes the line and the wound result. `sceneBreak` and `objective` are proposals. The line stays if narration fails.
+
+---
+
+## Scenes and objective
+
+The host confirms a scene change only when the phase is `play`, `openCheck` is null, and the intent queue is empty. The host may open that confirm without a model proposal. The confirm carries `rest: boolean`, default false.
+
+On confirm, in order:
+
+1. If `rest` is true, each in-scene, non-archived, non-Down character whose wounds are exactly `["hurt"]` becomes `[]`. Any other wound track is unchanged.
+2. Increase `scene` by 1 and clear the forced-check cap.
+3. Each non-archived character with `inScene: false` and a `down` box becomes `inScene: true` with wounds `["hurt", "impaired"]`.
+4. Each non-archived character with `inScene: false` and wounds `[]` becomes `inScene: true`.
+5. Commit steps 1–4, then request `{ "situation": string }` at temperature 0.7. A replacement created after that commit waits for the following scene. On a double failure, keep the previous situation and append `The game master returned an unreadable scene.`
+
+The host confirms `complete` or `failed` only when `openCheck` is null and the intent queue is empty. That sets `objectiveStatus`, sets phase to `ended`, and appends an objective entry. Intents, checks, and scene confirms stop. Saving remains available.
+
+End session, or the host disconnecting, sets `roomStatus` to `closed`, sends one final snapshot, and stops accepting peer messages. Objective end leaves `roomStatus` at `open`.
+
+---
+
+## Peer messages
+
+Peers send only these. The host ignores an invalid message.
+
+| Type | Payload |
+|------|---------|
+| `join` | `roomCode` |
+| `createCharacter` | `name`, `abilityId`, `classId`, `raceId`, `stats` |
+| `claim` | `name`, `claimCode` |
+| `intent` | `kind`, `text`, `targetCharacterId` |
+| `nameAssist` | `checkId`, `allyCharacterId` |
+| `assistResponse` | `checkId`, `accept` |
+
+A wrong room code is ignored. In `play` or `ended`, a connection with no seat receives public snapshots and sends only `claim`. In `play`, the host accepts `createCharacter` from a connection whose seat is an archived character. On success that seat becomes the replacement. `nameAssist` is accepted only from the rolling character while the check is uncommitted. `assistResponse` is accepted only from the named ally.
+
+A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `universeType`, `playerCount`, `objective`, `objectiveStatus`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, `characterOptions`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`. Each character includes `classId` and `raceId`.
+
+---
+
+## Save `schemaVersion: 1`
+
+Every commit also writes the save JSON to `localStorage` key `rpg.host.save`. If that write throws, play continues and the host shows one error. Download name: slug of `campaignName` plus `.rpg.json`. The slug is trimmed, lowercased, spaces turned into `-`, characters outside `[a-z0-9-]` removed, repeated hyphens collapsed, and end hyphens removed. An empty slug becomes `campaign`.
+
+Load is a file pick or the current `rpg.host.save`. The host sets the provider again after a load. Validation failure rejects the whole document with one reason. There is no partial load.
+
+A document is valid only when every rule here holds. Otherwise the host rejects it with one reason. `schemaVersion` is `1`. Enums and string limits match this rule. Stats match the campaign character options. A document without `characterOptions` uses the preset for its universe, or Might, Finesse, Wits and the eight skills when the universe is `custom`. `classId` and `raceId` may be absent on those older documents. Wounds are a legal prefix. Names are unique ignoring case. Non-archived count is **0–6**. `lobby` has **1–6** non-archived characters and none archived. `play` or `ended` has **2–6** non-archived characters when none are archived, and **0–6** when at least one is archived. At most one character is non-archived with `owner: "host"`. A non-archived character with `inScene: false` has wounds `[]` or a `down` box. `roomStatus` is session-only, starts `open`, and is absent from the save.
+
+```json
+{
+  "schemaVersion": 1,
+  "campaignName": "Ashreach",
+  "universe": "star-wars",
+  "universeLabel": null,
+  "universeType": "science-fiction",
+  "playerCount": 4,
+  "objective": "Recover the beacon before the storm hits.",
+  "objectiveStatus": "active",
+  "deathPenalty": "wounded",
+  "enemyDifficulty": "standard",
+  "lootRarity": "uncommon",
+  "playerFreedom": "open",
+  "scene": 1,
+  "situation": "The party stands at the beacon's outer door.",
+  "revision": 1,
+  "phase": "lobby",
+  "forcedCheckCharacterIds": [],
+  "openCheck": null,
+  "intentQueue": [],
+  "characters": [
+    {
+      "id": "pc_00000000",
+      "name": "Ada",
+      "abilityId": "fighter",
+      "classId": "sw-soldier",
+      "raceId": "sw-human",
+      "stats": { "might": 2, "finesse": 1, "wits": 0 },
+      "wounds": [],
+      "claimCode": "ABCD",
+      "owner": "host",
+      "archived": false,
+      "inScene": true
+    }
+  ],
+  "transcript": []
+}
+```
+
+`openCheck` is null or `{ "id", "kind", "actorId", "targetId", "stat", "difficulty", "failure", "abilityApplies", "assist", "setup", "committed", "line" }`. `kind` is `act`, `treat`, or `force`. On `act`, `targetId` is null and wounds apply to `actorId`. On `treat`, wounds apply to nobody and healing applies to `targetId`. On `force`, `actorId` is null and wounds apply to `targetId`. `id` is `chk_` plus 8 lowercase hex digits. `assist` is null or `{ "allyId", "status": "pending" | "accepted" | "declined" }`. `intentQueue` holds accepted intents that are not yet the open check. After load, `revision` continues; the next commit adds 1. A new room code is issued. A non-risky `act` never opens a check: the host appends the intent and the setup as narration in that commit.
+
+Transcript entries are append-only and use these `type` values: `situation` (`scene`, `text`), `intent` (`characterId`, `kind`, `text`), `check` (`characterId`, `line`), `narration` (`text`), `wound` (`characterId`, `wounds`), `death` (`characterId`, `penalty`), `scene` (`scene`), `objective` (`status`), `system` (`text`).
+
+---
+
+## Systems in this game
+
+The game is this list: the campaign's stats and point pool, its skills, one class, one race, their stat and roll modifiers, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. Preset campaigns use Might, Finesse, Wits, the eight skills, and that universe's classes and races. Enemy difficulty, loot rarity, and player freedom are instructions to the game master. An implementation adds no other resolution, character, or session system.

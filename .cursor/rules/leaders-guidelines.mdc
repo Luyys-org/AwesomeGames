@@ -1,6 +1,6 @@
 ---
 description: Leaders core game rules and mechanics. Use when implementing or changing game logic, rules engine, board state, or character abilities.
-globs: "**/game/**/*.tsx
+globs: leaders/**/*.tsx
 alwaysApply: false
 ---
 
@@ -24,7 +24,7 @@ When this rule applies: implement **only** what is specified here. If behavior i
 
 ### Recruitment placement zone
 
-During Recruitment, place the figure on an **empty** cell on **both outer borders of the board that meet at that player's corner** (the corner where their crown sits). If no such cell is empty, that recruitment is **illegal**.
+During Recruitment, place the figure on an **empty** cell on **both outer borders of the board that meet at that player's corner** (the corner where their crown sits), **including that player's crown hex** when the Leader has left it. The opponent's crown is not in your zone. If no such cell is empty, that recruitment is **illegal**.
 
 ---
 
@@ -79,7 +79,7 @@ Then the opponent's turn.
 - Place the figure on an **empty** cell in the **recruitment zone**.
 - Reveal from deck to restore **3** face-up offers when possible.
 
-**HERMIT & CUB:** One legal pick recruits **both**. Allowed only if you can place **two** figures and have **fewer than 4 non-Leader** cards in front of you. In Action Phase you may act with **Hermit**, **Cub**, or **both** consecutively (each at most one action).
+**HERMIT & CUB:** The deck contains a **Hermit** card and **no Cub** card. One legal Hermit pick places **both** figures and adds **only Hermit** to the hand (they count as **one** card toward the limit of 5). Cub is placed on an empty recruitment-zone hex adjacent to the Hermit. If those two cells are not available, the pick is **illegal**. Cub cannot be selected as an offer. In Action Phase you may act with **Hermit**, **Cub**, or **both** consecutively (each at most one action).
 
 ---
 
@@ -96,8 +96,9 @@ Opponent **Leader** is defeated if:
 
 | Trigger | When |
 |---------|------|
-| **SNIPER** passive | **Start of your turn**, before Action Phase — if true, **match ends immediately** |
-| **Capture / surround** (actions, recruitment, other passives e.g. **ASSASSIN**, **ARCHER**) | **End of active player's full turn** (after Action and all Recruitment phase(s) for that turn) |
+| **FROG revert** | When one or more frogs turn back, **before** Action Phase — capture and surround for **both** Leaders. Active Leader down: opponent wins. Otherwise enemy Leader down: active player wins. |
+| **SNIPER** passive | **Start of your turn**, after frog revert, before Action Phase — if true, **match ends immediately** |
+| **Capture / surround** (actions, recruitment, other passives e.g. **ASSASSIN**, **ARCHER**) | **End of active player's full turn** (after Action and all Recruitment phase(s) for that turn), and again when a frog reverts |
 
 ### Leader safety (active player)
 
@@ -121,7 +122,7 @@ You **must not** complete any action you control (moves, abilities, pushes, swap
 - **Standard capture:** **two enemy** characters **adjacent** to the enemy Leader.
 - **ARCHER:** **2** hexes on a straight line; may help even if not **visible**; **not** if Archer is **adjacent**; counts as **one** captor — **second captor still required**.
 - **ASSASSIN:** **Adjacent** to enemy Leader ⇒ capture **without** a second captor (checked at **end of turn** unless state already decisive).
-- **SNIPER:** **3+** hexes on a straight line; visibility **not** required; **no** ally help required — **immediate** win at turn start when true.
+- **SNIPER:** **3+** hexes on a straight line with **no character between**; **no** ally help required — **immediate** win at turn start when true. A figure on any hex strictly between the Sniper and the enemy Leader blocks the win, including a **FROG**.
 - **Never count as captors** (even if adjacent or on line): **FROG**, **WILL-O'-THE-WISP**, **CUB** — they **never** contribute to capture conditions.
 
 ---
@@ -138,12 +139,12 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### SHAMAN
 
-- **Active:** **Visible** **non-Leader** on a straight line becomes **FROG** until after the **opponent's next full turn** (their Action + Recruitment), then **reverts** before your following turn.
+- **Active:** **Visible** **non-Leader** on a straight line becomes **FROG** until after the **opponent's next full turn** (their Action + Recruitment), then **reverts** before your following turn. When it reverts, capture and surround are checked immediately.
 - **FROG:** Move up to **2** spaces; may **pass through** occupied cells; **never** helps capture; if the piece **already acted** this Action Phase, it **cannot** act again as Frog.
 
 ### SNIPER
 
-- **Passive:** At **start of your turn**, before Action Phase — if enemy Leader is **3+** away on a straight line, **you win immediately**.
+- **Passive:** At **start of your turn**, before Action Phase — if enemy Leader is **3+** away on a straight line and every hex between you is empty, **you win immediately**.
 
 ### TACTICIAN
 
@@ -155,7 +156,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### ACROBAT
 
-- **Active:** Jump in a straight line **over** one **adjacent** character; **landing empty**; may jump **twice**; second jump may use a **different** straight direction; still **one** adjacent character jumped per jump.
+- **Active:** Jump in a straight line **over** one **adjacent** character; **landing empty**; may jump **once or twice** (the second jump is optional); second jump may use a **different** straight direction; still **one** adjacent character jumped per jump.
 
 ### RIDER
 
@@ -181,7 +182,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### MANIPULATOR
 
-- **Active:** **Visible** **non-adjacent enemy** on straight line moves **1** space along that line; **acting player** chooses **toward** or **away** from Manipulator; destination must be **empty** and on board.
+- **Active:** **Visible** **non-adjacent enemy** on a straight line moves **1** space to **any empty adjacent** hex; destination must be on board.
 
 ### WANDERER
 
@@ -201,7 +202,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 ### JAILOR
 
-- **Passive:** **Adjacent enemies** cannot use **Active** abilities.
+- **Passive:** **Adjacent enemies** cannot use **Active** abilities. **Passive** and **Special** abilities still trigger (including **WILL-O'-THE-WISP** and **NEMESIS**).
 
 ### PROTECTOR
 
@@ -215,6 +216,7 @@ No special ability. Default move; **VIZIER** may add one step.
 
 - **Special:** No voluntary move in your Action Phase.
 - When **enemy Leader moves**, Nemesis **must** move **2** spaces ending on a **different empty** cell (standard occupancy rules on path).
+- While **FROG**, Nemesis does **not** make this forced move. After it reverts, the passive works again.
 - **Only Nemesis** may break Leader safety mid-resolution; **capture/surround** for **both** Leaders is checked **after** Nemesis's forced move, not before.
 
 ### HERMIT & CUB
@@ -227,6 +229,6 @@ No special ability. Default move; **VIZIER** may add one step.
 
 - Single source of truth for board, hands, face-up offers, phase, and frog timers.
 - Validate before mutate; reject illegal moves.
-- Resolution order: **Sniper** (immediate win) → Action Phase (player order) → Recruitment(s) → **end-of-turn** capture/surround (+ Leader safety already enforced).
+- Resolution order: at turn start, **revert frogs** (capture/surround if any reverted) → **Sniper** (immediate win) → Action Phase (player order) → Recruitment(s) → **end-of-turn** capture/surround (+ Leader safety already enforced).
 - Shared hex primitives: `neighbors`, `line`, `visibility`, `clearLine`, `distance`, `occupancy`, `push`, `swap`.
 - Board topology **37 cells** / recruitment zones must match configuration, not an ad-hoc grid.
