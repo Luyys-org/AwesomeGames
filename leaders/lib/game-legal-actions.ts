@@ -56,7 +56,7 @@ function abilityActionSelectsPieceTarget(
   return pieceIdAtCell(game, targetCellId) !== null;
 }
 
-function legalActionsForPiece(
+export function legalActionsForPiece(
   game: GameStateView,
   pieceId: string,
   type: GameLegalAction["type"],
@@ -85,7 +85,7 @@ function legalActionsForPiece(
       const adjacentOnly = new Set(boardNeighborCellIds(leaderCellId));
       filtered = filtered.filter(
         (action) =>
-          action.targetCellId !== undefined && adjacentOnly.has(action.targetCellId),
+          action.targetCellId === undefined || adjacentOnly.has(action.targetCellId),
       );
     }
   }
@@ -263,6 +263,12 @@ export function legalInteractiveCellIds(game: GameStateView, pieceId: string): n
   if (activeAbilityTargetsPiecesOnly(game, pieceId)) {
     return [...abilityCells];
   }
+  if (
+    pendingForThisPiece &&
+    game.pendingAbility?.abilityId === LEADER_VIZIER_PENDING_ABILITY_ID
+  ) {
+    return legalDefaultMoveCellIds(game, pieceId);
+  }
   if (pendingForThisPiece) {
     return [...abilityCells];
   }
@@ -283,12 +289,11 @@ export function matchingLegalActionsForCell(
 }
 
 export function legalActionChoiceLabel(action: GameLegalAction): string {
-  if (action.type === "DEFAULT_MOVE") {
-    return "Move";
-  }
-
   try {
     const decoded = decodeActionKey(action.actionKey);
+    if (decoded.abilityParams.completeVizier === true) {
+      return "Stop after one step";
+    }
     if (decoded.abilityParams.completeRoyalGuard === true) {
       return "Finish ability";
     }
@@ -304,6 +309,10 @@ export function legalActionChoiceLabel(action: GameLegalAction): string {
     }
   } catch {
     // Fall through to generic ability label.
+  }
+
+  if (action.type === "DEFAULT_MOVE") {
+    return "Move";
   }
 
   return "Use ability";

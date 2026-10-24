@@ -18,10 +18,12 @@ import {
   isSameHexActionChoice,
   legalActionChoiceLabel,
   legalAbilityHighlights,
+  legalActionsForPiece,
   legalDefaultMoveCellIds,
   legalInteractiveCellIds,
   pieceHasLegalActions,
   ACROBAT_PENDING_ABILITY_ID,
+  LEADER_VIZIER_PENDING_ABILITY_ID,
   ROYAL_GUARD_PENDING_ABILITY_ID,
 } from "@/leaders/lib/game-legal-actions";
 import {
@@ -201,6 +203,11 @@ export function GameActiveView({
       return [] as number[];
     }
 
+    const vizierExtraStep =
+      game.pendingAbility?.abilityId === LEADER_VIZIER_PENDING_ABILITY_ID &&
+      abilityFocusedPieceId !== null &&
+      game.pendingAbility.pieceId === abilityFocusedPieceId;
+
     if (
       game.phase !== "ACTION" ||
       !abilityFocusedPieceId ||
@@ -208,7 +215,7 @@ export function GameActiveView({
       !canActInActionPhase ||
       resolvingNemesisAsViewer ||
       abilityAwaitingPieceTarget ||
-      abilityResolvingServerHexStep
+      (abilityResolvingServerHexStep && !vizierExtraStep)
     ) {
       return [] as number[];
     }
@@ -274,13 +281,18 @@ export function GameActiveView({
     : false;
 
   const acrobatFinishActions = useMemo(() => {
-    if (
-      game.pendingAbility?.abilityId !== ACROBAT_PENDING_ABILITY_ID ||
-      !abilityFocusedPieceId
-    ) {
+    if (!abilityFocusedPieceId) {
       return [] as GameLegalAction[];
     }
-    return abilityCompletionOnlyActions(game, abilityFocusedPieceId);
+    if (game.pendingAbility?.abilityId === ACROBAT_PENDING_ABILITY_ID) {
+      return abilityCompletionOnlyActions(game, abilityFocusedPieceId);
+    }
+    if (game.pendingAbility?.abilityId === LEADER_VIZIER_PENDING_ABILITY_ID) {
+      return legalActionsForPiece(game, abilityFocusedPieceId, "DEFAULT_MOVE").filter(
+        (action) => action.targetCellId == null,
+      );
+    }
+    return [] as GameLegalAction[];
   }, [abilityFocusedPieceId, game]);
 
   const canSelectOwnPiece = useCallback(
@@ -353,10 +365,18 @@ export function GameActiveView({
         return false;
       }
 
+      if (
+        abilityFocusedPieceId !== pieceId &&
+        abilityTargets.pieceIds.includes(pieceId)
+      ) {
+        return false;
+      }
+
       return legalDefaultMoveCellIds(game, pieceId).length > 0;
     },
     [
       abilityFocusedPieceId,
+      abilityTargets.pieceIds,
       canSelectOwnPiece,
       game,
       isCommandPending,
@@ -429,7 +449,7 @@ export function GameActiveView({
 
   const actionHintText = (() => {
     if (resolvingNemesisAsViewer) {
-      return "The enemy Leader moved — move Nemesis 2 hexes in a straight, clear line (drag or tap a highlight).";
+      return "The enemy Leader moved — move Nemesis to any empty hex (drag or tap a highlight).";
     }
     if (game.resolvingNemesis && isActivePlayer) {
       return "Waiting for your opponent to move Nemesis…";
@@ -438,6 +458,9 @@ export function GameActiveView({
       return "Tap a highlighted hex to choose where the enemy is pushed.";
     }
     if (abilityResolvingServerHexStep) {
+      if (game.pendingAbility?.abilityId === LEADER_VIZIER_PENDING_ABILITY_ID) {
+        return "Tap a highlighted hex for one more step, or stop after this step so your Vizier can still move.";
+      }
       if (
         game.pendingAbility?.abilityId === ROYAL_GUARD_PENDING_ABILITY_ID &&
         game.pendingAbility.step === 1
@@ -465,6 +488,12 @@ export function GameActiveView({
           return "Tap a highlighted character to jump again, or finish the ability if you are done.";
         }
         return "Tap a highlighted character to jump over in a straight line.";
+      }
+      if (focusedType === "ILLUSIONIST") {
+        return "Tap a highlighted ally or enemy to swap places.";
+      }
+      if (focusedType === "SHAMAN") {
+        return "Tap a highlighted ally or enemy to turn them into a frog.";
       }
       return "Tap a highlighted character, then choose a destination hex.";
     }

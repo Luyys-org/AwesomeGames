@@ -112,8 +112,7 @@ function countsAsCaptor(state: GameState, piece: BoardPiece, leader: BoardPiece)
     return (
       !areAdjacent(piece.cellId, leader.cellId) &&
       isStraightLine(piece.cellId, leader.cellId) &&
-      axialDistance(piece.cellId, leader.cellId) === 2 &&
-      isVisible(piece.cellId, leader.cellId, (cellId) => isOccupied(state, cellId))
+      axialDistance(piece.cellId, leader.cellId) === 2
     );
   }
 

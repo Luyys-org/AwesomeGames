@@ -48,10 +48,13 @@ export interface CharacterAbilityCopy {
 const PIECE_ABILITY_COPY = {
   LEADER: {
     summary: "Default move only.",
-    rules: ["No special ability.", "VIZIER may add one empty step to Leader movement."],
+    rules: [
+      "No special ability.",
+      "VIZIER may add one empty step. Stopping after one step leaves the Vizier free to move; taking the extra step does not.",
+    ],
   },
   SHAMAN: {
-    summary: "Active: A visible non-Leader on a straight line becomes FROG.",
+    summary: "Active: A visible non-Leader, ally or enemy, on a straight line becomes FROG.",
     rules: [
       "FROG lasts until after the opponent's next full turn (Action + Recruitment).",
       "FROG: move up to 2 spaces; may pass through occupied cells.",
@@ -100,7 +103,7 @@ const PIECE_ABILITY_COPY = {
     ],
   },
   ILLUSIONIST: {
-    summary: "Active: Swap with a non-adjacent, visible character on a straight line.",
+    summary: "Active: Swap with a non-adjacent, visible ally or enemy on a straight line.",
     rules: [],
   },
   CLAW_LAUNCHER: {
@@ -126,7 +129,11 @@ const PIECE_ABILITY_COPY = {
   },
   ARCHER: {
     summary: "Passive: Helps capture the enemy Leader from 2 spaces on a straight line.",
-    rules: ["Does not help if adjacent.", "Counts as one captor; a second is still required."],
+    rules: [
+      "A character on the hex between the Archer and the enemy Leader does not block this.",
+      "Does not help if adjacent.",
+      "Counts as one captor; a second is still required.",
+    ],
   },
   ASSASSIN: {
     summary: "Passive: Adjacent to the enemy Leader captures without a second captor.",
@@ -142,14 +149,18 @@ const PIECE_ABILITY_COPY = {
   },
   VIZIER: {
     summary: "Passive: Your Leader may move 1 additional empty step during its action.",
-    rules: ["Leader safety rules still apply."],
+    rules: [
+      "If the Leader stops after one step, the Vizier can still move this phase.",
+      "If the Leader moves twice, the Vizier cannot move this phase.",
+      "Leader safety rules still apply.",
+    ],
   },
   NEMESIS: {
     summary: "Special: No voluntary move during your Action Phase.",
     rules: [
-      "When the enemy Leader moves, Nemesis must move 2 hexes in a straight, clear line to a different empty cell.",
+      "When the enemy Leader moves, Nemesis must move to any other empty cell on the board.",
+      "The destination does not have to be in a straight line, and pieces in between do not block it.",
       "This does not trigger while Nemesis is a frog.",
-      "Standard occupancy rules apply on the path.",
       "Only Nemesis may break Leader safety mid-resolution.",
       "Capture and surround are checked after Nemesis's forced move.",
     ],
