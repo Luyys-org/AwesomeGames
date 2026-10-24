@@ -52,6 +52,16 @@ describe("CaptureEvaluatorTest", () => {
     expect(isLeaderCaptured(state, "WHITE")).toBe(false);
   });
 
+  it("archerCountsWhenTheHexBetweenIsOccupied", () => {
+    const state = emptyState();
+    put(state, "LEADER", "WHITE", at(0, 0));
+    put(state, "ARCHER", "BLACK", at(2, 0));
+    put(state, "RIDER", "WHITE", at(1, 0));
+    expect(isLeaderCaptured(state, "WHITE")).toBe(false);
+    put(state, "BRUISER", "BLACK", at(0, -1));
+    expect(isLeaderCaptured(state, "WHITE")).toBe(true);
+  });
+
   it("leaderSurroundedWhenAllNeighborsOccupied", () => {
     const state = emptyState();
     const leader = at(0, 0);

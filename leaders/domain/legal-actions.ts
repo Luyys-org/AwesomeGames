@@ -92,6 +92,11 @@ function pendingActions(state: GameState): GameLegalAction[] {
     for (const cellId of neighborIds(piece.cellId)) {
       candidates.push({ type: "DEFAULT_MOVE", pieceId: piece.id, targetCellId: cellId });
     }
+    candidates.push({
+      type: "DEFAULT_MOVE",
+      pieceId: piece.id,
+      abilityParams: { completeVizier: true },
+    });
   } else if (pending.abilityId === "ROYAL_GUARD") {
     for (const cellId of neighborIds(piece.cellId)) {
       candidates.push({

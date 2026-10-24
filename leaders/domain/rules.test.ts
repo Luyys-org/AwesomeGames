@@ -133,6 +133,27 @@ describe("NemesisResolutionTest", () => {
       ),
     ).toThrow(/Frogged Nemesis/);
   });
+
+  it("nemesisMayMoveToAnyEmptyCell", () => {
+    const state = emptyState({ resolvingNemesis: true });
+    put(state, "LEADER", "BLACK", at(0, 0));
+    put(state, "LEADER", "WHITE", at(0, -3));
+    const nemesis = put(state, "NEMESIS", "WHITE", at(0, 2), "nemesis");
+    put(state, "RIDER", "BLACK", at(0, 1));
+    const target = at(3, 0);
+    expect(
+      legalActionsFor(state).some(
+        (action) => action.pieceId === nemesis.id && action.targetCellId === target,
+      ),
+    ).toBe(true);
+    const next = apply(
+      state,
+      command({ type: "DEFAULT_MOVE", pieceId: nemesis.id, targetCellId: target }),
+      "white",
+    );
+    expect(next.pieces[nemesis.id].cellId).toBe(target);
+    expect(next.resolvingNemesis).toBe(false);
+  });
 });
 
 describe("second player and frogs", () => {
@@ -433,6 +454,42 @@ describe("vizier geometry reminder", () => {
         (action) => action.pieceId === vizier.id && action.type === "DEFAULT_MOVE",
       ),
     ).toBe(false);
+  });
+
+  it("vizierCanMoveWhenLeaderStopsAfterOneStep", () => {
+    const state = emptyState();
+    state.blackHand = ["LEADER", "VIZIER"];
+    const leader = put(state, "LEADER", "BLACK", at(0, 0), "leader");
+    put(state, "LEADER", "WHITE", at(0, -3));
+    const vizier = put(state, "VIZIER", "BLACK", at(1, 1), "vizier");
+    const firstStep = apply(
+      state,
+      command({ type: "DEFAULT_MOVE", pieceId: leader.id, targetCellId: at(1, 0) }),
+      "black",
+    );
+    expect(
+      legalActionsFor(firstStep).some(
+        (action) => action.pieceId === leader.id && action.targetCellId == null,
+      ),
+    ).toBe(true);
+    const stopped = apply(
+      firstStep,
+      command({
+        type: "DEFAULT_MOVE",
+        pieceId: leader.id,
+        abilityParams: { completeVizier: true },
+      }),
+      "black",
+    );
+    expect(stopped.pendingAbility).toBeNull();
+    expect(stopped.pieces[leader.id].cellId).toBe(at(1, 0));
+    expect(stopped.actedThisPhase).toContain(leader.id);
+    expect(stopped.actedThisPhase).not.toContain(vizier.id);
+    expect(
+      legalActionsFor(stopped).some(
+        (action) => action.pieceId === vizier.id && action.type === "DEFAULT_MOVE",
+      ),
+    ).toBe(true);
   });
 
   it("leaderWithVizierMayHaveExtendedDefaultMove", () => {
