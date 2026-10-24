@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { RoomLobby } from "@/rpg/features/room/room-lobby";
 import { isRoomCode } from "@/rpg/lib/room-code";
 import { paths } from "@/rpg/paths";
 
@@ -26,12 +27,7 @@ export default async function RpgRoomPage({
         RPG
       </Link>
       {valid ? (
-        <>
-          <h1 className="mt-3 font-mono text-2xl font-semibold text-zinc-50">
-            {roomCode}
-          </h1>
-          <p className="mt-2 text-base text-zinc-400">Waiting for the host.</p>
-        </>
+        <RoomLobby roomCode={roomCode} />
       ) : (
         <>
           <h1 className="mt-3 text-2xl font-semibold text-zinc-50">Join a game</h1>

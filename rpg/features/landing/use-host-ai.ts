@@ -38,7 +38,7 @@ export function useHostAi() {
   const save = useCallback(
     (input: HostAiInput): string | null => {
       if (!isAiProvider(input.provider)) {
-        return "Choose OpenAI or Anthropic.";
+        return "Choose OpenAI, Anthropic, or Grok.";
       }
 
       const model = input.model.trim();

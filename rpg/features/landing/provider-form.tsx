@@ -3,11 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  type ProviderHealthStatus,
+  useProviderHealth,
+} from "@/rpg/features/landing/use-provider-health";
+import { type HostAiInput } from "@/rpg/features/landing/use-host-ai";
+import {
   type AiProvider,
   AI_PROVIDERS,
+  isAiProvider,
   providerLabel,
 } from "@/rpg/lib/host-ai";
-import { type HostAiInput } from "@/rpg/features/landing/use-host-ai";
 
 interface ProviderFormProps {
   ready: boolean;
@@ -30,7 +35,9 @@ export function ProviderForm({
   const [modelName, setModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const health = useProviderHealth(linked);
   const hydrated = useRef(false);
+  const checking = health.status === "checking";
 
   useEffect(() => {
     if (!ready || hydrated.current) return;
@@ -55,8 +62,8 @@ export function ProviderForm({
           event.preventDefault();
           setError(null);
 
-          if (selectedProvider !== "openai" && selectedProvider !== "anthropic") {
-            setError("Choose OpenAI or Anthropic.");
+          if (!isAiProvider(selectedProvider)) {
+            setError("Choose OpenAI, Anthropic, or Grok.");
             return;
           }
 
@@ -71,6 +78,7 @@ export function ProviderForm({
           }
 
           setApiKey("");
+          void health.check();
         }}
       >
         <div className="grid gap-4 sm:grid-cols-3">
@@ -79,12 +87,10 @@ export function ProviderForm({
             <select
               required
               value={selectedProvider}
-              disabled={!ready}
+              disabled={!ready || checking}
               onChange={(event) => {
                 const value = event.target.value;
-                setSelectedProvider(
-                  value === "openai" || value === "anthropic" ? value : "",
-                );
+                setSelectedProvider(isAiProvider(value) ? value : "");
                 setError(null);
               }}
               className="field mt-1 w-full"
@@ -105,8 +111,11 @@ export function ProviderForm({
               required
               autoComplete="off"
               spellCheck={false}
-              disabled={!ready}
-              placeholder={selectedProvider === "anthropic" ? "claude-sonnet-4-5" : "gpt-4o"}
+              disabled={!ready || checking}
+              placeholder={
+                AI_PROVIDERS.find((entry) => entry.id === selectedProvider)?.modelPlaceholder ??
+                "gpt-4o"
+              }
               value={modelName}
               onChange={(event) => {
                 setModelName(event.target.value);
@@ -123,7 +132,7 @@ export function ProviderForm({
               required={!linked}
               autoComplete="off"
               spellCheck={false}
-              disabled={!ready}
+              disabled={!ready || checking}
               placeholder={linked ? "Blank keeps the saved key" : ""}
               value={apiKey}
               onChange={(event) => {
@@ -145,12 +154,13 @@ export function ProviderForm({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={!ready} className="btn btn-primary">
+          <button type="submit" disabled={!ready || checking} className="btn btn-primary">
             {linked ? "Update provider" : "Link provider"}
           </button>
           {linked ? (
             <button
               type="button"
+              disabled={checking}
               className="btn btn-secondary"
               onClick={() => {
                 const message = remove();
@@ -158,6 +168,7 @@ export function ProviderForm({
                   setError(message);
                   return;
                 }
+                health.reset();
                 setSelectedProvider("");
                 setModelName("");
                 setApiKey("");
@@ -168,12 +179,74 @@ export function ProviderForm({
             </button>
           ) : null}
           {linked && provider ? (
-            <p role="status" className="min-w-0 text-sm break-all text-zinc-300">
+            <p className="min-w-0 text-sm break-all text-zinc-300">
               Linked · {providerLabel(provider)} · {model}
             </p>
           ) : null}
+          <ProviderHealth status={health.status} detail={health.detail} />
         </div>
       </form>
     </section>
+  );
+}
+
+function ProviderHealth({
+  status,
+  detail,
+}: {
+  status: ProviderHealthStatus;
+  detail: string | null;
+}) {
+  if (status === "idle") return null;
+
+  if (status === "checking") {
+    return (
+      <p role="status" className="text-sm text-zinc-400">
+        Checking provider…
+      </p>
+    );
+  }
+
+  const ok = status === "reachable";
+  const label = ok ? "Reachable" : `Unreachable. ${detail ?? "The provider could not be reached."}`;
+
+  return (
+    <p
+      role="status"
+      className={`inline-flex max-w-full min-w-0 items-start gap-2 text-sm ${ok ? "text-zinc-300" : "text-red-200"}`}
+    >
+      <HealthIcon ok={ok} />
+      <span className="min-w-0 break-words">{label}</span>
+    </p>
+  );
+}
+
+function HealthIcon({ ok }: { ok: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className={`mt-0.5 h-4 w-4 shrink-0 ${ok ? "text-emerald-400" : "text-red-400"}`}
+    >
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      {ok ? (
+        <path
+          d="M5 8.2 7 10.1 11 5.9"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : (
+        <path
+          d="M5.6 5.6 10.4 10.4 M10.4 5.6 5.6 10.4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
   );
 }

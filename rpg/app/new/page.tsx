@@ -6,7 +6,7 @@ import { paths } from "@/rpg/paths";
 
 export const metadata: Metadata = {
   title: "New campaign",
-  description: "Name the campaign, choose a universe, and set the objective.",
+  description: "Set the universe, the party, and how the table plays.",
 };
 
 export default function NewCampaignPage() {
@@ -20,7 +20,7 @@ export default function NewCampaignPage() {
       </Link>
       <h1 className="mt-3 text-2xl font-semibold text-zinc-50">New campaign</h1>
       <p className="mt-2 text-base text-zinc-400">
-        Name the campaign, choose a universe, and set the objective and death penalty.
+        Set the universe, the party, and how the table plays. Every field is required.
       </p>
       <NewCampaignForm />
     </main>

@@ -1,6 +1,6 @@
 export const HOST_AI_STORAGE_KEY = "rpg.host.ai";
 
-export type AiProvider = "openai" | "anthropic";
+export type AiProvider = "openai" | "anthropic" | "grok";
 
 export interface HostAi {
   provider: AiProvider;
@@ -8,9 +8,10 @@ export interface HostAi {
   apiKey: string;
 }
 
-export const AI_PROVIDERS: { id: AiProvider; label: string }[] = [
-  { id: "openai", label: "OpenAI" },
-  { id: "anthropic", label: "Anthropic" },
+export const AI_PROVIDERS: { id: AiProvider; label: string; modelPlaceholder: string }[] = [
+  { id: "openai", label: "OpenAI", modelPlaceholder: "gpt-4o" },
+  { id: "anthropic", label: "Anthropic", modelPlaceholder: "claude-sonnet-4-5" },
+  { id: "grok", label: "Grok", modelPlaceholder: "grok-4.7" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -18,7 +19,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isAiProvider(value: unknown): value is AiProvider {
-  return value === "openai" || value === "anthropic";
+  return AI_PROVIDERS.some((entry) => entry.id === value);
 }
 
 export function parseHostAi(value: unknown): HostAi | null {

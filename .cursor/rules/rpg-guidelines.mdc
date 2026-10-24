@@ -34,6 +34,7 @@ The host sets `provider`, `model`, and `apiKey` before situation generation and 
 |----------|------|
 | `openai` | `POST https://api.openai.com/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
 | `anthropic` | `POST https://api.anthropic.com/v1/messages`. Headers `x-api-key: <apiKey>`, `anthropic-version: 2023-06-01`, `content-type: application/json`. Body `model`, `max_tokens: 1024`, `temperature`, top-level `system`, and one `user` message. Read the concatenated `text` blocks of `content` |
+| `grok` | `POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
 
 Temperature is **0** for situation generation and check proposals. Temperature is **0.7** for outcome narration and new-scene prose. No tools, no function calls.
 
@@ -47,7 +48,8 @@ Every model request uses this system text, plus the schema and limits in the use
 - The universe changes names and scenery only. Stats, abilities, the d20, difficulties, wounds, and the death penalty stay as the user message states.
 - Reply with JSON only, matching the schema in the user message.
 - Do not write a die result, a total, or a success word.
-- Do not change the objective, the death penalty, stats, abilities, or wounds.
+- Do not change the objective, the death penalty, enemy difficulty, loot rarity, player freedom, stats, abilities, or wounds.
+- Follow the enemy difficulty, loot rarity, and player freedom in the user message. They add no die, item, or wound.
 - Player characters are allies. Harm applies only where the user message allows it.
 - Keep setup and narration inside the character limits in the user message.
 
@@ -59,16 +61,29 @@ Truncate in code, with no ellipsis added: situation **800** characters, setup **
 
 ## Campaign
 
-Settings are required for a new campaign and immutable after generation.
+Settings are required for a new campaign and immutable after generation. The host collects them in three steps: universe (`campaignName`, `universe`, and when `universe` is `custom` also `universeLabel` and `universeType`), team (`playerCount`, `deathPenalty`), and game (`objective`, `enemyDifficulty`, `lootRarity`, `playerFreedom`). Every field on the current step is required before the next step.
 
 | Field | Rule |
 |-------|------|
 | `campaignName` | Trimmed, 1–60 characters, no CR or LF |
 | `universe` | `star-wars`, `dungeons-and-dragons`, `alien`, or `custom` |
 | `universeLabel` | `null`, or 1–40 trimmed characters when `universe` is `custom`. Display labels for the presets are Star Wars, Dungeons & Dragons, and Alien |
+| `universeType` | `fantasy`, `science-fiction`, `horror`, `modern`, `historical`, or `post-apocalyptic`. The host chooses it only when `universe` is `custom`. A preset sets it from the table below |
+| `playerCount` | Integer 2–6, including the host. The game master is told this count. It does not change the 2–6 living-character limits |
 | `objective` | Trimmed, 1–280 characters, no CR or LF |
 | `objectiveStatus` | Starts `active`. Later `complete` or `failed` |
 | `deathPenalty` | `wounded`, `out-of-scene`, or `new-character` |
+| `enemyDifficulty` | `easy`, `standard`, `hard`, or `severe`. The game master prefers check difficulty 8, 10, 12, or 15 in that order. Another legal difficulty is still allowed when the fiction requires it |
+| `lootRarity` | `scarce`, `uncommon`, `common`, or `abundant`. How often useful gear appears in the fiction. There is no inventory and no loot roll |
+| `playerFreedom` | `narrow`, `guided`, or `open`. `narrow` permits only actions inside the current situation. `guided` permits any action the scene can contain. `open` permits any action the character could attempt. The host still accepts a well-formed intent. The attempt can still fail |
+
+Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `universeType`, `playerCount`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, and `playerFreedom`, replacing any previous values. `custom` clears those fields and does not fill them. `campaignName`, `universeLabel`, and `objective` are never filled or cleared by a universe change. The host may edit a filled value before generation.
+
+| Universe | `universeType` | `playerCount` | `deathPenalty` | `enemyDifficulty` | `lootRarity` | `playerFreedom` |
+|----------|----------------|---------------|----------------|-------------------|--------------|-----------------|
+| `star-wars` | `science-fiction` | 4 | `wounded` | `standard` | `uncommon` | `open` |
+| `dungeons-and-dragons` | `fantasy` | 4 | `new-character` | `standard` | `common` | `guided` |
+| `alien` | `horror` | 3 | `new-character` | `severe` | `scarce` | `narrow` |
 
 The host requests `{ "situation": string }` at temperature 0. An empty situation after trim is invalid. If both attempts fail, the host stays on settings and no campaign is stored. Scene **1** is that situation. The host then creates their character and the lobby opens.
 
@@ -231,7 +246,7 @@ Peers send only these. The host ignores an invalid message.
 
 A wrong room code is ignored. In `play` or `ended`, a connection with no seat receives public snapshots and sends only `claim`. In `play`, the host accepts `createCharacter` from a connection whose seat is an archived character. On success that seat becomes the replacement. `nameAssist` is accepted only from the rolling character while the check is uncommitted. `assistResponse` is accepted only from the named ally.
 
-A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `objective`, `objectiveStatus`, `deathPenalty`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`.
+A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `universeType`, `playerCount`, `objective`, `objectiveStatus`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`.
 
 ---
 
@@ -249,9 +264,14 @@ A document is valid only when every rule here holds. Otherwise the host rejects 
   "campaignName": "Ashreach",
   "universe": "star-wars",
   "universeLabel": null,
+  "universeType": "science-fiction",
+  "playerCount": 4,
   "objective": "Recover the beacon before the storm hits.",
   "objectiveStatus": "active",
   "deathPenalty": "wounded",
+  "enemyDifficulty": "standard",
+  "lootRarity": "uncommon",
+  "playerFreedom": "open",
   "scene": 1,
   "situation": "The party stands at the beacon's outer door.",
   "revision": 1,
@@ -284,4 +304,4 @@ Transcript entries are append-only and use these `type` values: `situation` (`sc
 
 ## Systems in this game
 
-The game is this list: three stats, eight abilities, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. An implementation adds no other resolution, character, or session system.
+The game is this list: three stats, eight abilities, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. Enemy difficulty, loot rarity, and player freedom are instructions to the game master. An implementation adds no other resolution, character, or session system.
