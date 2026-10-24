@@ -40,8 +40,8 @@ export const CELL_COUNT = cells.length;
 export const WHITE_CROWN_CELL_ID = 0;
 export const BLACK_CROWN_CELL_ID = 36;
 
-export const WHITE_RECRUITMENT_ZONE: readonly number[] = [1, 2, 3, 4, 9, 15];
-export const BLACK_RECRUITMENT_ZONE: readonly number[] = [33, 34, 35, 32, 27, 21];
+export const WHITE_RECRUITMENT_ZONE: readonly number[] = [0, 1, 2, 3, 4, 9, 15];
+export const BLACK_RECRUITMENT_ZONE: readonly number[] = [36, 33, 34, 35, 32, 27, 21];
 
 const whiteZone = new Set(WHITE_RECRUITMENT_ZONE);
 const blackZone = new Set(BLACK_RECRUITMENT_ZONE);

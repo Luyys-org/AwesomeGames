@@ -6,7 +6,7 @@ alwaysApply: false
 
 # RPG — co-op rules (authoritative for agents)
 
-This is a cooperative text RPG for **2–6 living player characters**. The creator is one of them. The game master is an AI seat with no character. Play is a shared transcript. The universe changes fiction only.
+This is a cooperative text RPG for **2–6 living player characters**. The creator is one of them. The game master is an AI seat with no character. Play is a shared transcript. A preset universe sets fiction, party defaults, and the character options below. A custom universe lets the creator replace those character options.
 
 When this rule applies: implement this ruleset as written. It is closed.
 
@@ -45,7 +45,7 @@ A transport failure or an empty body leaves state unchanged. The host shows one 
 Every model request uses this system text, plus the schema and limits in the user message:
 
 - You are the game master and you have no player character.
-- The universe changes names and scenery only. Stats, abilities, the d20, difficulties, wounds, and the death penalty stay as the user message states.
+- Use the stats, skills, classes, races, and modifiers from the user message. Do not invent different ones. Difficulties, wounds, and the death penalty stay as the user message states.
 - Reply with JSON only, matching the schema in the user message.
 - Do not write a die result, a total, or a success word.
 - Do not change the objective, the death penalty, enemy difficulty, loot rarity, player freedom, stats, abilities, or wounds.
@@ -77,7 +77,7 @@ Settings are required for a new campaign and immutable after generation. The hos
 | `lootRarity` | `scarce`, `uncommon`, `common`, or `abundant`. How often useful gear appears in the fiction. There is no inventory and no loot roll |
 | `playerFreedom` | `narrow`, `guided`, or `open`. `narrow` permits only actions inside the current situation. `guided` permits any action the scene can contain. `open` permits any action the character could attempt. The host still accepts a well-formed intent. The attempt can still fail |
 
-Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `universeType`, `playerCount`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, and `playerFreedom`, replacing any previous values. `custom` clears those fields and does not fill them. `campaignName`, `universeLabel`, and `objective` are never filled or cleared by a universe change. The host may edit a filled value before generation.
+Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `universeType`, `playerCount`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, and `playerFreedom`, replacing any previous values. `custom` clears those fields and does not fill them. `campaignName`, `universeLabel`, and `objective` are never filled or cleared by a universe change. The host may edit a filled value before generation, except the character options. Those stay with the preset. `custom` leaves them empty for the creator to fill.
 
 | Universe | `universeType` | `playerCount` | `deathPenalty` | `enemyDifficulty` | `lootRarity` | `playerFreedom` |
 |----------|----------------|---------------|----------------|-------------------|--------------|-----------------|
@@ -85,20 +85,26 @@ Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `u
 | `dungeons-and-dragons` | `fantasy` | 4 | `new-character` | `standard` | `common` | `guided` |
 | `alien` | `horror` | 3 | `new-character` | `severe` | `scarce` | `narrow` |
 
+Choosing a preset also writes that universe's character options. The point pool is **3**. The stats are Might, Finesse, and Wits. Players assign **2**, **1**, and **0**, each once. The skills are the eight in the ability table. Each universe has its own classes and races. A class or race modifier adds its amount to that stat, or to the roll when the check uses that stat. An empty roll stat applies to every roll. Amounts are **+1** or **−1** on the presets.
+
+`custom` does not fill character options. The creator sets a point pool from **1** to **12**, **1–6** stats, **1–12** skills, **1–8** classes, and **1–8** races. Players assign whole numbers from **0** through the pool, and the sum cannot exceed the pool. Each class and race has up to **4** modifiers. A modifier is `stat` or `roll`, from **−3** to **+3**, excluding **0**. A roll modifier names a stat, or applies to every roll when the stat is empty. Names are trimmed, 1–24 characters, unique in their list ignoring case. A skill names one of those stats and a 1–80 character description of when it applies.
+
 The host requests `{ "situation": string }` at temperature 0. An empty situation after trim is invalid. If both attempts fail, the host stays on settings and no campaign is stored. Scene **1** is that situation. The host then creates their character and the lobby opens.
 
 ---
 
 ## Characters
 
-Each living character has one owner (`host` or `peer`), one name, one ability, and one stat assignment.
+Each living character has one owner (`host` or `peer`), one name, one skill, one class, one race, and one stat assignment. A campaign with no classes or races, used only when loading an older custom game, does not require a class or race.
 
 | Field | Rule |
 |-------|------|
 | `id` | `pc_` plus 8 lowercase hex digits from 4 `crypto.getRandomValues` bytes |
 | `name` | Trimmed, 1–24 characters, matching `^[A-Za-z0-9 '\-]+$`, unique ignoring case, including archived names |
-| `stats` | Keys `might`, `finesse`, `wits`. The values are a permutation of `2`, `1`, and `0` |
-| `abilityId` | One id from the ability table, immutable |
+| `stats` | One whole number per campaign stat. On a preset, the values are a permutation of `2`, `1`, and `0`. On a custom universe, each value is from `0` through the point pool and the sum does not exceed the pool |
+| `abilityId` | One skill id from the campaign, immutable |
+| `classId` | One class id from the campaign, immutable. Empty only when the campaign has no classes |
+| `raceId` | One race id from the campaign, immutable. Empty only when the campaign has no races |
 | `claimCode` | 4 characters from the room-code alphabet |
 | `wounds` | A prefix of `["hurt", "impaired", "down"]`, including `[]` |
 | `archived` | `true` only after the `new-character` penalty |
@@ -110,7 +116,7 @@ A create that would make a **7th** non-archived character is rejected. In `lobby
 
 ## Abilities
 
-A matching ability adds **+2** to the check. `abilityApplies` is true only when the ability's stat equals the check's stat and the host keeps it true. The host may set it false before the roll. The host may set it true before the roll only when the stats match.
+Skills are these abilities, unless the universe is custom and the creator replaced the list. A matching skill adds **+2** to the check. `abilityApplies` is true only when the skill's stat equals the check's stat and the host keeps it true. The host may set it false before the roll. The host may set it true before the roll only when the stats match. Class and race modifiers are separate and always apply.
 
 | Id | Line name | Stat | Applies when the intent is to |
 |----|-----------|------|-------------------------------|
@@ -191,7 +197,7 @@ The host requests a forced-check proposal only when the phase is `play`, `openCh
 
 The host rolls. The model does not. Draw a `uint32` with `crypto.getRandomValues`, reject values at or above `floor(2^32 / 20) * 20` (`4294967280`), then use `(n % 20) + 1`.
 
-**Total** = natural + stat modifier + ability (`0` or `+2`) + assist (`0` or `+2`) − `2` when the rolling character's wounds include `impaired`.
+**Total** = natural + assigned stat + class and race stat modifiers for that stat + ability (`0` or `+2`) + assist (`0` or `+2`) + class and race roll modifiers − `2` when the rolling character's wounds include `impaired`. A roll modifier counts when its stat is empty or equals the check's stat. A stat modifier counts only for its stat.
 
 Success means total ≥ difficulty, with two exceptions. Natural **20** succeeds and applies no wound. Natural **1** fails, and a `severe` failure on a natural 1 has a margin of at least 5.
 
@@ -238,7 +244,7 @@ Peers send only these. The host ignores an invalid message.
 | Type | Payload |
 |------|---------|
 | `join` | `roomCode` |
-| `createCharacter` | `name`, `abilityId`, `stats` |
+| `createCharacter` | `name`, `abilityId`, `classId`, `raceId`, `stats` |
 | `claim` | `name`, `claimCode` |
 | `intent` | `kind`, `text`, `targetCharacterId` |
 | `nameAssist` | `checkId`, `allyCharacterId` |
@@ -246,7 +252,7 @@ Peers send only these. The host ignores an invalid message.
 
 A wrong room code is ignored. In `play` or `ended`, a connection with no seat receives public snapshots and sends only `claim`. In `play`, the host accepts `createCharacter` from a connection whose seat is an archived character. On success that seat becomes the replacement. `nameAssist` is accepted only from the rolling character while the check is uncommitted. `assistResponse` is accepted only from the named ally.
 
-A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `universeType`, `playerCount`, `objective`, `objectiveStatus`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`.
+A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `universeType`, `playerCount`, `objective`, `objectiveStatus`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, `characterOptions`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`. Each character includes `classId` and `raceId`.
 
 ---
 
@@ -256,7 +262,7 @@ Every commit also writes the save JSON to `localStorage` key `rpg.host.save`. If
 
 Load is a file pick or the current `rpg.host.save`. The host sets the provider again after a load. Validation failure rejects the whole document with one reason. There is no partial load.
 
-A document is valid only when every rule here holds. Otherwise the host rejects it with one reason. `schemaVersion` is `1`. Enums and string limits match this rule. Stats are a permutation of `2`, `1`, and `0`. Wounds are a legal prefix. Names are unique ignoring case. Non-archived count is **0–6**. `lobby` has **1–6** non-archived characters and none archived. `play` or `ended` has **2–6** non-archived characters when none are archived, and **0–6** when at least one is archived. At most one character is non-archived with `owner: "host"`. A non-archived character with `inScene: false` has wounds `[]` or a `down` box. `roomStatus` is session-only, starts `open`, and is absent from the save.
+A document is valid only when every rule here holds. Otherwise the host rejects it with one reason. `schemaVersion` is `1`. Enums and string limits match this rule. Stats match the campaign character options. A document without `characterOptions` uses the preset for its universe, or Might, Finesse, Wits and the eight skills when the universe is `custom`. `classId` and `raceId` may be absent on those older documents. Wounds are a legal prefix. Names are unique ignoring case. Non-archived count is **0–6**. `lobby` has **1–6** non-archived characters and none archived. `play` or `ended` has **2–6** non-archived characters when none are archived, and **0–6** when at least one is archived. At most one character is non-archived with `owner: "host"`. A non-archived character with `inScene: false` has wounds `[]` or a `down` box. `roomStatus` is session-only, starts `open`, and is absent from the save.
 
 ```json
 {
@@ -284,6 +290,8 @@ A document is valid only when every rule here holds. Otherwise the host rejects 
       "id": "pc_00000000",
       "name": "Ada",
       "abilityId": "fighter",
+      "classId": "sw-soldier",
+      "raceId": "sw-human",
       "stats": { "might": 2, "finesse": 1, "wits": 0 },
       "wounds": [],
       "claimCode": "ABCD",
@@ -304,4 +312,4 @@ Transcript entries are append-only and use these `type` values: `situation` (`sc
 
 ## Systems in this game
 
-The game is this list: three stats, eight abilities, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. Enemy difficulty, loot rarity, and player freedom are instructions to the game master. An implementation adds no other resolution, character, or session system.
+The game is this list: the campaign's stats and point pool, its skills, one class, one race, their stat and roll modifiers, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. Preset campaigns use Might, Finesse, Wits, the eight skills, and that universe's classes and races. Enemy difficulty, loot rarity, and player freedom are instructions to the game master. An implementation adds no other resolution, character, or session system.

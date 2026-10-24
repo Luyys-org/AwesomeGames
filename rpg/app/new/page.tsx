@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function NewCampaignPage() {
   return (
-    <main className="page-shell mx-auto flex w-full max-w-xl flex-1 flex-col px-6 py-8">
+    <main className="page-shell mx-auto flex w-full max-w-2xl flex-1 flex-col px-6 py-8">
       <Link
         href={paths.home}
         className="text-sm text-zinc-400 transition-colors duration-150 hover:text-zinc-50"

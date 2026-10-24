@@ -202,6 +202,37 @@ describe("CharacterLegalActionsTest", () => {
     expect(action?.targetCellId).toBeNull();
   });
 
+  it("manipulatorCanMoveTargetToAnyEmptyAdjacentHex", () => {
+    const state = board();
+    const manipulator = put(state, "MANIPULATOR", "BLACK", at(0, 0), "manipulator");
+    const rider = put(state, "RIDER", "WHITE", at(0, -2), "rider");
+    const aimed = apply(
+      state,
+      command({
+        type: "ACTIVE_ABILITY",
+        pieceId: manipulator.id,
+        abilityParams: { targetPieceId: rider.id },
+      }),
+      "black",
+    );
+    const sideways = at(1, -2);
+    const cells = actionsFor(manipulator.id, legalActionsFor(aimed))
+      .map((action) => action.targetCellId)
+      .filter((cellId): cellId is number => cellId != null);
+    expect(cells).toContain(sideways);
+    expect(cells).toContain(at(0, -1));
+    const moved = apply(
+      aimed,
+      command({
+        type: "ACTIVE_ABILITY",
+        pieceId: manipulator.id,
+        abilityParams: { targetPieceId: rider.id, targetCellId: sideways },
+      }),
+      "black",
+    );
+    expect(moved.pieces[rider.id].cellId).toBe(sideways);
+  });
+
   it("wandererHasNonAdjacentEnemyActiveAbility", () => {
     const state = board();
     const wanderer = put(state, "WANDERER", "BLACK", at(0, 0), "wanderer");
@@ -275,12 +306,26 @@ describe("LegalActionsResolverEdgeCasesTest", () => {
       }),
       "black",
     );
+    expect(first.pieces[acrobat.id].cellId).toBe(at(2, 0));
     expect(first.pendingAbility?.abilityId).toBe("ACROBAT");
+    expect(first.actedThisPhase).not.toContain(acrobat.id);
     const actions = legalActionsFor(first);
     expect(actions.every((action) => action.pieceId === acrobat.id)).toBe(true);
     expect(actions.length).toBeGreaterThan(0);
     const keys = actions.map((action) => action.actionKey);
     expect(new Set(keys).size).toBe(keys.length);
+    const finished = apply(
+      first,
+      command({
+        type: "ACTIVE_ABILITY",
+        pieceId: acrobat.id,
+        abilityParams: { completeAcrobat: true },
+      }),
+      "black",
+    );
+    expect(finished.pieces[acrobat.id].cellId).toBe(at(2, 0));
+    expect(finished.pendingAbility).toBeNull();
+    expect(finished.actedThisPhase).toContain(acrobat.id);
   });
 });
 
@@ -313,6 +358,14 @@ describe("WandererLegalActionsTest", () => {
     const actions = actionsFor(wanderer.id, legalActionsFor(state));
     expect(actions.some((action) => action.type === "ACTIVE_ABILITY")).toBe(false);
     expect(actions.some((action) => action.type === "DEFAULT_MOVE")).toBe(true);
+  });
+
+  it("jailorDoesNotSuppressWispSpecial", () => {
+    const state = board();
+    const wisp = put(state, "WILL_O_THE_WISP", "BLACK", at(0, 0), "wisp");
+    put(state, "JAILOR", "WHITE", at(1, 0), "jailor");
+    const actions = actionsFor(wisp.id, legalActionsFor(state));
+    expect(actions.some((action) => action.type === "ACTIVE_ABILITY")).toBe(true);
   });
 
   it("applyTeleportMovesWandererToChosenEmptyCell", () => {

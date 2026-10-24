@@ -11,11 +11,12 @@ import {
   UNIVERSE_TYPES,
   universePreset,
 } from "@/rpg/lib/campaign-settings";
+import { TeamOptions } from "@/rpg/features/campaign/team-options";
 import { useNewCampaign } from "@/rpg/features/campaign/use-new-campaign";
 
 const STEP_LEADS = [
   "A preset fills the later steps. Custom leaves them empty.",
-  "How many people are playing, and what happens when a character goes Down.",
+  "Party size, death, and what players choose when they create a character.",
   "Opposition, gear, and which actions are permitted.",
 ];
 
@@ -105,13 +106,16 @@ export function NewCampaignForm() {
 
             {preset && universeName ? (
               <p className="text-sm text-zinc-400">
-                {universeName} filled the later steps. You can change those values.
+                {universeName} filled the later steps. You can change those values. Stats, skills,
+                classes, and races stay with the universe.
               </p>
             ) : null}
 
             {campaign.universe === "custom" ? (
               <>
-                <p className="text-sm text-zinc-400">Custom leaves the later steps empty.</p>
+                <p className="text-sm text-zinc-400">
+                  Custom leaves the later steps empty, including stats, skills, classes, and races.
+                </p>
                 <label className="block text-sm text-zinc-300" htmlFor="universe-name">
                   Universe name
                   <input
@@ -199,6 +203,13 @@ export function NewCampaignForm() {
                 ))}
               </ul>
             </div>
+
+            <TeamOptions
+              universe={campaign.universe}
+              draft={campaign.optionsDraft}
+              onChange={campaign.setOptionsDraft}
+              nextId={campaign.nextOptionId}
+            />
           </>
         ) : null}
 

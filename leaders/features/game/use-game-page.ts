@@ -25,7 +25,12 @@ import {
 } from "@/leaders/lib/game-view-model";
 import { membershipMatchesRoomCode } from "@/leaders/lib/room-game-membership";
 import { getStoredRoomMembership, setStoredRoomMembership } from "@/leaders/lib/room-storage";
-import { getServerSnapshot, getSnapshot, subscribe } from "@/leaders/services/room-connection";
+import {
+  getServerSnapshot,
+  getSnapshot,
+  membershipFromConnection,
+  subscribe,
+} from "@/leaders/services/room-connection";
 import type { GameCommandRequest, GameLegalAction, GameStateView } from "@/leaders/services/game.types";
 import type { RoomMembershipView } from "@/leaders/services/room.types";
 
@@ -136,6 +141,19 @@ export function useGamePage(roomCode: string) {
       cancelled = true;
     };
   }, [roomCode, router]);
+
+  useEffect(() => {
+    if (!connection || connection.code !== roomCode.toUpperCase()) {
+      return;
+    }
+    if (connection.roomStatus !== "LOBBY") {
+      return;
+    }
+
+    const next = membershipFromConnection(connection);
+    setStoredRoomMembership(next);
+    router.replace(leadersPaths.room(next.code));
+  }, [connection, roomCode, router]);
 
   useEffect(() => {
     if (game?.phase !== "RECRUITMENT") {

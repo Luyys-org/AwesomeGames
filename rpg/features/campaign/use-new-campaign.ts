@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useHostAi } from "@/rpg/features/landing/use-host-ai";
@@ -11,6 +11,10 @@ import {
   validateCampaignSettings,
   validateCampaignStep,
 } from "@/rpg/lib/campaign-settings";
+import {
+  emptyCharacterOptionsDraft,
+  type CharacterOptionsDraft,
+} from "@/rpg/lib/character-options";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import { createRoomCode } from "@/rpg/lib/room-code";
 import { createTable } from "@/rpg/lib/table";
@@ -40,8 +44,10 @@ export function useNewCampaign() {
   const [enemyDifficulty, setEnemyDifficulty] = useState("");
   const [lootRarity, setLootRarity] = useState("");
   const [playerFreedom, setPlayerFreedom] = useState("");
+  const [optionsDraft, setOptionsDraft] = useState<CharacterOptionsDraft>(emptyCharacterOptionsDraft);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const optionIds = useRef(1);
 
   const input: CampaignSettingsInput = {
     campaignName,
@@ -65,9 +71,21 @@ export function useNewCampaign() {
     clearResult();
   }
 
+  function nextOptionId(prefix: string) {
+    const id = `${prefix}${optionIds.current}`;
+    optionIds.current += 1;
+    return id;
+  }
+
+  function resetOptions() {
+    optionIds.current = 1;
+    setOptionsDraft(emptyCharacterOptionsDraft());
+  }
+
   function selectUniverse(value: string) {
     setUniverse(value);
     clearResult();
+    resetOptions();
 
     const preset = universePreset(value);
     if (!preset) {
@@ -107,7 +125,7 @@ export function useNewCampaign() {
     if (!current) return;
 
     if (step < CAMPAIGN_STEPS.length - 1) {
-      const result = validateCampaignStep(current.id, input);
+      const result = validateCampaignStep(current.id, input, optionsDraft);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -117,7 +135,7 @@ export function useNewCampaign() {
       return;
     }
 
-    const result = validateCampaignSettings(input);
+    const result = validateCampaignSettings(input, optionsDraft);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -158,6 +176,7 @@ export function useNewCampaign() {
     enemyDifficulty,
     lootRarity,
     playerFreedom,
+    optionsDraft,
     error,
     submitting,
     setCampaignName: (value: string) => edit(() => setCampaignName(value)),
@@ -170,6 +189,9 @@ export function useNewCampaign() {
     setEnemyDifficulty: (value: string) => edit(() => setEnemyDifficulty(value)),
     setLootRarity: (value: string) => edit(() => setLootRarity(value)),
     setPlayerFreedom: (value: string) => edit(() => setPlayerFreedom(value)),
+    setOptionsDraft: (update: (current: CharacterOptionsDraft) => CharacterOptionsDraft) =>
+      edit(() => setOptionsDraft(update)),
+    nextOptionId,
     goToStep,
     back,
     submit,

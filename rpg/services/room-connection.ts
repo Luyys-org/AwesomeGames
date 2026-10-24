@@ -1,11 +1,13 @@
 import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
+import type { CharacterOptions } from "@/rpg/lib/character-options";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
   commitCharacter,
   parseSnapshot,
+  toPublicCharacter,
   toSnapshot,
   type PublicCharacter,
   type TableSnapshot,
@@ -39,6 +41,7 @@ export interface RoomView {
   universeName: string | null;
   objective: string | null;
   playerCount: number | null;
+  characterOptions: CharacterOptions | null;
   phase: "waiting" | "lobby";
   characters: PublicCharacter[];
   seat: RoomSeat | null;
@@ -183,8 +186,10 @@ export async function submitCharacter(draft: CharacterDraft): Promise<string | n
   if (session.seat?.status === "replaced") return "Claim your character to continue.";
   if (!session.hostPeerId) return "Waiting for the host.";
 
+  const options = session.lastSnapshot?.characterOptions ?? null;
+  if (!options) return "Waiting for the host.";
   const known = sessionViewCharacters(session);
-  const localError = characterError(known, draft, "peer");
+  const localError = characterError(known, draft, "peer", options);
   if (localError) return localError;
 
   try {
@@ -650,8 +655,9 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
         : null,
     objective: source?.objective ?? table?.settings.objective ?? null,
     playerCount: source?.playerCount ?? table?.settings.playerCount ?? null,
+    characterOptions: source?.characterOptions ?? table?.settings.characterOptions ?? null,
     phase: source?.phase ?? table?.phase ?? "waiting",
-    characters: source?.characters ?? (table ? table.characters.map(publicFromTable) : []),
+    characters: source?.characters ?? (table ? table.characters.map(toPublicCharacter) : []),
     seat: session.seat,
     joiningCount:
       session.role === "host"
@@ -660,19 +666,6 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
   };
 
   for (const listener of listeners) listener();
-}
-
-function publicFromTable(character: TableState["characters"][number]): PublicCharacter {
-  return {
-    id: character.id,
-    name: character.name,
-    abilityId: character.abilityId,
-    stats: character.stats,
-    wounds: character.wounds,
-    owner: character.owner,
-    archived: character.archived,
-    inScene: character.inScene,
-  };
 }
 
 function hostSeat(table: TableState): RoomSeat | null {
@@ -695,19 +688,20 @@ function draftPayload(draft: CharacterDraft): JsonValue {
     type: "createCharacter",
     name: draft.name,
     abilityId: draft.abilityId,
-    might: draft.might,
-    finesse: draft.finesse,
-    wits: draft.wits,
+    classId: draft.classId,
+    raceId: draft.raceId,
+    stats: draft.stats,
   };
 }
 
 function readDraft(value: Record<string, unknown>): CharacterDraft | null {
+  const stats = readStatDraft(value.stats);
   if (
     typeof value.name !== "string" ||
     typeof value.abilityId !== "string" ||
-    typeof value.might !== "string" ||
-    typeof value.finesse !== "string" ||
-    typeof value.wits !== "string"
+    typeof value.classId !== "string" ||
+    typeof value.raceId !== "string" ||
+    !stats
   ) {
     return null;
   }
@@ -715,10 +709,24 @@ function readDraft(value: Record<string, unknown>): CharacterDraft | null {
   return {
     name: value.name,
     abilityId: value.abilityId,
-    might: value.might,
-    finesse: value.finesse,
-    wits: value.wits,
+    classId: value.classId,
+    raceId: value.raceId,
+    stats,
   };
+}
+
+function readStatDraft(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) return null;
+  const keys = Object.keys(value);
+  if (keys.length > 6) return null;
+  const stats: Record<string, string> = {};
+  for (const key of keys) {
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(key)) return null;
+    const entry = value[key];
+    if (typeof entry !== "string" || entry.length > 4) return null;
+    stats[key] = entry;
+  }
+  return stats;
 }
 
 function readSeat(value: unknown): RoomSeat | null {

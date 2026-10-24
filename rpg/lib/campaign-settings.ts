@@ -1,3 +1,9 @@
+import {
+  resolveCharacterOptions,
+  type CharacterOptions,
+  type CharacterOptionsDraft,
+} from "@/rpg/lib/character-options";
+
 export type UniverseId = "star-wars" | "dungeons-and-dragons" | "alien" | "custom";
 
 export type UniverseTypeId =
@@ -24,6 +30,7 @@ export interface CampaignSettings {
   universeLabel: string | null;
   universeType: UniverseTypeId;
   playerCount: number;
+  characterOptions: CharacterOptions;
   objective: string;
   deathPenalty: DeathPenaltyId;
   enemyDifficulty: EnemyDifficultyId;
@@ -253,9 +260,13 @@ function readUniverseStep(input: CampaignSettingsInput): Check<{
   };
 }
 
-function readTeamStep(input: CampaignSettingsInput): Check<{
+function readTeamStep(
+  input: CampaignSettingsInput,
+  optionsDraft: CharacterOptionsDraft,
+): Check<{
   playerCount: number;
   deathPenalty: DeathPenaltyId;
+  characterOptions: CharacterOptions;
 }> {
   if (!PLAYER_COUNTS.some((count) => String(count) === input.playerCount)) {
     return { ok: false, error: "Choose the number of players." };
@@ -264,11 +275,15 @@ function readTeamStep(input: CampaignSettingsInput): Check<{
   const deathPenalty = readChoice(input.deathPenalty, DEATH_PENALTIES, "Choose a death penalty.");
   if (!deathPenalty.ok) return deathPenalty;
 
+  const characterOptions = resolveCharacterOptions(input.universe, optionsDraft);
+  if (!characterOptions.ok) return characterOptions;
+
   return {
     ok: true,
     value: {
       playerCount: Number(input.playerCount),
       deathPenalty: deathPenalty.value,
+      characterOptions: characterOptions.value,
     },
   };
 }
@@ -319,12 +334,13 @@ function readGameStep(input: CampaignSettingsInput): Check<{
 export function validateCampaignStep(
   step: CampaignStepId,
   input: CampaignSettingsInput,
+  optionsDraft: CharacterOptionsDraft,
 ): { ok: true } | { ok: false; error: string } {
   const result =
     step === "universe"
       ? readUniverseStep(input)
       : step === "team"
-        ? readTeamStep(input)
+        ? readTeamStep(input, optionsDraft)
         : readGameStep(input);
   if (!result.ok) return result;
   return { ok: true };
@@ -332,6 +348,7 @@ export function validateCampaignStep(
 
 export function validateCampaignSettings(
   input: CampaignSettingsInput,
+  optionsDraft: CharacterOptionsDraft,
 ): { ok: true; value: CampaignSettings } | { ok: false; error: string } {
   const universe = readUniverseStep(input);
   if (!universe.ok) return universe;
@@ -339,7 +356,7 @@ export function validateCampaignSettings(
     return { ok: false, error: "Choose a universe type." };
   }
 
-  const team = readTeamStep(input);
+  const team = readTeamStep(input, optionsDraft);
   if (!team.ok) return team;
 
   const game = readGameStep(input);
@@ -353,6 +370,7 @@ export function validateCampaignSettings(
       universeLabel: universe.value.universeLabel,
       universeType: universe.value.universeType,
       playerCount: team.value.playerCount,
+      characterOptions: team.value.characterOptions,
       objective: game.value.objective,
       deathPenalty: team.value.deathPenalty,
       enemyDifficulty: game.value.enemyDifficulty,

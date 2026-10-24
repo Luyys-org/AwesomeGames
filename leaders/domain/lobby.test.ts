@@ -192,6 +192,7 @@ describe("lobby", () => {
     expect(replay.game).toBeNull();
     expect(replay.readyByPlayerId.host).toBe(false);
     expect(replay.readyByPlayerId.guest).toBe(false);
+    expect(resetRoomForReplay(replay)).toBe(replay);
   });
 
   it("startsWhenBothReadyAndAssignsHostBlack", () => {

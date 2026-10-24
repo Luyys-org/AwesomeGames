@@ -86,6 +86,39 @@ describe("CaptureEvaluatorTest", () => {
     put(state, "SNIPER", "BLACK", at(0, -2));
     expect(sniperWins(state, "BLACK")).toBe(false);
   });
+
+  it("sniperDoesNotWinWhenAUnitStandsBetween", () => {
+    const state = emptyState({ activeColor: "BLACK" });
+    put(state, "LEADER", "WHITE", at(0, 0));
+    put(state, "SNIPER", "BLACK", at(0, -3));
+    put(state, "RIDER", "WHITE", at(0, -1));
+    expect(sniperWins(state, "BLACK")).toBe(false);
+  });
+
+  it("sniperDoesNotWinWhenAFrogStandsBetween", () => {
+    const state = emptyState({ activeColor: "BLACK" });
+    put(state, "LEADER", "WHITE", at(0, 0));
+    put(state, "SNIPER", "BLACK", at(0, -3));
+    const blocker = put(state, "RIDER", "BLACK", at(0, -2));
+    blocker.frog = true;
+    expect(sniperWins(state, "BLACK")).toBe(false);
+  });
+
+  it("jailedSniperStillWinsOnAClearLine", () => {
+    const state = emptyState({ activeColor: "BLACK" });
+    put(state, "LEADER", "WHITE", at(0, 0));
+    put(state, "SNIPER", "BLACK", at(0, -3));
+    put(state, "JAILOR", "WHITE", at(1, -3));
+    expect(sniperWins(state, "BLACK")).toBe(true);
+  });
+
+  it("jailedAssassinStillCaptures", () => {
+    const state = emptyState();
+    put(state, "LEADER", "WHITE", at(0, 0));
+    put(state, "ASSASSIN", "BLACK", at(1, 0));
+    put(state, "JAILOR", "WHITE", at(2, 0));
+    expect(isLeaderCaptured(state, "WHITE")).toBe(true);
+  });
 });
 
 describe("GameRulesEngineWinTest", () => {

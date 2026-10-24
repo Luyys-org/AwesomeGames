@@ -26,7 +26,6 @@ export const DECK_TYPES: readonly PieceType[] = [
   "VIZIER",
   "NEMESIS",
   "HERMIT",
-  "CUB",
 ];
 
 export interface OpeningPlayers {

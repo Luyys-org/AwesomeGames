@@ -1,4 +1,4 @@
-import { sniperWins } from "@/leaders/domain/capture";
+import { isLeaderDown, sniperWins } from "@/leaders/domain/capture";
 import { opponent, playerIdFor, type GameState } from "@/leaders/domain/game-state";
 
 export function declareWinner(state: GameState, playerId: string): void {
@@ -6,15 +6,30 @@ export function declareWinner(state: GameState, playerId: string): void {
   state.winnerPlayerId = playerId;
 }
 
-export function expireFrogs(state: GameState): void {
+/** Returns true when at least one piece stops being a frog. */
+export function expireFrogs(state: GameState): boolean {
+  let reverted = false;
   for (const [pieceId, turn] of Object.entries(state.frogExpiresAfterOpponentTurn)) {
     if (turn <= state.turnNumber) {
       const piece = state.pieces[pieceId];
-      if (piece) {
+      if (piece?.frog) {
         piece.frog = false;
+        reverted = true;
       }
       delete state.frogExpiresAfterOpponentTurn[pieceId];
     }
+  }
+  return reverted;
+}
+
+function resolveWinsAfterFrogRevert(state: GameState): void {
+  const active = state.activeColor;
+  if (isLeaderDown(state, active)) {
+    declareWinner(state, playerIdFor(state, opponent(active)));
+    return;
+  }
+  if (isLeaderDown(state, opponent(active))) {
+    declareWinner(state, playerIdFor(state, active));
   }
 }
 
@@ -23,12 +38,16 @@ export function beginTurnIfNeeded(state: GameState): void {
     return;
   }
 
-  if (sniperWins(state, state.activeColor)) {
-    declareWinner(state, playerIdFor(state, state.activeColor));
-    return;
+  if (expireFrogs(state)) {
+    resolveWinsAfterFrogRevert(state);
+    if (state.status !== "IN_PROGRESS") {
+      return;
+    }
   }
 
-  expireFrogs(state);
+  if (sniperWins(state, state.activeColor)) {
+    declareWinner(state, playerIdFor(state, state.activeColor));
+  }
 }
 
 export function advanceTurn(state: GameState): void {
@@ -41,6 +60,5 @@ export function advanceTurn(state: GameState): void {
   state.pendingAbility = null;
   state.recruitmentPhasesRemaining =
     state.turnNumber === 2 && next !== state.firstPlayerColor ? 2 : 1;
-  expireFrogs(state);
   beginTurnIfNeeded(state);
 }

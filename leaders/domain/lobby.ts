@@ -376,6 +376,9 @@ export function withGame(room: RoomRecord, game: GameState): RoomRecord {
 
 /** After a finished match, return to lobby so both players can ready up again. */
 export function resetRoomForReplay(room: RoomRecord): RoomRecord {
+  if (room.status === "LOBBY" && !room.game) {
+    return room;
+  }
   if (room.status !== "FINISHED") {
     throw new LobbyError("Room is not finished");
   }

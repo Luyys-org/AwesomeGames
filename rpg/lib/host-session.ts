@@ -1,3 +1,7 @@
+import {
+  characterOptionsFor,
+  coreCharacterOptions,
+} from "@/rpg/lib/character-options";
 import { isRoomCode } from "@/rpg/lib/room-code";
 import type { TableState } from "@/rpg/lib/table";
 
@@ -34,7 +38,12 @@ function parseHostSession(value: unknown): HostSession | null {
     return null;
   }
 
-  return { roomCode: value.roomCode, table: value.table as unknown as TableState };
+  const table = value.table as unknown as TableState;
+  if (!table.settings.characterOptions) {
+    table.settings.characterOptions =
+      characterOptionsFor(table.settings.universe) ?? coreCharacterOptions();
+  }
+  return { roomCode: value.roomCode, table };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -54,14 +54,14 @@ export function mirrorBoardCellId(cellId: number): number {
   return mirroredId;
 }
 
-/** Three hexes along the top row + three down the left edge from white crown (cell 0). */
+/** White crown plus three hexes along the top row and three down the left edge. */
 export const WHITE_RECRUITMENT_ZONE_CELL_IDS: readonly number[] = [
-  1, 2, 3, 4, 9, 15,
+  0, 1, 2, 3, 4, 9, 15,
 ];
 
-/** Three hexes along the bottom row + three up the right edge from black crown (cell 36). */
+/** Black crown plus three hexes along the bottom row and three up the right edge. */
 export const BLACK_RECRUITMENT_ZONE_CELL_IDS: readonly number[] = [
-  33, 34, 35, 32, 27, 21,
+  36, 33, 34, 35, 32, 27, 21,
 ];
 
 export function recruitmentZoneCellIdsForColor(

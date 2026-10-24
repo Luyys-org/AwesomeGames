@@ -5,9 +5,10 @@ import { decodeActionKey, encodeActionKey } from "@/leaders/domain/action-key";
 import { IllegalGameMoveException } from "@/leaders/domain/errors";
 import { at, command, emptyState, put } from "@/leaders/domain/fixtures";
 import { legalActionsFor, presentLegalAction } from "@/leaders/domain/legal-actions";
-import { apply } from "@/leaders/domain/rules";
+import { apply, canRecruitOffer } from "@/leaders/domain/rules";
 import { createInitial, DECK_TYPES } from "@/leaders/domain/state";
 import { commitCommand, toGameStateView, tryCommit } from "@/leaders/domain/submit";
+import { beginTurnIfNeeded } from "@/leaders/domain/turn";
 import type { Rng } from "@/leaders/domain/rng";
 
 function scriptedRng(flags: { boolean?: boolean; floats?: number[] }): Rng {
@@ -40,7 +41,7 @@ describe("opening state", () => {
     expect(state.firstPlayerColor).toBe("BLACK");
     expect(state.blackHand).toEqual(["LEADER"]);
     expect(state.whiteHand).toEqual(["LEADER"]);
-    expect(state.deck).toHaveLength(18);
+    expect(state.deck).toHaveLength(17);
     expect(state.faceUpOffers).toHaveLength(3);
     expect([...state.deck, ...state.faceUpOffers].sort()).toEqual([...DECK_TYPES].sort());
     expect(state.cellToPiece["36"]).toBeTruthy();
@@ -87,6 +88,50 @@ describe("NemesisResolutionTest", () => {
         "black",
       ),
     ).toThrow(/Only Nemesis owner may move during Nemesis resolution/);
+  });
+
+  it("jailedNemesisStillResolvesWhenEnemyLeaderMoves", () => {
+    const state = emptyState();
+    const leader = put(state, "LEADER", "BLACK", at(0, 0), "black-leader");
+    put(state, "LEADER", "WHITE", at(0, -3));
+    put(state, "NEMESIS", "WHITE", at(0, 2), "nemesis");
+    put(state, "JAILOR", "BLACK", at(1, 2), "jailor");
+    const next = apply(
+      state,
+      command({ type: "DEFAULT_MOVE", pieceId: leader.id, targetCellId: at(1, 0) }),
+      "black",
+    );
+    expect(next.resolvingNemesis).toBe(true);
+  });
+
+  it("froggedNemesisDoesNotResolveWhenEnemyLeaderMoves", () => {
+    const state = emptyState();
+    const leader = put(state, "LEADER", "BLACK", at(0, 0), "black-leader");
+    put(state, "LEADER", "WHITE", at(0, -3));
+    const nemesis = put(state, "NEMESIS", "WHITE", at(0, 2), "nemesis");
+    nemesis.frog = true;
+    const next = apply(
+      state,
+      command({ type: "DEFAULT_MOVE", pieceId: leader.id, targetCellId: at(1, 0) }),
+      "black",
+    );
+    expect(next.resolvingNemesis).toBe(false);
+    expect(next.pieces[nemesis.id].cellId).toBe(at(0, 2));
+  });
+
+  it("rejectsFroggedNemesisMove", () => {
+    const state = emptyState({ resolvingNemesis: true });
+    put(state, "LEADER", "BLACK", at(0, 0));
+    put(state, "LEADER", "WHITE", at(0, -3));
+    const nemesis = put(state, "NEMESIS", "WHITE", at(0, 2), "nemesis");
+    nemesis.frog = true;
+    expect(() =>
+      apply(
+        state,
+        command({ type: "DEFAULT_MOVE", pieceId: nemesis.id, targetCellId: at(2, 0) }),
+        "white",
+      ),
+    ).toThrow(/Frogged Nemesis/);
   });
 });
 
@@ -142,6 +187,31 @@ describe("second player and frogs", () => {
     expect(afterOpponent.turnNumber).toBe(3);
     expect(afterOpponent.activeColor).toBe("BLACK");
     expect(afterOpponent.pieces[rider.id].frog).toBe(false);
+  });
+
+  it("frogRevertCapturesEnemyLeaderBeforeActionPhase", () => {
+    const state = emptyState({ activeColor: "BLACK", turnNumber: 3 });
+    put(state, "LEADER", "BLACK", at(0, 3), "black-leader");
+    put(state, "LEADER", "WHITE", at(0, 0), "white-leader");
+    const assassin = put(state, "ASSASSIN", "BLACK", at(1, 0), "assassin");
+    assassin.frog = true;
+    state.frogExpiresAfterOpponentTurn[assassin.id] = 3;
+    beginTurnIfNeeded(state);
+    expect(state.pieces[assassin.id].frog).toBe(false);
+    expect(state.status).toBe("WON");
+    expect(state.winnerPlayerId).toBe("black");
+  });
+
+  it("frogRevertThatCapturesActiveLeaderGivesOpponentTheWin", () => {
+    const state = emptyState({ activeColor: "BLACK", turnNumber: 3 });
+    put(state, "LEADER", "BLACK", at(0, 0), "black-leader");
+    put(state, "LEADER", "WHITE", at(0, -3), "white-leader");
+    const assassin = put(state, "ASSASSIN", "WHITE", at(1, 0), "assassin");
+    assassin.frog = true;
+    state.frogExpiresAfterOpponentTurn[assassin.id] = 3;
+    beginTurnIfNeeded(state);
+    expect(state.status).toBe("WON");
+    expect(state.winnerPlayerId).toBe("white");
   });
 });
 
@@ -287,15 +357,55 @@ describe("command feedback", () => {
 });
 
 describe("recruitment hand", () => {
-  it("hermitRequiresAtMostTwoNonLeaders", () => {
+  it("hermitRecruitsCubAsOneHandCard", () => {
     const state = emptyState({ phase: "RECRUITMENT" });
-    put(state, "LEADER", "BLACK", at(0, 3));
+    put(state, "LEADER", "BLACK", at(0, 2));
     put(state, "LEADER", "WHITE", at(0, -3));
     state.blackHand = ["LEADER", "SNIPER", "ARCHER", "VIZIER"];
     state.faceUpOffers = ["HERMIT"];
+    const next = apply(
+      state,
+      command({ type: "RECRUIT", offerIndex: 0, targetCellId: 35 }),
+      "black",
+    );
+    expect(next.blackHand).toEqual(["LEADER", "SNIPER", "ARCHER", "VIZIER", "HERMIT"]);
+    const cub = Object.values(next.pieces).find((piece) => piece.type === "CUB");
+    expect(cub?.owner).toBe("BLACK");
+  });
+
+  it("cubOfferCannotBeRecruited", () => {
+    const state = emptyState({ phase: "RECRUITMENT" });
+    put(state, "LEADER", "BLACK", at(0, 3));
+    put(state, "LEADER", "WHITE", at(0, -3));
+    state.faceUpOffers = ["CUB"];
+    expect(canRecruitOffer(state, "BLACK", "CUB")).toBe(false);
     expect(() =>
       apply(state, command({ type: "RECRUIT", offerIndex: 0, targetCellId: 35 }), "black"),
-    ).toThrow(/Hermit recruitment not allowed/);
+    ).toThrow(/Cub cannot be recruited/);
+  });
+
+  it("canRecruitOnOwnEmptyCrown", () => {
+    const state = emptyState({ phase: "RECRUITMENT" });
+    put(state, "LEADER", "BLACK", at(0, 2));
+    put(state, "LEADER", "WHITE", at(0, -3));
+    state.faceUpOffers = ["ARCHER"];
+    const next = apply(
+      state,
+      command({ type: "RECRUIT", offerIndex: 0, targetCellId: 36 }),
+      "black",
+    );
+    expect(next.cellToPiece["36"]).toBeTruthy();
+    expect(next.pieces[next.cellToPiece["36"]].type).toBe("ARCHER");
+  });
+
+  it("cannotRecruitOnTheOpponentCrown", () => {
+    const state = emptyState({ phase: "RECRUITMENT" });
+    put(state, "LEADER", "BLACK", at(0, 2));
+    put(state, "LEADER", "WHITE", at(1, -3));
+    state.faceUpOffers = ["ARCHER"];
+    expect(() =>
+      apply(state, command({ type: "RECRUIT", offerIndex: 0, targetCellId: 0 }), "black"),
+    ).toThrow(/Not a recruitment zone cell/);
   });
 });
 
