@@ -56,7 +56,7 @@ function abilityActionSelectsPieceTarget(
   return pieceIdAtCell(game, targetCellId) !== null;
 }
 
-function legalActionsForPiece(
+export function legalActionsForPiece(
   game: GameStateView,
   pieceId: string,
   type: GameLegalAction["type"],

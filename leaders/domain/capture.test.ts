@@ -237,14 +237,16 @@ describe("leader safety", () => {
     expect(landing).toBeTruthy();
   });
 
-  it("leaderSafetyBlocksTeleportThatNewlyExposesLeaderToCapture", () => {
+  it("leaderSafetyBlocksMoveThatNewlyExposesLeaderToCapture", () => {
     const state = emptyState();
-    put(state, "LEADER", "BLACK", at(0, 0), "black-leader");
-    put(state, "LEADER", "WHITE", at(2, -2));
-    put(state, "BRUISER", "WHITE", at(1, 0));
-    put(state, "ARCHER", "WHITE", at(0, -2));
-    const wanderer = put(state, "WANDERER", "BLACK", at(0, -1), "wanderer");
-    const blocked = legalActionsFor(state).filter((action) => action.pieceId === wanderer.id);
-    expect(blocked).toHaveLength(0);
+    const leader = put(state, "LEADER", "BLACK", at(0, 0), "black-leader");
+    put(state, "LEADER", "WHITE", at(0, -3));
+    put(state, "BRUISER", "WHITE", at(2, 0));
+    put(state, "RIDER", "WHITE", at(2, -1));
+    const cells = legalActionsFor(state)
+      .filter((action) => action.pieceId === leader.id)
+      .map((action) => action.targetCellId);
+    expect(cells).not.toContain(at(1, 0));
+    expect(cells).toContain(at(-1, 0));
   });
 });
