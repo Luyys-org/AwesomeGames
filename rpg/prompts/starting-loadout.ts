@@ -31,5 +31,8 @@ Currency name: {{currencyName}}
 Characters:
 {{json:characters}}
 
+Language: {{language}}
+Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
+
 Task: Create a starting kit for each living character and 3 to 8 actions the party can take in the current situation. Pick currency as a whole number inside that character's currencyMin and currencyMax. Those bounds already combine starting wealth and currency abundance. Invent starting equipment that fits the character's class and race, with a count inside itemMin and itemMax. Mark worn or wielded items equipped true, packed items false. Action ids are lowercase slugs. Action labels are short commands the player can choose. Those actions must be coherent with the current situation and the character's abilities.
 `.trim();

@@ -14,7 +14,7 @@ import {
   buildGmOutcomeUserMessage,
   buildGmReactionRetryMessage,
   buildGmReactionUserMessage,
-  GM_SYSTEM_PROMPT,
+  buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
 import type { TableState } from "@/rpg/lib/table";
@@ -80,7 +80,7 @@ async function requestReaction(
 ): Promise<{ ok: true; value: GmReaction } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
     temperature: 0.7,
-    system: GM_SYSTEM_PROMPT,
+    system: buildGmSystemPrompt(table.settings),
     user,
   });
   if (!response.ok) return response;
@@ -96,7 +96,7 @@ async function requestOutcome(
 ): Promise<{ ok: true; value: GmBeat } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
     temperature: 0.7,
-    system: GM_SYSTEM_PROMPT,
+    system: buildGmSystemPrompt(table.settings),
     user,
   });
   if (!response.ok) return response;

@@ -55,6 +55,9 @@ Recent transcript:
 Player intent:
 {{json:intent}}
 
+Language: {{language}}
+Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
+
 Task: React to that intent and to no later intent. kind speak means the character said the text. kind act means the character chose that action. You may answer with dialogue, a discovery, travel, a complication, an encounter, loot, a stat check, or a mix the fiction supports. Follow the campaign settings for tone, enemy difficulty, encounter frequency, random encounters, loot rarity, loot quantity, currency, player freedom, healing, NPC mortality, factions, PvP, and theft.
 
 Player freedom narrow allows only what this situation already contains. Guided allows anything this scene can contain. Open allows anything that character could attempt. The intent is already accepted. The attempt can still fail.

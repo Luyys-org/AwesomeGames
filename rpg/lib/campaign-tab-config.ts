@@ -8,6 +8,19 @@ export type MissionFailureImpact = "none" | "low" | "standard" | "high";
 
 export type ReputationTracking = "no" | "character" | "party";
 
+export type GmLanguageId =
+  | "zh"
+  | "nl"
+  | "en"
+  | "fr"
+  | "de"
+  | "it"
+  | "ja"
+  | "ko"
+  | "pl"
+  | "pt"
+  | "es";
+
 export type CampaignTagId =
   | "survival"
   | "political"
@@ -21,6 +34,7 @@ export type CampaignTagId =
   | "heist";
 
 export interface CampaignConfiguration {
+  language: GmLanguageId;
   shortDescription: string;
   campaignTags: CampaignTagId[];
   gmNotes: string;
@@ -56,6 +70,7 @@ export interface CampaignConfiguration {
 }
 
 export interface CampaignConfigurationInput {
+  language: GmLanguageId | "";
   shortDescription: string;
   campaignTags: CampaignTagId[];
   gmNotes: string;
@@ -91,6 +106,31 @@ export interface CampaignConfigurationInput {
 }
 
 type Check<T> = { ok: true; value: T } | { ok: false; error: string };
+
+export const GM_LANGUAGES: { id: GmLanguageId; label: string }[] = [
+  { id: "zh", label: "Chinese" },
+  { id: "nl", label: "Dutch" },
+  { id: "en", label: "English" },
+  { id: "fr", label: "French" },
+  { id: "de", label: "German" },
+  { id: "it", label: "Italian" },
+  { id: "ja", label: "Japanese" },
+  { id: "ko", label: "Korean" },
+  { id: "pl", label: "Polish" },
+  { id: "pt", label: "Portuguese" },
+  { id: "es", label: "Spanish" },
+];
+
+export function storedGmLanguage(value: unknown): GmLanguageId {
+  if (typeof value === "string" && GM_LANGUAGES.some((entry) => entry.id === value)) {
+    return value as GmLanguageId;
+  }
+  return "en";
+}
+
+export function gmLanguageLabel(id: string | undefined): string {
+  return GM_LANGUAGES.find((entry) => entry.id === id)?.label ?? "English";
+}
 
 export const CAMPAIGN_TAGS: { id: CampaignTagId; label: string }[] = [
   { id: "survival", label: "Survival" },
@@ -245,6 +285,7 @@ export function applyGlobalDifficultyPrefill(
   return {
     ...current,
     ...campaignDropdownPrefillFromGlobalDifficulty(difficulty),
+    language: current.language,
     shortDescription: current.shortDescription,
     campaignTags: current.campaignTags,
     gmNotes: current.gmNotes,
@@ -262,6 +303,7 @@ export function applyGlobalDifficultyPrefill(
 
 export function emptyCampaignConfigurationInput(): CampaignConfigurationInput {
   return {
+    language: "en",
     shortDescription: "",
     campaignTags: [],
     gmNotes: "",
@@ -321,6 +363,9 @@ function readPositiveInt(value: string, empty: string, invalid: string, field: s
 export function validateCampaignConfiguration(
   input: CampaignConfigurationInput,
 ): Check<CampaignConfiguration> {
+  const language = readChoice(input.language, GM_LANGUAGES, "Choose a language.");
+  if (!language.ok) return language;
+
   const shortDescription = readMultiline(
     input.shortDescription,
     "Enter a short description.",
@@ -484,6 +529,7 @@ export function validateCampaignConfiguration(
   return {
     ok: true,
     value: {
+      language: language.value,
       shortDescription: shortDescription.value,
       campaignTags: input.campaignTags,
       gmNotes: gmNotes.value,
@@ -578,6 +624,7 @@ function readStoredTags(value: unknown): CampaignTagId[] {
 export function parseStoredCampaignConfiguration(value: unknown): CampaignConfiguration | null {
   if (!isRecord(value)) return null;
   const input: CampaignConfigurationInput = {
+    language: storedGmLanguage(value.language),
     shortDescription: readStoredString(value.shortDescription),
     campaignTags: readStoredTags(value.campaignTags),
     gmNotes: readStoredString(value.gmNotes),

@@ -3,7 +3,7 @@ import type { HostAi } from "@/rpg/lib/host-ai";
 import {
   buildStartingLoadoutRetryMessage,
   buildStartingLoadoutUserMessage,
-  GM_SYSTEM_PROMPT,
+  buildGmSystemPrompt,
   type StartingLoadoutCharacterPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
@@ -80,7 +80,7 @@ async function requestLoadout(
 ): Promise<{ ok: true; kits: DraftStartingKit[]; actions: SceneAction[] } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
     temperature: 0.7,
-    system: GM_SYSTEM_PROMPT,
+    system: buildGmSystemPrompt(table.settings),
     user,
   });
   if (!response.ok) return response;

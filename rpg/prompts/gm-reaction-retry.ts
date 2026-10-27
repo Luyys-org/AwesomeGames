@@ -46,5 +46,8 @@ Recent transcript:
 Player intent:
 {{json:intent}}
 
+Language: {{language}}
+Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
+
 Task: Fix the JSON. React only to that intent. When the outcome is certain, check is null, loot stays within the limits, and actions has 3 to 8 entries. When the outcome is uncertain, check is set, loot is empty, and actions is empty. Do not write a die result, a total, or a success word.
 `.trim();

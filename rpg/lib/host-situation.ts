@@ -3,7 +3,7 @@ import type { HostAi } from "@/rpg/lib/host-ai";
 import {
   buildOpeningSituationRetryMessage,
   buildOpeningSituationUserMessage,
-  GM_SYSTEM_PROMPT,
+  buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
 import type { SceneLocation } from "@/rpg/lib/table";
@@ -20,12 +20,13 @@ export async function generateOpeningSituation(
   settings: CampaignSettings,
   hostAi: HostAi,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
-  const first = await requestSituation(hostAi, buildOpeningSituationUserMessage(settings));
+  const first = await requestSituation(hostAi, buildOpeningSituationUserMessage(settings), settings);
   if (first.ok) return first;
 
   const second = await requestSituation(
     hostAi,
     buildOpeningSituationRetryMessage(settings, first.error),
+    settings,
   );
   if (second.ok) return second;
 
@@ -35,10 +36,11 @@ export async function generateOpeningSituation(
 async function requestSituation(
   hostAi: HostAi,
   user: string,
+  settings: CampaignSettings,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
     temperature: 0,
-    system: GM_SYSTEM_PROMPT,
+    system: buildGmSystemPrompt(settings),
     user,
   });
   if (!response.ok) return response;

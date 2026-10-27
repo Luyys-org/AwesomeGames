@@ -15,6 +15,7 @@ import {
   MISSION_FAILURE_IMPACTS,
   REPUTATION_TRACKING_OPTIONS,
   GLOBAL_DIFFICULTY_OPTIONS,
+  GM_LANGUAGES,
   SETTING_LEVELS,
   type CampaignConfigurationInput,
 } from "@/rpg/lib/campaign-tab-config";
@@ -271,6 +272,18 @@ function CampaignTabPanel({
 
   return (
     <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SelectField
+          id="gm-language"
+          label="Language"
+          description="Language the game master uses for narration, names, and spoken replies."
+          value={config.language}
+          onChange={(value) => patch({ language: value })}
+          required
+          placeholder="Choose a language"
+          options={GM_LANGUAGES}
+        />
+      </div>
       <div className="lg:col-span-2 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <SelectField
           id="global-difficulty"

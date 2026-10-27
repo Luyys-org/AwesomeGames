@@ -34,5 +34,8 @@ Currency name: {{currencyName}}
 Characters:
 {{json:characters}}
 
+Language: {{language}}
+Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
+
 Task: Fix the JSON and return only { "kits", "actions" } matching the schema.
 `.trim();

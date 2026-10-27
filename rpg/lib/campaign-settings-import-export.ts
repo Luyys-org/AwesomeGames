@@ -3,6 +3,7 @@ import {
   type CampaignConfigurationInput,
   type GlobalDifficultyId,
   GLOBAL_DIFFICULTY_OPTIONS,
+  storedGmLanguage,
   validateCampaignConfiguration,
 } from "@/rpg/lib/campaign-tab-config";
 import {
@@ -70,6 +71,7 @@ function readCampaignConfigurationInput(value: unknown): Check<CampaignConfigura
     return { ok: false, error: "Import JSON is missing campaignConfiguration." };
   }
   const input = {
+    language: storedGmLanguage(value.language),
     shortDescription: typeof value.shortDescription === "string" ? value.shortDescription : "",
     campaignTags: Array.isArray(value.campaignTags)
       ? value.campaignTags.filter((entry): entry is CampaignConfigurationInput["campaignTags"][number] =>

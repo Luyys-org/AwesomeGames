@@ -1,3 +1,4 @@
+import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import {
   DEATH_PENALTIES,
   ENEMY_DIFFICULTIES,
@@ -34,7 +35,9 @@ import systemTemplate from "@/rpg/prompts/system";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import type { TableState, TranscriptEntry } from "@/rpg/lib/table";
 
-export const GM_SYSTEM_PROMPT = renderTemplate(systemTemplate, {});
+export function buildGmSystemPrompt(settings: CampaignSettings): string {
+  return renderTemplate(systemTemplate, { language: gmLanguageLabel(settings.campaignConfiguration?.language) });
+}
 
 function choiceLabel<T extends string>(
   id: T,
@@ -95,7 +98,11 @@ export function serializeCampaignForGm(settings: CampaignSettings): Record<strin
 
 function campaignVars(settings: CampaignSettings): Record<string, unknown> {
   const campaign = serializeCampaignForGm(settings);
-  return { ...campaign, campaign };
+  return {
+    ...campaign,
+    campaign,
+    language: gmLanguageLabel(settings.campaignConfiguration?.language),
+  };
 }
 
 export function buildOpeningSituationUserMessage(settings: CampaignSettings): string {

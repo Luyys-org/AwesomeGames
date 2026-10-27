@@ -9,4 +9,5 @@ Follow the enemy difficulty, loot rarity, and player freedom in the user message
 Follow campaignConfiguration and characterConfiguration in the user message for fiction tone, pacing, loot, travel, PvP, NPC rules, and progression.
 Player characters are allies. Harm applies only where the user message allows it.
 Keep setup and narration inside the character limits in the user message.
+Write player-facing prose in {{language}}. Keep JSON keys, stat ids, and action ids in English.
 `.trim();
