@@ -14,6 +14,7 @@ import {
   canStartCampaign,
   commitCharacter,
   commitSceneAction,
+  commitSetItemEquipped,
   commitSpeak,
   emptyLocation,
   markLoadoutFailed,
@@ -270,6 +271,38 @@ export async function submitSpeak(text: string): Promise<string | null> {
 
 export async function submitChosenAction(actionId: string): Promise<string | null> {
   return submitHostOrPeerIntent("act", actionId);
+}
+
+export async function submitSetItemEquipped(itemId: string, equipped: boolean): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result = commitSetItemEquipped(session.table, session.seat.characterId, itemId, equipped);
+    if (!result.ok) return result.error;
+    rememberTable(session, result.table);
+    try {
+      await broadcastSnapshot(session);
+    } catch {
+      // The saved table is sent with the next snapshot.
+    }
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "setItemEquipped", itemId, equipped },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
 }
 
 export async function dismissGmError(index: number): Promise<string | null> {
@@ -609,6 +642,21 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (!result.ok) return { ok: false, error: result.error };
     acceptIntent(session, result.table);
     return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+  }
+
+  if (
+    data.type === "setItemEquipped" &&
+    typeof data.itemId === "string" &&
+    typeof data.equipped === "boolean" &&
+    session.table
+  ) {
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const result = commitSetItemEquipped(session.table, characterId, data.itemId, data.equipped);
+    if (!result.ok) return { ok: false, error: result.error };
+    rememberTable(session, result.table);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
   }
 
   if (data.type === "dismissGmError" && typeof data.index === "number" && session.table) {

@@ -11,6 +11,7 @@ import {
   submitCharacter,
   submitChosenAction,
   dismissGmError,
+  submitSetItemEquipped,
   submitClaim,
   submitReady,
   submitSpeak,
@@ -38,5 +39,6 @@ export function useRoom(roomCode: string) {
     submitSpeak: (text: string) => submitSpeak(text),
     submitAction: (actionId: string) => submitChosenAction(actionId),
     dismissGmError: (index: number) => dismissGmError(index),
+    setItemEquipped: (itemId: string, equipped: boolean) => submitSetItemEquipped(itemId, equipped),
   };
 }
