@@ -9,6 +9,24 @@ import type { SceneAction, TableState } from "@/rpg/lib/table";
 const DIFFICULTIES = [8, 10, 12, 15] as const;
 const FAILURES = ["setback", "harm", "severe"] as const;
 
+/** Snap an arbitrary difficulty to the nearest legal scene/check difficulty (ties prefer the lower value). */
+export function snapDifficulty(value: number): (typeof DIFFICULTIES)[number] {
+  const n = Number.isFinite(value) ? Math.round(value) : DIFFICULTIES[0];
+  if ((DIFFICULTIES as readonly number[]).includes(n)) {
+    return n as (typeof DIFFICULTIES)[number];
+  }
+  let best: (typeof DIFFICULTIES)[number] = DIFFICULTIES[0];
+  let bestDist = Math.abs(n - best);
+  for (const entry of DIFFICULTIES) {
+    const dist = Math.abs(n - entry);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = entry;
+    }
+  }
+  return best;
+}
+
 export type SceneActionFailure = (typeof FAILURES)[number];
 
 export interface ActionCheckPreview {
@@ -182,7 +200,7 @@ function parseSceneActionEntry(value: unknown): SceneAction | null {
   const stat = record.stat.trim();
   if (!/^[a-z][a-z0-9-]{0,31}$/.test(id)) return null;
   if (label.length === 0 || label.length > 72) return null;
-  if (!DIFFICULTIES.includes(record.difficulty as (typeof DIFFICULTIES)[number])) return null;
+  const difficulty = snapDifficulty(record.difficulty);
   if (!FAILURES.includes(record.failure as SceneActionFailure)) return null;
 
   const abilityId = readOptionalId(record.abilityId);
@@ -194,7 +212,7 @@ function parseSceneActionEntry(value: unknown): SceneAction | null {
     id,
     label,
     stat,
-    difficulty: record.difficulty as SceneAction["difficulty"],
+    difficulty,
     failure: record.failure as SceneActionFailure,
     ...(abilityId ? { abilityId } : {}),
     ...(itemId ? { itemId } : {}),
