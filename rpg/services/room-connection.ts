@@ -2,7 +2,7 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
-import { markGmUnreadable, type GmIntent } from "@/rpg/lib/gm-turn";
+import { markGmUnreadable, removeGmError, type GmIntent } from "@/rpg/lib/gm-turn";
 import { readHostAi } from "@/rpg/lib/host-ai";
 import { runGmTurn } from "@/rpg/lib/host-gm-turn";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
@@ -270,6 +270,37 @@ export async function submitSpeak(text: string): Promise<string | null> {
 
 export async function submitChosenAction(actionId: string): Promise<string | null> {
   return submitHostOrPeerIntent("act", actionId);
+}
+
+export async function dismissGmError(index: number): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const next = removeGmError(session.table, index);
+    if (!next) return "That message is already gone.";
+    rememberTable(session, next);
+    try {
+      await broadcastSnapshot(session);
+    } catch {
+      // The saved table is sent with the next snapshot.
+    }
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "dismissGmError", index },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
 }
 
 async function submitHostOrPeerIntent(kind: "speak" | "act", value: string): Promise<string | null> {
@@ -580,6 +611,14 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
   }
 
+  if (data.type === "dismissGmError" && typeof data.index === "number" && session.table) {
+    const next = removeGmError(session.table, data.index);
+    if (!next) return { ok: false, error: "That message is already gone." };
+    rememberTable(session, next);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(next)) };
+  }
+
   return { ok: false };
 }
 
@@ -618,7 +657,7 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
     if (current !== session || session.hidden || !session.table) return;
     const hostAi = readHostAi();
     if (!hostAi) {
-      rememberTable(session, markGmUnreadable(session.table, false));
+      rememberTable(session, markGmUnreadable(session.table, false, "The game master has no model configured."));
       try {
         await broadcastSnapshot(session);
       } catch {
@@ -635,9 +674,10 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
     if (current !== session || session.hidden) return;
     rememberTable(session, next);
     await broadcastSnapshot(session);
-  } catch {
+  } catch (error) {
     if (current === session && session.table && !session.hidden) {
-      rememberTable(session, markGmUnreadable(session.table, false));
+      const content = error instanceof Error && error.message ? error.message : "The game master returned an unreadable result.";
+      rememberTable(session, markGmUnreadable(session.table, false, content));
       try {
         await broadcastSnapshot(session);
       } catch {

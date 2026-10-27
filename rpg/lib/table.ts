@@ -3,8 +3,13 @@ import {
   characterOptionsFor,
   coreCharacterOptions,
   parseCharacterOptions,
+  parseItemModifiers,
+  parseItemSlot,
   parseStatBlock,
+  readItemModifiers,
+  readItemSlot,
   type CharacterOptions,
+  type StatDefinition,
 } from "@/rpg/lib/character-options";
 import {
   addCharacter,
@@ -31,14 +36,24 @@ export interface SceneLocation {
   reputation: string;
 }
 
+export const UNREADABLE_GM_RESULT = "The game master returned an unreadable result.";
+
 export type TranscriptEntry =
   | { type: "situation"; scene: number; text: string }
-  | { type: "intent"; characterId: string; kind: "act" | "treat" | "speak"; text: string }
+  | { type: "intent"; characterId: string; kind: "act" | "treat" | "speak"; text: string; failed?: boolean }
   | { type: "narration"; text: string }
   | { type: "check"; characterId: string; line: string }
   | { type: "wound"; characterId: string; wounds: Wound[] }
   | { type: "death"; characterId: string; penalty: CampaignSettings["deathPenalty"] }
-  | { type: "system"; text: string };
+  | { type: "system"; text: string }
+  | { type: "gm-error"; text: string };
+
+export function isGmErrorEntry(entry: TranscriptEntry): boolean {
+  return (
+    entry.type === "gm-error" ||
+    (entry.type === "system" && entry.text === UNREADABLE_GM_RESULT)
+  );
+}
 
 export interface SceneAction {
   id: string;
@@ -130,7 +145,13 @@ function normalizeTableCharacter(character: TableCharacter): TableCharacter {
     ...character,
     ready: character.ready === true,
     currency: Number.isFinite(character.currency) ? character.currency : 0,
-    inventory: Array.isArray(character.inventory) ? character.inventory : [],
+    inventory: Array.isArray(character.inventory)
+      ? character.inventory.map((item) => ({
+          ...item,
+          slot: typeof item.slot === "string" ? item.slot : "",
+          modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
+        }))
+      : [],
   };
 }
 
@@ -282,7 +303,9 @@ export function applyStartingLoadout(
       inventory: kit.inventory.map((item) => ({
         id: createItemId(),
         name: item.name,
+        slot: item.slot,
         equipped: item.equipped,
+        modifiers: item.modifiers,
       })),
     });
   }
@@ -326,12 +349,61 @@ function checkKit(
     if (item.name.trim().length === 0 || item.name.length > 80) {
       return { ok: false, error: `Each item name for ${character.name} must be 1 to 80 characters.` };
     }
+    const modifiers = readItemModifiers(item.modifiers, table.settings.characterOptions.stats);
+    if (!modifiers.ok) return { ok: false, error: modifiers.error };
+    const slot = readItemSlot(item.slot);
+    if (!slot.ok) return { ok: false, error: slot.error };
   }
 
   return { ok: true };
 }
 
 const INTENT_MAX = 400;
+
+export function commitSetItemEquipped(
+  table: TableState,
+  characterId: string,
+  itemId: string,
+  equipped: boolean,
+): { ok: true; table: TableState } | { ok: false; error: string } {
+  if (table.phase !== "play") return { ok: false, error: "The campaign has not started." };
+  if (!table.loadoutReady) return { ok: false, error: "The game master is still preparing." };
+  if (table.gmBusy) return { ok: false, error: "The game master is answering." };
+
+  const character = table.characters.find((entry) => entry.id === characterId);
+  if (!character || character.archived) return { ok: false, error: "That character is not at the table." };
+  if (!character.inScene) return { ok: false, error: "You are not in this scene." };
+
+  const index = character.inventory.findIndex((entry) => entry.id === itemId);
+  if (index < 0) return { ok: false, error: "That item is not in your inventory." };
+  const item = character.inventory[index];
+  if (!item) return { ok: false, error: "That item is not in your inventory." };
+  if (item.equipped === equipped) return { ok: true, table };
+
+  if (equipped && item.slot.length > 0) {
+    const conflict = character.inventory.find(
+      (entry) => entry.id !== item.id && entry.equipped && entry.slot === item.slot,
+    );
+    if (conflict) {
+      return { ok: false, error: `You already have ${conflict.name} equipped in that slot.` };
+    }
+  }
+
+  const inventory = character.inventory.slice();
+  inventory[index] = { ...item, equipped };
+  const characters = table.characters.map((entry) =>
+    entry.id === characterId ? { ...entry, inventory } : entry,
+  );
+
+  return {
+    ok: true,
+    table: {
+      ...table,
+      revision: table.revision + 1,
+      characters,
+    },
+  };
+}
 
 export function commitSpeak(
   table: TableState,
@@ -439,7 +511,13 @@ export function toPublicCharacter(character: TableCharacter): PublicCharacter {
     inScene: character.inScene,
     ready: character.ready === true,
     currency: Number.isFinite(character.currency) ? character.currency : 0,
-    inventory: Array.isArray(character.inventory) ? character.inventory : [],
+    inventory: Array.isArray(character.inventory)
+      ? character.inventory.map((item) => ({
+          ...item,
+          slot: typeof item.slot === "string" ? item.slot : "",
+          modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
+        }))
+      : [],
   };
 }
 
@@ -530,7 +608,7 @@ function parsePublicCharacter(value: unknown, options: CharacterOptions): Public
     inScene: value.inScene !== false,
     ready: value.ready === true,
     currency: readCurrency(value.currency),
-    inventory: parseInventory(value.inventory),
+    inventory: parseInventory(value.inventory, options.stats),
   };
 }
 
@@ -545,14 +623,20 @@ function readCurrency(value: unknown): number {
   return Math.floor(value);
 }
 
-function parseInventory(value: unknown): InventoryItem[] {
+function parseInventory(value: unknown, stats: StatDefinition[]): InventoryItem[] {
   if (!Array.isArray(value)) return [];
   const items: InventoryItem[] = [];
   for (const entry of value) {
     if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.name !== "string") continue;
     const name = entry.name.trim();
     if (name.length === 0 || name.length > 80) continue;
-    items.push({ id: entry.id, name, equipped: entry.equipped === true });
+    items.push({
+      id: entry.id,
+      name,
+      slot: parseItemSlot(entry.slot),
+      equipped: entry.equipped === true,
+      modifiers: parseItemModifiers(entry.modifiers, stats),
+    });
   }
   return items;
 }
@@ -621,7 +705,13 @@ function parseTranscriptEntry(value: unknown): TranscriptEntry | null {
     typeof value.text === "string" &&
     (value.kind === "act" || value.kind === "treat" || value.kind === "speak")
   ) {
-    return { type: "intent", characterId: value.characterId, kind: value.kind, text: value.text };
+    return {
+      type: "intent",
+      characterId: value.characterId,
+      kind: value.kind,
+      text: value.text,
+      ...(value.failed === true ? { failed: true } : {}),
+    };
   }
   if (value.type === "narration" && typeof value.text === "string") {
     return { type: "narration", text: value.text };
@@ -643,6 +733,9 @@ function parseTranscriptEntry(value: unknown): TranscriptEntry | null {
   }
   if (value.type === "system" && typeof value.text === "string") {
     return { type: "system", text: value.text };
+  }
+  if (value.type === "gm-error" && typeof value.text === "string") {
+    return { type: "gm-error", text: value.text };
   }
   return null;
 }

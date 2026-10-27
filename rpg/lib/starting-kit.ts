@@ -1,6 +1,7 @@
 import type { UniverseId } from "@/rpg/lib/campaign-settings";
 import type { SettingLevel } from "@/rpg/lib/campaign-tab-config";
 import type { InventoryItem } from "@/rpg/lib/character";
+import type { ItemModifier } from "@/rpg/lib/character-options";
 
 export interface AmountRange {
   min: number;
@@ -9,7 +10,9 @@ export interface AmountRange {
 
 export interface DraftInventoryItem {
   name: string;
+  slot: string;
   equipped: boolean;
+  modifiers: ItemModifier[];
 }
 
 export interface DraftStartingKit {

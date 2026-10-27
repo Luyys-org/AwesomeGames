@@ -1,6 +1,7 @@
 import {
   readAssignedStats,
   type CharacterOptions,
+  type ItemModifier,
 } from "@/rpg/lib/character-options";
 import { createCharacterId, createClaimCode } from "@/rpg/lib/ids";
 
@@ -11,7 +12,16 @@ export type Wound = "hurt" | "impaired" | "down";
 export interface InventoryItem {
   id: string;
   name: string;
+  slot: string;
   equipped: boolean;
+  modifiers: ItemModifier[];
+}
+
+export const WOUND_HP_MAX = 3;
+
+export function characterHp(wounds: Wound[]): { current: number; max: number } {
+  if (wounds.includes("down")) return { current: 0, max: WOUND_HP_MAX };
+  return { current: WOUND_HP_MAX - wounds.length, max: WOUND_HP_MAX };
 }
 
 export interface CharacterDraft {

@@ -10,6 +10,7 @@ import {
   joinRoom,
   submitCharacter,
   submitChosenAction,
+  dismissGmError,
   submitClaim,
   submitReady,
   submitSpeak,
@@ -36,5 +37,6 @@ export function useRoom(roomCode: string) {
     setReady: (ready: boolean) => submitReady(ready),
     submitSpeak: (text: string) => submitSpeak(text),
     submitAction: (actionId: string) => submitChosenAction(actionId),
+    dismissGmError: (index: number) => dismissGmError(index),
   };
 }

@@ -24,6 +24,8 @@ export interface TraitModifier {
   amount: number;
 }
 
+export type ItemModifier = Pick<TraitModifier, "kind" | "statId" | "amount">;
+
 export interface RacialAbility {
   name: string;
   description: string;
@@ -290,7 +292,7 @@ export function formatSigned(amount: number): string {
   return "0";
 }
 
-export function formatModifier(item: TraitModifier, stats: StatDefinition[]): string {
+export function formatModifier(item: ItemModifier | TraitModifier, stats: StatDefinition[]): string {
   const amount = formatSigned(item.amount);
   const stat = stats.find((entry) => entry.id === item.statId)?.label;
   if (item.kind === "roll") {
@@ -303,6 +305,158 @@ export function formatModifier(item: TraitModifier, stats: StatDefinition[]): st
 export function formatModifierList(modifiers: TraitModifier[], stats: StatDefinition[]): string {
   if (modifiers.length === 0) return "None";
   return modifiers.map((item) => formatModifier(item, stats)).join(", ");
+}
+
+export function itemModifierBonuses(modifiers: ItemModifier[], stats: StatDefinition[]): string {
+  const entries = modifiers.filter((item) => item.amount > 0);
+  return entries.length > 0 ? entries.map((item) => formatModifier(item, stats)).join(", ") : "None";
+}
+
+export function itemModifierMaluses(modifiers: ItemModifier[], stats: StatDefinition[]): string {
+  const entries = modifiers.filter((item) => item.amount < 0);
+  return entries.length > 0 ? entries.map((item) => formatModifier(item, stats)).join(", ") : "None";
+}
+
+export function readItemModifiers(value: unknown, stats: StatDefinition[]): Parsed<ItemModifier[]> {
+  if (value === undefined) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: "Item modifiers must be an array." };
+  const modifiers: ItemModifier[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) return { ok: false, error: "Each item modifier must be an object." };
+    if (entry.kind !== "stat" && entry.kind !== "roll") {
+      return { ok: false, error: "Item modifier kind must be stat or roll." };
+    }
+    if (typeof entry.statId !== "string") {
+      return { ok: false, error: "Each item modifier needs a statId." };
+    }
+    if (typeof entry.amount !== "number" || !Number.isInteger(entry.amount) || entry.amount === 0) {
+      return { ok: false, error: "Item modifier amount must be a non-zero integer from −3 to 3." };
+    }
+    if (entry.amount < -3 || entry.amount > 3) {
+      return { ok: false, error: "Item modifier amount must be from −3 to 3." };
+    }
+    if (entry.kind === "stat" && !stats.some((stat) => stat.id === entry.statId)) {
+      return { ok: false, error: "Item stat modifiers must use campaign stat ids." };
+    }
+    if (entry.kind === "roll" && entry.statId !== "" && !stats.some((stat) => stat.id === entry.statId)) {
+      return { ok: false, error: "Item roll modifiers must use campaign stat ids or an empty statId." };
+    }
+    if (modifiers.length >= MAX_MODIFIERS) {
+      return { ok: false, error: "Each item can have at most 4 modifiers." };
+    }
+    modifiers.push({
+      kind: entry.kind,
+      statId: entry.statId,
+      amount: entry.amount,
+    });
+  }
+  return { ok: true, value: modifiers };
+}
+
+export function parseItemModifiers(value: unknown, stats: StatDefinition[]): ItemModifier[] {
+  const parsed = readItemModifiers(value, stats);
+  return parsed.ok ? parsed.value : [];
+}
+
+const ITEM_SLOT_PATTERN = /^[a-z][a-z0-9-]{0,23}$/;
+
+export function readItemSlot(value: unknown): Parsed<string> {
+  if (value === undefined || value === "") return { ok: true, value: "" };
+  if (typeof value !== "string") return { ok: false, error: "Item slot must be a string." };
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.length === 0) return { ok: true, value: "" };
+  if (!ITEM_SLOT_PATTERN.test(trimmed)) {
+    return { ok: false, error: "Item slot must be a lowercase slug up to 24 characters." };
+  }
+  return { ok: true, value: trimmed };
+}
+
+export function parseItemSlot(value: unknown): string {
+  const parsed = readItemSlot(value);
+  return parsed.ok ? parsed.value : "";
+}
+
+export function formatItemSlotLabel(slot: string): string {
+  if (slot.length === 0) return "None";
+  return slot
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function equipmentAdjustments(
+  inventory: { equipped: boolean; modifiers: ItemModifier[] }[],
+  statId: string,
+): CheckAdjustments {
+  let stat = 0;
+  let roll = 0;
+  for (const item of inventory) {
+    if (!item.equipped) continue;
+    for (const modifier of item.modifiers) {
+      if (modifier.kind === "stat" && modifier.statId === statId) stat += modifier.amount;
+      if (modifier.kind === "roll" && (modifier.statId === "" || modifier.statId === statId)) {
+        roll += modifier.amount;
+      }
+    }
+  }
+  return { stat, roll };
+}
+
+export interface CharacterStatRow {
+  label: string;
+  total: number;
+  detail: string;
+}
+
+export function characterStatRows(
+  character: {
+    classId: string;
+    raceId: string;
+    raceStatIds?: string[];
+    stats: Record<string, number>;
+    inventory: { equipped: boolean; modifiers: ItemModifier[] }[];
+  },
+  options: CharacterOptions,
+): CharacterStatRow[] {
+  const chosen = character.raceStatIds ?? [];
+  return options.stats.map((stat) => {
+    const base = character.stats[stat.id] ?? 0;
+    const traits = checkAdjustments(options, character.classId, character.raceId, stat.id, chosen);
+    const gear = equipmentAdjustments(character.inventory, stat.id);
+    const total = base + traits.stat + gear.stat;
+    const parts = [`Base ${base}`];
+    if (traits.stat !== 0) parts.push(`Class/race ${formatSigned(traits.stat)}`);
+    if (gear.stat !== 0) parts.push(`Equipment ${formatSigned(gear.stat)}`);
+    return {
+      label: stat.label,
+      total,
+      detail: parts.join(" · "),
+    };
+  });
+}
+
+export function characterRollModifierSummary(
+  character: {
+    classId: string;
+    raceId: string;
+    inventory: { equipped: boolean; modifiers: ItemModifier[] }[];
+  },
+  options: CharacterOptions,
+): string {
+  const parts: string[] = [];
+  for (const entry of [findTrait(options.classes, character.classId), findTrait(options.races, character.raceId)]) {
+    if (!entry) continue;
+    for (const item of entry.modifiers) {
+      if (item.kind === "roll") parts.push(formatModifier(item, options.stats));
+    }
+  }
+  for (const item of character.inventory) {
+    if (!item.equipped) continue;
+    for (const modifier of item.modifiers) {
+      if (modifier.kind === "roll") parts.push(formatModifier(modifier, options.stats));
+    }
+  }
+  return parts.length > 0 ? parts.join(", ") : "None";
 }
 
 export function formatTraitDetail(trait: TraitDefinition, stats: StatDefinition[]): string {

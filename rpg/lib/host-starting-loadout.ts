@@ -1,4 +1,9 @@
-import { characterIdentity } from "@/rpg/lib/character-options";
+import {
+  characterIdentity,
+  readItemModifiers,
+  readItemSlot,
+  type StatDefinition,
+} from "@/rpg/lib/character-options";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
   buildStartingLoadoutRetryMessage,
@@ -109,7 +114,7 @@ function readLoadout(
   const kits: DraftStartingKit[] = [];
   const seen = new Set<string>();
   for (const entry of record.kits) {
-    const kit = readKit(entry);
+    const kit = readKit(entry, table.settings.characterOptions.stats);
     if (!kit) return { ok: false, error: "Each kit needs characterId, currency, and inventory." };
     if (!livingIds.has(kit.characterId) || seen.has(kit.characterId)) {
       return { ok: false, error: "Each living character must appear in kits exactly once." };
@@ -129,7 +134,7 @@ function readLoadout(
   return { ok: true, kits, actions };
 }
 
-function readKit(value: unknown): DraftStartingKit | null {
+function readKit(value: unknown, stats: StatDefinition[]): DraftStartingKit | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (typeof record.characterId !== "string" || typeof record.currency !== "number") return null;
@@ -139,7 +144,16 @@ function readKit(value: unknown): DraftStartingKit | null {
     if (typeof item !== "object" || item === null || Array.isArray(item)) return null;
     const row = item as Record<string, unknown>;
     if (typeof row.name !== "string") return null;
-    inventory.push({ name: row.name.trim(), equipped: row.equipped === true });
+    const modifiers = readItemModifiers(row.modifiers, stats);
+    if (!modifiers.ok) return null;
+    const slot = readItemSlot(row.slot);
+    if (!slot.ok) return null;
+    inventory.push({
+      name: row.name.trim(),
+      slot: slot.value,
+      equipped: row.equipped === true,
+      modifiers: modifiers.value,
+    });
   }
   return {
     characterId: record.characterId,

@@ -10,7 +10,14 @@ Reply with JSON only, matching this schema:
     {
       "characterId": "string",
       "currency": "integer",
-      "items": [{ "name": "string", "equipped": "boolean" }]
+      "items": [
+        {
+          "name": "string",
+          "slot": "string",
+          "equipped": "boolean",
+          "modifiers": [{ "kind": "stat", "statId": "string", "amount": 1 }]
+        }
+      ]
     }
   ],
   "actions": [{ "id": "string", "label": "string" }]
@@ -50,5 +57,5 @@ Resolved check:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and narrate the resolved check. Do not contradict the line or the wounds. Do not call another check. Loot stays within the limits. Return 3 to 8 actions.
+Task: Fix the JSON and narrate the resolved check. Do not contradict the line or the wounds. Do not call another check. Loot stays within the limits. Return 3 to 8 actions with ids using hyphens only, no underscores.
 `.trim();

@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { InventoryDialog } from "@/rpg/features/play/inventory-dialog";
+import { StatsDialog } from "@/rpg/features/play/stats-dialog";
 import { useRoom } from "@/rpg/features/room/use-room";
+import { characterHp } from "@/rpg/lib/character";
 import { characterIdentity } from "@/rpg/lib/character-options";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
-import type { TranscriptEntry } from "@/rpg/lib/table";
+import { isGmErrorEntry, UNREADABLE_GM_RESULT, type TranscriptEntry } from "@/rpg/lib/table";
 import { paths } from "@/rpg/paths";
 
 interface CampaignPlayProps {
@@ -15,9 +17,10 @@ interface CampaignPlayProps {
 }
 
 export function CampaignPlay({ roomCode }: CampaignPlayProps) {
-  const { view, submitSpeak, submitAction } = useRoom(roomCode);
+  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped } = useRoom(roomCode);
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
   const [speech, setSpeech] = useState("");
   const [actionId, setActionId] = useState("");
   const [actPending, setActPending] = useState(false);
@@ -31,13 +34,16 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   }, [roomCode, router, view]);
 
   useEffect(() => {
-    if (!inventoryOpen) return;
+    if (!inventoryOpen && !statsOpen) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setInventoryOpen(false);
+      if (event.key === "Escape") {
+        setInventoryOpen(false);
+        setStatsOpen(false);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [inventoryOpen]);
+  }, [inventoryOpen, statsOpen]);
 
   const character =
     view?.seat?.status === "active"
@@ -84,7 +90,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   return (
     <div className="page-shell flex h-dvh min-h-0 flex-col overflow-hidden">
       <header className="grid shrink-0 grid-cols-3 items-center border-b border-[var(--border)] px-4 py-3">
-        <div>
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             className="btn btn-secondary"
@@ -93,11 +99,24 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           >
             Inventory
           </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={!character}
+            onClick={() => setStatsOpen(true)}
+          >
+            Stats
+          </button>
         </div>
         <div className="text-center">
-          {identity ? (
+          {identity && character ? (
             <>
-              <h1 className="text-lg font-semibold text-zinc-50">{identity.name}</h1>
+              <h1 className="text-lg font-semibold text-zinc-50">
+                {identity.name}
+                <span className="ml-2 text-sm font-normal tabular-nums text-zinc-400">
+                  HP {characterHp(character.wounds).current}/{characterHp(character.wounds).max}
+                </span>
+              </h1>
               <p className="mt-1 text-sm text-zinc-400">
                 {[identity.race, identity.className].filter((part) => part.length > 0).join(" · ")}
               </p>
@@ -148,6 +167,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
               situation={view?.situation ?? ""}
               gmBusy={gmBusy}
               characterNames={Object.fromEntries((view?.characters ?? []).map((entry) => [entry.id, entry.name]))}
+              onDismissError={(index) => dismissGmError(index)}
             />
           </div>
 
@@ -244,9 +264,52 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
         </div>
       </div>
 
-      {inventoryOpen && character ? (
-        <InventoryDialog items={character.inventory} onClose={() => setInventoryOpen(false)} />
+      {inventoryOpen && character && view?.characterOptions ? (
+        <InventoryDialog
+          items={character.inventory}
+          characterOptions={view.characterOptions}
+          controlsLocked={gmBusy}
+          onSetEquipped={setItemEquipped}
+          onClose={() => setInventoryOpen(false)}
+        />
       ) : null}
+
+      {statsOpen && character && view?.characterOptions ? (
+        <StatsDialog
+          character={character}
+          characterOptions={view.characterOptions}
+          onClose={() => setStatsOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function BinIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M3 4.25h10M6.25 4.25V3.4c0-.22.18-.4.4-.4h2.7c.22 0 .4.18.4.4v.85M4.4 4.25l.45 8.05c.03.36.33.65.7.65h4.9c.37 0 .67-.29.7-.65l.45-8.05"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function GmBusyIndicator() {
+  return (
+    <div className="flex items-center gap-3 text-sm text-zinc-400" role="status" aria-live="polite">
+      <div
+        className="relative size-5 shrink-0"
+        aria-hidden="true"
+      >
+        <div className="absolute inset-0 rounded-full border-2 border-zinc-800" />
+        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[var(--primary)]" />
+      </div>
+      <span>The game master is answering.</span>
     </div>
   );
 }
@@ -265,12 +328,16 @@ function AgentLog({
   situation,
   gmBusy,
   characterNames,
+  onDismissError,
 }: {
   transcript: TranscriptEntry[];
   situation: string;
   gmBusy: boolean;
   characterNames: Record<string, string>;
+  onDismissError: (index: number) => Promise<string | null>;
 }) {
+  const [dismissingIndex, setDismissingIndex] = useState<number | null>(null);
+  const [dismissError, setDismissError] = useState<string | null>(null);
   const entries =
     transcript.length > 0
       ? transcript
@@ -278,16 +345,40 @@ function AgentLog({
         ? [{ type: "situation" as const, scene: 1, text: situation }]
         : [];
 
+  function dismiss(index: number) {
+    if (dismissingIndex !== null) return;
+    setDismissingIndex(index);
+    setDismissError(null);
+    void onDismissError(index).then((message) => {
+      setDismissingIndex(null);
+      if (message) setDismissError(message);
+    });
+  }
+
   if (entries.length === 0) {
+    if (gmBusy) {
+      return (
+        <div className="mx-auto w-full max-w-2xl">
+          <GmBusyIndicator />
+        </div>
+      );
+    }
     return <p className="text-sm text-zinc-400">Waiting for the game master.</p>;
   }
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
       {entries.map((entry, index) => (
-        <LogEntry key={`${entry.type}-${index}`} entry={entry} characterNames={characterNames} />
+        <LogEntry
+          key={`${entry.type}-${index}`}
+          entry={entry}
+          characterNames={characterNames}
+          dismissing={dismissingIndex === index}
+          onDismiss={transcript.length > 0 && isGmErrorEntry(entry) ? () => dismiss(index) : undefined}
+        />
       ))}
-      {gmBusy ? <p className="text-sm text-zinc-400">The game master is answering.</p> : null}
+      {dismissError ? <p className="text-sm text-red-200">{dismissError}</p> : null}
+      {gmBusy ? <GmBusyIndicator /> : null}
     </div>
   );
 }
@@ -295,9 +386,13 @@ function AgentLog({
 function LogEntry({
   entry,
   characterNames,
+  dismissing,
+  onDismiss,
 }: {
   entry: TranscriptEntry;
   characterNames: Record<string, string>;
+  dismissing?: boolean;
+  onDismiss?: () => void;
 }) {
   if (entry.type === "intent") {
     const name = characterNames[entry.characterId] ?? "Someone";
@@ -337,6 +432,29 @@ function LogEntry({
           ? `${name} is gone.`
           : `${name} is down.`;
     return <p className="text-sm leading-relaxed text-zinc-400">{line}</p>;
+  }
+
+  if (isGmErrorEntry(entry)) {
+    const body = entry.text === UNREADABLE_GM_RESULT ? null : entry.text;
+    return (
+      <div className="flex items-start gap-3 text-sm leading-relaxed text-red-200">
+        <div className="min-w-0 flex-1">
+          <p>{UNREADABLE_GM_RESULT}</p>
+          {body ? <p className="mt-2 break-words whitespace-pre-wrap">{body}</p> : null}
+        </div>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-md border border-red-500/40 p-1.5 text-red-200 hover:border-red-400 hover:bg-red-950/40 disabled:opacity-60"
+            aria-label="Remove from the log"
+            disabled={dismissing}
+            onClick={onDismiss}
+          >
+            <BinIcon />
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   if (entry.type === "system") {

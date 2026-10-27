@@ -5,7 +5,14 @@ Reply with JSON only, matching this schema:
     {
       "characterId": "string",
       "currency": "integer",
-      "inventory": [{ "name": "string", "equipped": "boolean" }]
+      "inventory": [
+        {
+          "name": "string",
+          "slot": "string",
+          "equipped": "boolean",
+          "modifiers": [{ "kind": "stat", "statId": "string", "amount": 1 }]
+        }
+      ]
     }
   ],
   "actions": [{ "id": "string", "label": "string" }]
@@ -37,5 +44,5 @@ Characters:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and return only { "kits", "actions" } matching the schema.
+Task: Fix the JSON and return only { "kits", "actions" } matching the schema. Action ids use hyphens only, no underscores.
 `.trim();

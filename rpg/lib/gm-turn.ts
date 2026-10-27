@@ -1,10 +1,19 @@
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { SettingLevel } from "@/rpg/lib/campaign-tab-config";
-import { checkAdjustments, type CharacterOptions } from "@/rpg/lib/character-options";
+import {
+  checkAdjustments,
+  equipmentAdjustments,
+  readItemModifiers,
+  readItemSlot,
+  type CharacterOptions,
+  type ItemModifier,
+} from "@/rpg/lib/character-options";
 import type { TableCharacter, Wound } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
 import {
+  isGmErrorEntry,
   parseSceneActions,
+  UNREADABLE_GM_RESULT,
   type SceneAction,
   type SceneLocation,
   type TableState,
@@ -58,7 +67,9 @@ export interface GmEncounter {
 
 export interface GmLootItem {
   name: string;
+  slot: string;
   equipped: boolean;
+  modifiers: ItemModifier[];
 }
 
 export interface GmLootGrant {
@@ -246,16 +257,57 @@ export function commitCheckBeat(
   };
 }
 
-export function markGmUnreadable(table: TableState, gmBusy: boolean): TableState {
+export function markGmUnreadable(table: TableState, gmBusy: boolean, content: string): TableState {
+  const text = content.length > 0 ? content : UNREADABLE_GM_RESULT;
   return {
     ...table,
     revision: table.revision + 1,
     gmBusy,
     transcript: [
-      ...table.transcript,
-      { type: "system", text: "The game master returned an unreadable result." },
+      ...markUnresolvedIntent(table.transcript),
+      { type: "gm-error", text },
     ],
   };
+}
+
+export function removeGmError(table: TableState, index: number): TableState | null {
+  const entry = table.transcript[index];
+  if (!entry || !isGmErrorEntry(entry)) return null;
+  const transcript = table.transcript.filter((_, entryIndex) => entryIndex !== index);
+  return {
+    ...table,
+    revision: table.revision + 1,
+    transcript: markUnresolvedIntentBefore(transcript, index - 1),
+  };
+}
+
+function markUnresolvedIntent(transcript: TranscriptEntry[]): TranscriptEntry[] {
+  return markUnresolvedIntentBefore(transcript, transcript.length - 1);
+}
+
+function markUnresolvedIntentBefore(transcript: TranscriptEntry[], start: number): TranscriptEntry[] {
+  for (let index = start; index >= 0; index -= 1) {
+    const entry = transcript[index];
+    if (!entry) continue;
+    if (isResolvedBeatEntry(entry)) return transcript;
+    if (entry.type === "system" || entry.type === "gm-error") continue;
+    if (entry.type !== "intent" || (entry.kind !== "speak" && entry.kind !== "act")) return transcript;
+    if (entry.failed) return transcript;
+    const next = transcript.slice();
+    next[index] = { ...entry, failed: true };
+    return next;
+  }
+  return transcript;
+}
+
+function isResolvedBeatEntry(entry: TranscriptEntry): boolean {
+  return (
+    entry.type === "narration" ||
+    entry.type === "check" ||
+    entry.type === "wound" ||
+    entry.type === "death" ||
+    entry.type === "situation"
+  );
 }
 
 function readBeat(value: unknown, table: TableState, actionsRequired: boolean): Parsed<GmBeat> {
@@ -376,7 +428,11 @@ function readGrant(
     if (item.equipped !== undefined && typeof item.equipped !== "boolean") {
       return { ok: false, error: `Equipped for ${character.name} must be true or false.` };
     }
-    items.push({ name, equipped: item.equipped === true });
+    const modifiers = readItemModifiers(item.modifiers, table.settings.characterOptions.stats);
+    if (!modifiers.ok) return modifiers;
+    const slot = readItemSlot(item.slot);
+    if (!slot.ok) return slot;
+    items.push({ name, slot: slot.value, equipped: item.equipped === true, modifiers: modifiers.value });
   }
 
   return {
@@ -455,15 +511,19 @@ function rollCheck(
     check.stat,
     character.raceStatIds,
   );
+  const gear = equipmentAdjustments(character.inventory, check.stat);
   const ability = check.abilityApplies ? 2 : 0;
   const impaired = character.wounds.includes("impaired") ? 2 : 0;
-  const total = natural + assigned + adjustments.stat + adjustments.roll + ability - impaired;
+  const total =
+    natural + assigned + adjustments.stat + gear.stat + adjustments.roll + gear.roll + ability - impaired;
   const success = natural === 20 || (natural !== 1 && total >= check.difficulty);
   const statLabel = options.stats.find((stat) => stat.id === check.stat)?.label ?? check.stat;
   const parts = [`d20 ${natural}`];
   if (assigned !== 0) parts.push(`${signed(assigned)} stat`);
-  if (adjustments.stat !== 0) parts.push(`${signed(adjustments.stat)} modifier`);
-  if (adjustments.roll !== 0) parts.push(`${signed(adjustments.roll)} roll`);
+  const modifierStat = adjustments.stat + gear.stat;
+  const modifierRoll = adjustments.roll + gear.roll;
+  if (modifierStat !== 0) parts.push(`${signed(modifierStat)} modifier`);
+  if (modifierRoll !== 0) parts.push(`${signed(modifierRoll)} roll`);
   if (ability !== 0) parts.push(`${signed(ability)} ${abilityLabel(character, options, check.stat)}`);
   if (impaired !== 0) parts.push("−2 impaired");
 
@@ -540,7 +600,9 @@ function grantLoot(
         ...grant.items.map((item) => ({
           id: createItemId(),
           name: item.name,
+          slot: item.slot,
           equipped: item.equipped,
+          modifiers: item.modifiers,
         })),
       ],
     });

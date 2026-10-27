@@ -11,7 +11,14 @@ Reply with JSON only, matching this schema:
     {
       "characterId": "string",
       "currency": "integer",
-      "items": [{ "name": "string", "equipped": "boolean" }]
+      "items": [
+        {
+          "name": "string",
+          "slot": "string",
+          "equipped": "boolean",
+          "modifiers": [{ "kind": "stat", "statId": "string", "amount": 1 }]
+        }
+      ]
     }
   ],
   "actions": [{ "id": "string", "label": "string" }]
@@ -49,5 +56,5 @@ Player intent:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON. React only to that intent. When the outcome is certain, check is null, loot stays within the limits, and actions has 3 to 8 entries. When the outcome is uncertain, check is set, loot is empty, and actions is empty. Do not write a die result, a total, or a success word.
+Task: Fix the JSON. React only to that intent. When the outcome is certain, check is null, loot stays within the limits, and actions has 3 to 8 entries with action ids using hyphens only, no underscores. When the outcome is uncertain, check is set, loot is empty, and actions is empty. Do not write a die result, a total, or a success word.
 `.trim();

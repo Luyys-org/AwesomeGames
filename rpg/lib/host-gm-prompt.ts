@@ -33,7 +33,7 @@ import startingLoadoutRetryTemplate from "@/rpg/prompts/starting-loadout-retry";
 import startingLoadoutTemplate from "@/rpg/prompts/starting-loadout";
 import systemTemplate from "@/rpg/prompts/system";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
-import type { TableState, TranscriptEntry } from "@/rpg/lib/table";
+import { isGmErrorEntry, type TableState, type TranscriptEntry } from "@/rpg/lib/table";
 
 export function buildGmSystemPrompt(settings: CampaignSettings): string {
   return renderTemplate(systemTemplate, { language: gmLanguageLabel(settings.campaignConfiguration?.language) });
@@ -206,7 +206,12 @@ function charactersForGm(table: TableState) {
         inScene: character.inScene,
         wounds: character.wounds,
         currency: character.currency,
-        inventory: character.inventory.map((item) => ({ name: item.name, equipped: item.equipped })),
+        inventory: character.inventory.map((item) => ({
+          name: item.name,
+          slot: item.slot,
+          equipped: item.equipped,
+          modifiers: item.modifiers,
+        })),
         stats: options.stats.map((stat) => ({
           id: stat.id,
           label: stat.label,
@@ -227,7 +232,24 @@ function charactersForGm(table: TableState) {
 
 function transcriptForGm(table: TableState) {
   const names = new Map(table.characters.map((character) => [character.id, character.name]));
-  return table.transcript.slice(-20).map((entry) => transcriptLine(entry, names));
+  return table.transcript
+    .filter((entry, index) => !excludedFromGm(table.transcript, entry, index))
+    .slice(-20)
+    .map((entry) => transcriptLine(entry, names));
+}
+
+function excludedFromGm(transcript: TranscriptEntry[], entry: TranscriptEntry, index: number): boolean {
+  if (isGmErrorEntry(entry)) return true;
+  if (entry.type !== "intent" || entry.kind === "treat") return false;
+  if (entry.failed) return true;
+  for (let later = index + 1; later < transcript.length; later += 1) {
+    const next = transcript[later];
+    if (!next) continue;
+    if (isGmErrorEntry(next)) return true;
+    if (next.type === "system") continue;
+    return false;
+  }
+  return false;
 }
 
 function transcriptLine(entry: TranscriptEntry, names: Map<string, string>): Record<string, string> {
