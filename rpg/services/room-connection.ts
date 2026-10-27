@@ -2,16 +2,33 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
+import { markGmUnreadable, removeGmError, type GmIntent } from "@/rpg/lib/gm-turn";
+import { readHostAi } from "@/rpg/lib/host-ai";
+import { runGmTurn } from "@/rpg/lib/host-gm-turn";
+import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
+import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
+  applyStartingLoadout,
+  canStartCampaign,
   commitCharacter,
+  commitSceneAction,
+  commitSetItemEquipped,
+  commitSpeak,
+  emptyLocation,
+  markLoadoutFailed,
   parseSnapshot,
+  setCharacterReady,
+  startCampaign,
   toPublicCharacter,
   toSnapshot,
   type PublicCharacter,
+  type SceneAction,
+  type SceneLocation,
   type TableSnapshot,
   type TableState,
+  type TranscriptEntry,
 } from "@/rpg/lib/table";
 
 const APP_ID = "app.awesomegames.rpg";
@@ -39,11 +56,19 @@ export interface RoomView {
   roomCode: string;
   campaignName: string | null;
   universeName: string | null;
+  universe: TableSnapshot["universe"] | null;
   objective: string | null;
+  situation: string | null;
+  location: SceneLocation;
   playerCount: number | null;
   characterOptions: CharacterOptions | null;
-  phase: "waiting" | "lobby";
+  phase: "waiting" | "lobby" | "play";
   characters: PublicCharacter[];
+  transcript: TranscriptEntry[];
+  availableActions: SceneAction[];
+  loadoutReady: boolean;
+  gmBusy: boolean;
+  scene: number | null;
   seat: RoomSeat | null;
   joiningCount: number;
 }
@@ -90,6 +115,9 @@ interface Session {
   hostWaiters: HostWaiter[];
   hostTimer: ReturnType<typeof setTimeout> | null;
   claimAttempted: boolean;
+  loadoutRequested: boolean;
+  gmPending: number;
+  gmQueue: Promise<void>;
 }
 
 let current: Session | null = null;
@@ -131,6 +159,7 @@ function enqueue(task: () => Promise<void>): Promise<void> {
 }
 
 async function hostRoomNow(roomCode: string): Promise<void> {
+  await ensureUniversePresets().catch(() => undefined);
   const saved = readHostSession();
   if (!saved || saved.roomCode !== roomCode) {
     throw new Error("This browser does not have the host game.");
@@ -145,9 +174,11 @@ async function hostRoomNow(roomCode: string): Promise<void> {
     seat: hostSeat(saved.table),
   });
   await finishOpen(session);
+  requestStartingLoadout(session);
 }
 
 async function joinRoomNow(roomCode: string): Promise<void> {
+  await ensureUniversePresets().catch(() => undefined);
   if (sameOpenSession(roomCode, "peer")) return;
 
   const session = await openSession({
@@ -203,6 +234,140 @@ export async function submitCharacter(draft: CharacterDraft): Promise<string | n
   }
 }
 
+export async function submitReady(ready: boolean): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result = setCharacterReady(session.table, session.seat.characterId, ready);
+    if (!result.ok) return result.error;
+    session.table = result.table;
+    writeHostSession({ roomCode: session.roomCode, table: result.table });
+    maybeStartCampaign(session);
+    publish(session);
+    void broadcastSnapshot(session);
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "ready", ready },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
+export async function submitSpeak(text: string): Promise<string | null> {
+  return submitHostOrPeerIntent("speak", text);
+}
+
+export async function submitChosenAction(actionId: string): Promise<string | null> {
+  return submitHostOrPeerIntent("act", actionId);
+}
+
+export async function submitSetItemEquipped(itemId: string, equipped: boolean): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result = commitSetItemEquipped(session.table, session.seat.characterId, itemId, equipped);
+    if (!result.ok) return result.error;
+    rememberTable(session, result.table);
+    try {
+      await broadcastSnapshot(session);
+    } catch {
+      // The saved table is sent with the next snapshot.
+    }
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "setItemEquipped", itemId, equipped },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
+export async function dismissGmError(index: number): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const next = removeGmError(session.table, index);
+    if (!next) return "That message is already gone.";
+    rememberTable(session, next);
+    try {
+      await broadcastSnapshot(session);
+    } catch {
+      // The saved table is sent with the next snapshot.
+    }
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "dismissGmError", index },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
+async function submitHostOrPeerIntent(kind: "speak" | "act", value: string): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result =
+      kind === "speak"
+        ? commitSpeak(session.table, session.seat.characterId, value)
+        : commitSceneAction(session.table, session.seat.characterId, value);
+    if (!result.ok) return result.error;
+    acceptIntent(session, result.table);
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      kind === "speak"
+        ? { type: "intent", kind: "speak", text: value, targetCharacterId: null }
+        : { type: "intent", kind: "act", actionId: value, targetCharacterId: null },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
 export async function submitClaim(name: string, claimCode: string): Promise<string | null> {
   const session = current;
   if (!session || session.role !== "peer" || !session.hostPeerId) {
@@ -250,6 +415,9 @@ async function openSession(input: {
     hostWaiters: [],
     hostTimer: null,
     claimAttempted: false,
+    loadoutRequested: false,
+    gmPending: 0,
+    gmQueue: Promise.resolve(),
   };
 
   current = session;
@@ -346,6 +514,7 @@ function handlePeerLeave(session: Session, peerId: string): void {
   }
 
   publish(session);
+  if (session.role === "host") maybeStartCampaign(session);
 }
 
 async function sendJoin(session: Session, hostId: string): Promise<void> {
@@ -446,7 +615,180 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     };
   }
 
+  if (data.type === "ready") {
+    if (typeof data.ready !== "boolean") return { ok: false };
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const result = setCharacterReady(session.table, characterId, data.ready);
+    if (!result.ok) return { ok: false, error: result.error };
+    session.table = result.table;
+    writeHostSession({ roomCode: session.roomCode, table: result.table });
+    maybeStartCampaign(session);
+    publish(session);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+  }
+
+  if (data.type === "intent") {
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const result =
+      data.kind === "speak" && typeof data.text === "string"
+        ? commitSpeak(session.table, characterId, data.text)
+        : data.kind === "act" && typeof data.actionId === "string"
+          ? commitSceneAction(session.table, characterId, data.actionId)
+          : null;
+    if (!result) return { ok: false };
+    if (!result.ok) return { ok: false, error: result.error };
+    acceptIntent(session, result.table);
+    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+  }
+
+  if (
+    data.type === "setItemEquipped" &&
+    typeof data.itemId === "string" &&
+    typeof data.equipped === "boolean" &&
+    session.table
+  ) {
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const result = commitSetItemEquipped(session.table, characterId, data.itemId, data.equipped);
+    if (!result.ok) return { ok: false, error: result.error };
+    rememberTable(session, result.table);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
+  }
+
+  if (data.type === "dismissGmError" && typeof data.index === "number" && session.table) {
+    const next = removeGmError(session.table, data.index);
+    if (!next) return { ok: false, error: "That message is already gone." };
+    rememberTable(session, next);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(next)) };
+  }
+
   return { ok: false };
+}
+
+function acceptIntent(session: Session, table: TableState): void {
+  const intent = queuedIntent(table);
+  const next = intent ? { ...table, gmBusy: true } : table;
+  session.table = next;
+  if (intent) {
+    session.gmPending += 1;
+    const turn = intent;
+    session.gmQueue = session.gmQueue.catch(() => undefined).then(() => resolveGmIntent(session, turn));
+  }
+  writeHostSession({ roomCode: session.roomCode, table: next });
+  publish(session);
+  void broadcastSnapshot(session);
+}
+
+function queuedIntent(table: TableState): GmIntent | null {
+  for (let index = table.transcript.length - 1; index >= 0; index -= 1) {
+    const entry = table.transcript[index];
+    if (!entry || entry.type !== "intent") continue;
+    if (entry.kind !== "speak" && entry.kind !== "act") continue;
+    const character = table.characters.find((candidate) => candidate.id === entry.characterId);
+    return {
+      characterId: entry.characterId,
+      characterName: character?.name ?? "Someone",
+      kind: entry.kind,
+      text: entry.text,
+    };
+  }
+  return null;
+}
+
+async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void> {
+  try {
+    if (current !== session || session.hidden || !session.table) return;
+    const hostAi = readHostAi();
+    if (!hostAi) {
+      rememberTable(session, markGmUnreadable(session.table, false, "The game master has no model configured."));
+      try {
+        await broadcastSnapshot(session);
+      } catch {
+        // The saved table is sent with the next snapshot.
+      }
+      return;
+    }
+    const next = await runGmTurn(session.table, hostAi, intent, async (mid) => {
+      if (current !== session || session.hidden) return false;
+      rememberTable(session, mid);
+      await broadcastSnapshot(session);
+      return current === session && !session.hidden;
+    });
+    if (current !== session || session.hidden) return;
+    rememberTable(session, next);
+    await broadcastSnapshot(session);
+  } catch (error) {
+    if (current === session && session.table && !session.hidden) {
+      const content = error instanceof Error && error.message ? error.message : "The game master returned an unreadable result.";
+      rememberTable(session, markGmUnreadable(session.table, false, content));
+      try {
+        await broadcastSnapshot(session);
+      } catch {
+        // The saved table is sent with the next snapshot.
+      }
+    }
+  } finally {
+    session.gmPending = Math.max(0, session.gmPending - 1);
+  }
+}
+
+function rememberTable(session: Session, table: TableState): void {
+  session.table = table;
+  writeHostSession({ roomCode: session.roomCode, table });
+  publish(session);
+}
+
+function maybeStartCampaign(session: Session): void {
+  if (session.role !== "host" || !session.table || session.table.phase !== "lobby") return;
+  const joiningCount = [...session.peers.values()].filter((peer) => peer.characterId === null).length;
+  if (!canStartCampaign(session.table, joiningCount)) return;
+  const started = startCampaign(session.table);
+  if (!started.ok) return;
+  session.table = started.table;
+  writeHostSession({ roomCode: session.roomCode, table: started.table });
+  publish(session);
+  void broadcastSnapshot(session);
+  requestStartingLoadout(session);
+}
+
+function requestStartingLoadout(session: Session): void {
+  if (session.role !== "host" || !session.table) return;
+  if (session.table.phase !== "play" || session.table.loadoutReady || session.loadoutRequested) return;
+  session.loadoutRequested = true;
+  void fillStartingLoadout(session);
+}
+
+async function fillStartingLoadout(session: Session): Promise<void> {
+  if (!session.table || session.hidden || session.link === "failed") return;
+  const hostAi = readHostAi();
+  if (!hostAi) {
+    session.table = markLoadoutFailed(session.table);
+    writeHostSession({ roomCode: session.roomCode, table: session.table });
+    publish(session);
+    void broadcastSnapshot(session);
+    return;
+  }
+
+  const generated = await generateStartingLoadout(session.table, hostAi);
+  if (session.hidden || current !== session || !session.table) return;
+  if (!generated.ok) {
+    session.table = markLoadoutFailed(session.table);
+    writeHostSession({ roomCode: session.roomCode, table: session.table });
+    publish(session);
+    void broadcastSnapshot(session);
+    return;
+  }
+
+  const applied = applyStartingLoadout(session.table, generated.kits, generated.actions);
+  session.table = applied.ok ? applied.table : markLoadoutFailed(session.table);
+  writeHostSession({ roomCode: session.roomCode, table: session.table });
+  publish(session);
+  void broadcastSnapshot(session);
 }
 
 function handleFeed(session: Session, data: JsonValue): void {
@@ -653,11 +995,19 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
       : table
         ? universeName(table.settings.universe, table.settings.universeLabel)
         : null,
+    universe: source?.universe ?? table?.settings.universe ?? null,
     objective: source?.objective ?? table?.settings.objective ?? null,
+    situation: source?.situation ?? table?.situation ?? null,
+    location: source?.location ?? table?.location ?? emptyLocation(),
     playerCount: source?.playerCount ?? table?.settings.playerCount ?? null,
     characterOptions: source?.characterOptions ?? table?.settings.characterOptions ?? null,
     phase: source?.phase ?? table?.phase ?? "waiting",
     characters: source?.characters ?? (table ? table.characters.map(toPublicCharacter) : []),
+    transcript: source?.transcript ?? table?.transcript ?? [],
+    availableActions: source?.availableActions ?? table?.availableActions ?? [],
+    loadoutReady: source?.loadoutReady ?? table?.loadoutReady ?? false,
+    gmBusy: source?.gmBusy ?? table?.gmBusy ?? false,
+    scene: source?.scene ?? table?.scene ?? null,
     seat: session.seat,
     joiningCount:
       session.role === "host"
@@ -688,8 +1038,10 @@ function draftPayload(draft: CharacterDraft): JsonValue {
     type: "createCharacter",
     name: draft.name,
     abilityId: draft.abilityId,
+    extraAbilityId: draft.extraAbilityId,
     classId: draft.classId,
     raceId: draft.raceId,
+    raceStatIds: draft.raceStatIds,
     stats: draft.stats,
   };
 }
@@ -706,13 +1058,29 @@ function readDraft(value: Record<string, unknown>): CharacterDraft | null {
     return null;
   }
 
+  const picks = readDraftPicks(value.extraAbilityId, value.raceStatIds);
+  if (!picks) return null;
+
   return {
     name: value.name,
     abilityId: value.abilityId,
+    extraAbilityId: picks.extraAbilityId,
     classId: value.classId,
     raceId: value.raceId,
+    raceStatIds: picks.raceStatIds,
     stats,
   };
+}
+
+function readDraftPicks(
+  extraAbilityId: unknown,
+  raceStatIds: unknown,
+): { extraAbilityId: string; raceStatIds: string[] } | null {
+  const extra = extraAbilityId === undefined ? "" : extraAbilityId;
+  const chosen = raceStatIds === undefined ? [] : raceStatIds;
+  if (typeof extra !== "string" || extra.length > 32 || !Array.isArray(chosen) || chosen.length > 2) return null;
+  if (chosen.some((entry) => typeof entry !== "string" || !/^[a-z][a-z0-9-]{0,31}$/.test(entry))) return null;
+  return { extraAbilityId: extra, raceStatIds: chosen };
 }
 
 function readStatDraft(value: unknown): Record<string, string> | null {

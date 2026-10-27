@@ -1,0 +1,48 @@
+export default `
+Reply with JSON only, matching this schema:
+{
+  "kits": [
+    {
+      "characterId": "string",
+      "currency": "integer",
+      "inventory": [
+        {
+          "name": "string",
+          "slot": "string",
+          "equipped": "boolean",
+          "modifiers": [{ "kind": "stat", "statId": "string", "amount": 1 }]
+        }
+      ]
+    }
+  ],
+  "actions": [{ "id": "string", "label": "string" }]
+}
+
+Limits:
+{
+  "itemName": 80,
+  "actionId": 32,
+  "actionLabel": 48,
+  "actions": { "min": 3, "max": 8 }
+}
+
+Validation error:
+{{validationError}}
+
+Campaign:
+{{json:campaign}}
+
+Current situation:
+{{situation}}
+
+Place: {{place}}
+Currency name: {{currencyName}}
+
+Characters:
+{{json:characters}}
+
+Language: {{language}}
+Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
+
+Task: Fix the JSON and return only { "kits", "actions" } matching the schema. Action ids use hyphens only, no underscores.
+`.trim();

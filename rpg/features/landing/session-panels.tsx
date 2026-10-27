@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { readBrowserSave, startLobbyFromSave } from "@/rpg/lib/host-save";
+import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { isRoomCode } from "@/rpg/lib/room-code";
 import { paths } from "@/rpg/paths";
 
@@ -23,8 +24,16 @@ export function SessionPanels({ ready, linked }: SessionPanelsProps) {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [loadingSave, setLoadingSave] = useState(false);
 
-  function openSave(raw: string) {
+  async function openSave(raw: string) {
+    setLoadingSave(true);
+    setCreateError(null);
+    try {
+      await ensureUniversePresets();
+    } catch {
+      // A save that already stores its character options can still load.
+    }
     const result = startLobbyFromSave(raw);
+    setLoadingSave(false);
     if (!result.ok) {
       setCreateError(result.error);
       return;
@@ -41,7 +50,7 @@ export function SessionPanels({ ready, linked }: SessionPanelsProps) {
     setCreateError(null);
     const stored = readBrowserSave();
     if (stored) {
-      openSave(stored);
+      void openSave(stored);
       return;
     }
 
@@ -102,15 +111,12 @@ export function SessionPanels({ ready, linked }: SessionPanelsProps) {
               input.value = "";
               if (!file) return;
 
-              setLoadingSave(true);
               setCreateError(null);
               void file.text().then(
                 (raw) => {
-                  setLoadingSave(false);
-                  openSave(raw);
+                  void openSave(raw);
                 },
                 () => {
-                  setLoadingSave(false);
                   setCreateError("The save could not be read.");
                 },
               );

@@ -6,4 +6,5 @@ export const paths = {
   home,
   newGame: `${home}/new`,
   room: (code: string) => `${home}/room/${encodeURIComponent(code)}`,
+  campaign: (code: string) => `${home}/campaign/${encodeURIComponent(code)}`,
 };

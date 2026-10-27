@@ -2,7 +2,7 @@ import { createClaimCode } from "@/rpg/lib/room-code";
 
 export { createClaimCode };
 
-export function createCharacterId(): string {
+function randomHexId(prefix: string): string {
   const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
 
@@ -11,5 +11,13 @@ export function createCharacterId(): string {
     hex += byte.toString(16).padStart(2, "0");
   }
 
-  return `pc_${hex}`;
+  return `${prefix}${hex}`;
+}
+
+export function createCharacterId(): string {
+  return randomHexId("pc_");
+}
+
+export function createItemId(): string {
+  return randomHexId("itm_");
 }
