@@ -22,6 +22,7 @@ import {
 } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
 import { canPerformSceneAction, parseSceneActions } from "@/rpg/lib/scene-action";
+import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { levelRewardOptions, progressionRules } from "@/rpg/lib/progression";
 
 export { parseSceneActions } from "@/rpg/lib/scene-action";
@@ -100,6 +101,7 @@ export interface TableState {
   availableActions: SceneAction[];
   loadoutReady: boolean;
   gmBusy: boolean;
+  journey: JourneyGraph;
 }
 
 export interface PublicCharacter {
@@ -165,6 +167,7 @@ export function normalizeTable(table: TableState): TableState {
     availableActions: Array.isArray(table.availableActions) ? table.availableActions : [],
     loadoutReady: table.loadoutReady === true,
     gmBusy: table.gmBusy === true,
+    journey: parseJourney(table.journey, table.location?.place ?? ""),
     characters: table.characters.map(normalizeTableCharacter),
   };
 }
@@ -200,6 +203,7 @@ export function createTable(roomCode: string, settings: CampaignSettings): Table
     availableActions: [],
     loadoutReady: false,
     gmBusy: false,
+    journey: emptyJourney(),
   };
 }
 
