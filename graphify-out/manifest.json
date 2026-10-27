@@ -756,9 +756,9 @@
     "semantic_hash": "25077711727567c3712b35e0dea13995"
   },
   "rpg/lib/host-save.ts": {
-    "mtime": 1793119156.827203,
-    "seen": 1793119330.4222429,
-    "ast_hash": "1e4659ba8338174c620eca88229fa14d",
+    "mtime": 1793120874.1344275,
+    "seen": 1793121314.4084146,
+    "ast_hash": "d971f64915e1c33834965871cc0de934",
     "semantic_hash": ""
   },
   "rpg/lib/host-session.ts": {
@@ -786,9 +786,9 @@
     "semantic_hash": "4ffb9218858b3eb7b05c290b95dfba1c"
   },
   "rpg/lib/table.ts": {
-    "mtime": 1793119163.1935034,
-    "seen": 1793119330.4222565,
-    "ast_hash": "13b1eff2f9dd927a0044fdbfa2d6b72b",
+    "mtime": 1793120859.6331573,
+    "seen": 1793121314.408429,
+    "ast_hash": "7fd6555720438998bb682b4ab58f4337",
     "semantic_hash": ""
   },
   "rpg/lib/universe-preset-cache.ts": {
@@ -816,9 +816,9 @@
     "semantic_hash": ""
   },
   "rpg/services/room-connection.ts": {
-    "mtime": 1793119243.0105278,
-    "seen": 1793119330.4222643,
-    "ast_hash": "d0ed09d14bdc43c033253513877064c1",
+    "mtime": 1793121105.7790577,
+    "seen": 1793121314.408451,
+    "ast_hash": "f2186789b2d083e48470f383c3178a93",
     "semantic_hash": ""
   },
   "scripts/create-game.mjs": {
@@ -1056,9 +1056,9 @@
     "semantic_hash": ""
   },
   "rpg/features/play/campaign-play.tsx": {
-    "mtime": 1793119282.5922604,
-    "seen": 1793119330.4222193,
-    "ast_hash": "c5e1948b81324bc729009274838f1faf",
+    "mtime": 1793120961.106886,
+    "seen": 1793121314.4083867,
+    "ast_hash": "71cd9c39a221c8a1055e905cb3a1310a",
     "semantic_hash": ""
   },
   "rpg/features/play/inventory-dialog.tsx": {
@@ -1074,9 +1074,9 @@
     "semantic_hash": ""
   },
   "rpg/lib/host-gm-prompt.ts": {
-    "mtime": 1793119843.832767,
-    "seen": 1793119876.083693,
-    "ast_hash": "7e61d267909945496b45f78a9ea94cb7",
+    "mtime": 1793120825.5391371,
+    "seen": 1793121314.4084098,
+    "ast_hash": "b0059eda07ceb6a7a009c59d7489b26f",
     "semantic_hash": ""
   },
   "rpg/lib/host-model-call.ts": {
@@ -1104,9 +1104,9 @@
     "semantic_hash": ""
   },
   "rpg/lib/prompt-template.ts": {
-    "mtime": 1793119869.198831,
-    "seen": 1793119876.0837045,
-    "ast_hash": "6f9450814fb425190d25f5e30bf593dc",
+    "mtime": 1793119888.582457,
+    "seen": 1793121314.4084227,
+    "ast_hash": "9dcf450281f209170841c21347c6e595",
     "semantic_hash": ""
   },
   "rpg/prompts/opening-situation-retry.ts": {
@@ -1128,15 +1128,51 @@
     "semantic_hash": ""
   },
   "rpg/prompts/starting-loadout.ts": {
-    "mtime": 1793119811.3893316,
-    "seen": 1793119876.0837238,
-    "ast_hash": "17a57cca7b42934ab30d26be4bc55a3e",
+    "mtime": 1793120095.350907,
+    "seen": 1793121314.408448,
+    "ast_hash": "2877615fe4ae9b77756f134951fcb5e0",
     "semantic_hash": ""
   },
   "rpg/prompts/system.ts": {
     "mtime": 1793119808.6381872,
     "seen": 1793119876.0837252,
     "ast_hash": "35351d7e24b4101a9c4f1d99fa192acb",
+    "semantic_hash": ""
+  },
+  "rpg/lib/gm-turn.ts": {
+    "mtime": 1793121017.857636,
+    "seen": 1793121314.408406,
+    "ast_hash": "bd11690dcfd5ee3717a98026503ecb54",
+    "semantic_hash": ""
+  },
+  "rpg/lib/host-gm-turn.ts": {
+    "mtime": 1793120827.5392647,
+    "seen": 1793121314.4084115,
+    "ast_hash": "a781a0f91f4282c30461b92fe1a5059b",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/gm-outcome-retry.ts": {
+    "mtime": 1793120747.1921632,
+    "seen": 1793121314.4084368,
+    "ast_hash": "ea071332ac4d83dc49584c22ea656bd7",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/gm-outcome.ts": {
+    "mtime": 1793120745.7054188,
+    "seen": 1793121314.4084382,
+    "ast_hash": "2cc8e60947e6efd8b9607ffb8fd3c2a9",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/gm-reaction-retry.ts": {
+    "mtime": 1793120743.3725214,
+    "seen": 1793121314.4084394,
+    "ast_hash": "730c99a2058c0c28a8e7124544e865cc",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/gm-reaction.ts": {
+    "mtime": 1793121105.6976693,
+    "seen": 1793121314.4084408,
+    "ast_hash": "1fbbf3700bc246558a038422e77208fe",
     "semantic_hash": ""
   },
   "package-lock.json": {

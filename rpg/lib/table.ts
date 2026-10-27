@@ -35,6 +35,9 @@ export type TranscriptEntry =
   | { type: "situation"; scene: number; text: string }
   | { type: "intent"; characterId: string; kind: "act" | "treat" | "speak"; text: string }
   | { type: "narration"; text: string }
+  | { type: "check"; characterId: string; line: string }
+  | { type: "wound"; characterId: string; wounds: Wound[] }
+  | { type: "death"; characterId: string; penalty: CampaignSettings["deathPenalty"] }
   | { type: "system"; text: string };
 
 export interface SceneAction {
@@ -56,6 +59,7 @@ export interface TableState {
   transcript: TranscriptEntry[];
   availableActions: SceneAction[];
   loadoutReady: boolean;
+  gmBusy: boolean;
 }
 
 export interface PublicCharacter {
@@ -100,6 +104,7 @@ export interface TableSnapshot {
   transcript: TranscriptEntry[];
   availableActions: SceneAction[];
   loadoutReady: boolean;
+  gmBusy: boolean;
   openCheck: null;
   intentQueue: [];
 }
@@ -115,6 +120,7 @@ export function normalizeTable(table: TableState): TableState {
     transcript: Array.isArray(table.transcript) ? table.transcript : [],
     availableActions: Array.isArray(table.availableActions) ? table.availableActions : [],
     loadoutReady: table.loadoutReady === true,
+    gmBusy: table.gmBusy === true,
     characters: table.characters.map(normalizeTableCharacter),
   };
 }
@@ -143,6 +149,7 @@ export function createTable(roomCode: string, settings: CampaignSettings): Table
     transcript: [],
     availableActions: [],
     loadoutReady: false,
+    gmBusy: false,
   };
 }
 
@@ -352,6 +359,8 @@ function commitIntent(
   empty: string,
 ): { ok: true; table: TableState } | { ok: false; error: string } {
   if (table.phase !== "play") return { ok: false, error: "The campaign has not started." };
+  if (!table.loadoutReady) return { ok: false, error: "The game master is still preparing." };
+  if (table.gmBusy) return { ok: false, error: "The game master is answering." };
   const trimmed = text.trim();
   if (trimmed.length === 0) return { ok: false, error: empty };
   if (trimmed.length > INTENT_MAX) return { ok: false, error: "That action is too long." };
@@ -408,6 +417,7 @@ export function toSnapshot(table: TableState): TableSnapshot | null {
     transcript: table.transcript,
     availableActions: table.availableActions,
     loadoutReady: table.loadoutReady,
+    gmBusy: table.gmBusy === true,
     openCheck: null,
     intentQueue: [],
   };
@@ -477,6 +487,7 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
     transcript: parseTranscript(value.transcript),
     availableActions: parseSceneActions(value.availableActions),
     loadoutReady: value.loadoutReady === true,
+    gmBusy: value.gmBusy === true,
     openCheck: null,
     intentQueue: [],
   };
@@ -614,6 +625,21 @@ function parseTranscriptEntry(value: unknown): TranscriptEntry | null {
   }
   if (value.type === "narration" && typeof value.text === "string") {
     return { type: "narration", text: value.text };
+  }
+  if (value.type === "check" && typeof value.characterId === "string" && typeof value.line === "string") {
+    const line = value.line.trim();
+    if (line.length === 0) return null;
+    return { type: "check", characterId: value.characterId, line };
+  }
+  if (value.type === "wound" && typeof value.characterId === "string") {
+    return { type: "wound", characterId: value.characterId, wounds: readWounds(value.wounds) };
+  }
+  if (
+    value.type === "death" &&
+    typeof value.characterId === "string" &&
+    isDeathPenalty(value.penalty)
+  ) {
+    return { type: "death", characterId: value.characterId, penalty: value.penalty };
   }
   if (value.type === "system" && typeof value.text === "string") {
     return { type: "system", text: value.text };

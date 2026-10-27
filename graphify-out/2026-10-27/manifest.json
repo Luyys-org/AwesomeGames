@@ -612,8 +612,8 @@
     "semantic_hash": "04a014beabb4a5ef6395c9b620143024"
   },
   "next.config.ts": {
-    "mtime": 1792704677.187813,
-    "seen": 1793100722.8439524,
+    "mtime": 1793119798.9814646,
+    "seen": 1793119876.0836442,
     "ast_hash": "719619d6a70ba400cfa86d2c367339af",
     "semantic_hash": "719619d6a70ba400cfa86d2c367339af"
   },
@@ -834,8 +834,8 @@
     "semantic_hash": "93bd76698ba4c62abcbdb4450c7dd4c2"
   },
   "tsconfig.json": {
-    "mtime": 1792703194.0933218,
-    "seen": 1793100722.8439968,
+    "mtime": 1793119799.4984937,
+    "seen": 1793119876.083732,
     "ast_hash": "c777794f51ffec67d8b19f5716b21686",
     "semantic_hash": "c777794f51ffec67d8b19f5716b21686"
   },
@@ -1074,9 +1074,9 @@
     "semantic_hash": ""
   },
   "rpg/lib/host-gm-prompt.ts": {
-    "mtime": 1793119174.9602008,
-    "seen": 1793119330.4222398,
-    "ast_hash": "6cc4c14532c281b390e565cfd072cb2f",
+    "mtime": 1793119843.832767,
+    "seen": 1793119876.083693,
+    "ast_hash": "7e61d267909945496b45f78a9ea94cb7",
     "semantic_hash": ""
   },
   "rpg/lib/host-model-call.ts": {
@@ -1101,6 +1101,42 @@
     "mtime": 1793119264.394644,
     "seen": 1793119330.422248,
     "ast_hash": "45d615e5049fe228ffcf950f820bf91e",
+    "semantic_hash": ""
+  },
+  "rpg/lib/prompt-template.ts": {
+    "mtime": 1793119869.198831,
+    "seen": 1793119876.0837045,
+    "ast_hash": "6f9450814fb425190d25f5e30bf593dc",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/opening-situation-retry.ts": {
+    "mtime": 1793119810.1439345,
+    "seen": 1793119876.0837193,
+    "ast_hash": "90efaf010d17fdc435adfdf2105c8055",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/opening-situation.ts": {
+    "mtime": 1793119809.5194292,
+    "seen": 1793119876.0837212,
+    "ast_hash": "c38c437610b2b409a7391ad4e664789d",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/starting-loadout-retry.ts": {
+    "mtime": 1793119811.798584,
+    "seen": 1793119876.0837226,
+    "ast_hash": "05272e9de8a8b27ad0d455790590295e",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/starting-loadout.ts": {
+    "mtime": 1793119811.3893316,
+    "seen": 1793119876.0837238,
+    "ast_hash": "17a57cca7b42934ab30d26be4bc55a3e",
+    "semantic_hash": ""
+  },
+  "rpg/prompts/system.ts": {
+    "mtime": 1793119808.6381872,
+    "seen": 1793119876.0837252,
+    "ast_hash": "35351d7e24b4101a9c4f1d99fa192acb",
     "semantic_hash": ""
   },
   "package-lock.json": {

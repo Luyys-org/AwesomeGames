@@ -316,6 +316,7 @@ export function startLobbyFromSave(
       transcript: [],
       availableActions: [],
       loadoutReady: false,
+      gmBusy: false,
     };
     writeHostSession({ roomCode, table });
     return { ok: true, roomCode };

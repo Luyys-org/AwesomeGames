@@ -2,7 +2,9 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
+import { markGmUnreadable, type GmIntent } from "@/rpg/lib/gm-turn";
 import { readHostAi } from "@/rpg/lib/host-ai";
+import { runGmTurn } from "@/rpg/lib/host-gm-turn";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
@@ -64,6 +66,7 @@ export interface RoomView {
   transcript: TranscriptEntry[];
   availableActions: SceneAction[];
   loadoutReady: boolean;
+  gmBusy: boolean;
   scene: number | null;
   seat: RoomSeat | null;
   joiningCount: number;
@@ -112,6 +115,8 @@ interface Session {
   hostTimer: ReturnType<typeof setTimeout> | null;
   claimAttempted: boolean;
   loadoutRequested: boolean;
+  gmPending: number;
+  gmQueue: Promise<void>;
 }
 
 let current: Session | null = null;
@@ -281,10 +286,7 @@ async function submitHostOrPeerIntent(kind: "speak" | "act", value: string): Pro
         ? commitSpeak(session.table, session.seat.characterId, value)
         : commitSceneAction(session.table, session.seat.characterId, value);
     if (!result.ok) return result.error;
-    session.table = result.table;
-    writeHostSession({ roomCode: session.roomCode, table: result.table });
-    publish(session);
-    void broadcastSnapshot(session);
+    acceptIntent(session, result.table);
     return null;
   }
 
@@ -350,6 +352,8 @@ async function openSession(input: {
     hostTimer: null,
     claimAttempted: false,
     loadoutRequested: false,
+    gmPending: 0,
+    gmQueue: Promise.resolve(),
   };
 
   current = session;
@@ -572,14 +576,83 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
           : null;
     if (!result) return { ok: false };
     if (!result.ok) return { ok: false, error: result.error };
-    session.table = result.table;
-    writeHostSession({ roomCode: session.roomCode, table: result.table });
-    publish(session);
-    void broadcastSnapshot(session);
-    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
+    acceptIntent(session, result.table);
+    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
   }
 
   return { ok: false };
+}
+
+function acceptIntent(session: Session, table: TableState): void {
+  const intent = queuedIntent(table);
+  const next = intent ? { ...table, gmBusy: true } : table;
+  session.table = next;
+  if (intent) {
+    session.gmPending += 1;
+    const turn = intent;
+    session.gmQueue = session.gmQueue.catch(() => undefined).then(() => resolveGmIntent(session, turn));
+  }
+  writeHostSession({ roomCode: session.roomCode, table: next });
+  publish(session);
+  void broadcastSnapshot(session);
+}
+
+function queuedIntent(table: TableState): GmIntent | null {
+  for (let index = table.transcript.length - 1; index >= 0; index -= 1) {
+    const entry = table.transcript[index];
+    if (!entry || entry.type !== "intent") continue;
+    if (entry.kind !== "speak" && entry.kind !== "act") continue;
+    const character = table.characters.find((candidate) => candidate.id === entry.characterId);
+    return {
+      characterId: entry.characterId,
+      characterName: character?.name ?? "Someone",
+      kind: entry.kind,
+      text: entry.text,
+    };
+  }
+  return null;
+}
+
+async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void> {
+  try {
+    if (current !== session || session.hidden || !session.table) return;
+    const hostAi = readHostAi();
+    if (!hostAi) {
+      rememberTable(session, markGmUnreadable(session.table, false));
+      try {
+        await broadcastSnapshot(session);
+      } catch {
+        // The saved table is sent with the next snapshot.
+      }
+      return;
+    }
+    const next = await runGmTurn(session.table, hostAi, intent, async (mid) => {
+      if (current !== session || session.hidden) return false;
+      rememberTable(session, mid);
+      await broadcastSnapshot(session);
+      return current === session && !session.hidden;
+    });
+    if (current !== session || session.hidden) return;
+    rememberTable(session, next);
+    await broadcastSnapshot(session);
+  } catch {
+    if (current === session && session.table && !session.hidden) {
+      rememberTable(session, markGmUnreadable(session.table, false));
+      try {
+        await broadcastSnapshot(session);
+      } catch {
+        // The saved table is sent with the next snapshot.
+      }
+    }
+  } finally {
+    session.gmPending = Math.max(0, session.gmPending - 1);
+  }
+}
+
+function rememberTable(session: Session, table: TableState): void {
+  session.table = table;
+  writeHostSession({ roomCode: session.roomCode, table });
+  publish(session);
 }
 
 function maybeStartCampaign(session: Session): void {
@@ -845,6 +918,7 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     transcript: source?.transcript ?? table?.transcript ?? [],
     availableActions: source?.availableActions ?? table?.availableActions ?? [],
     loadoutReady: source?.loadoutReady ?? table?.loadoutReady ?? false,
+    gmBusy: source?.gmBusy ?? table?.gmBusy ?? false,
     scene: source?.scene ?? table?.scene ?? null,
     seat: session.seat,
     joiningCount:

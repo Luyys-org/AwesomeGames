@@ -7,13 +7,32 @@ import {
   UNIVERSE_TYPES,
   type CampaignSettings,
 } from "@/rpg/lib/campaign-settings";
-import type { CharacterOptions } from "@/rpg/lib/character-options";
+import { characterIdentity, type CharacterOptions } from "@/rpg/lib/character-options";
+import {
+  CARRIED_MAX,
+  ENCOUNTER_NAME_MAX,
+  ENCOUNTER_SUMMARY_MAX,
+  gmLootLimits,
+  injuryEnabled,
+  LOCATION_MAX,
+  NARRATION_MAX,
+  preferredCheckDifficulty,
+  SETUP_MAX,
+  type CheckResolution,
+  type GmIntent,
+} from "@/rpg/lib/gm-turn";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
+import gmOutcomeRetryTemplate from "@/rpg/prompts/gm-outcome-retry";
+import gmOutcomeTemplate from "@/rpg/prompts/gm-outcome";
+import gmReactionRetryTemplate from "@/rpg/prompts/gm-reaction-retry";
+import gmReactionTemplate from "@/rpg/prompts/gm-reaction";
 import openingSituationRetryTemplate from "@/rpg/prompts/opening-situation-retry";
 import openingSituationTemplate from "@/rpg/prompts/opening-situation";
 import startingLoadoutRetryTemplate from "@/rpg/prompts/starting-loadout-retry";
 import startingLoadoutTemplate from "@/rpg/prompts/starting-loadout";
 import systemTemplate from "@/rpg/prompts/system";
+import { currencyLabel } from "@/rpg/lib/starting-kit";
+import type { TableState, TranscriptEntry } from "@/rpg/lib/table";
 
 export const GM_SYSTEM_PROMPT = renderTemplate(systemTemplate, {});
 
@@ -128,6 +147,139 @@ export function buildStartingLoadoutUserMessage(input: {
   characters: StartingLoadoutCharacterPrompt[];
 }): string {
   return renderTemplate(startingLoadoutTemplate, loadoutVars(input));
+}
+
+const GM_LIMITS = {
+  narration: NARRATION_MAX,
+  setup: SETUP_MAX,
+  encounterName: ENCOUNTER_NAME_MAX,
+  encounterSummary: ENCOUNTER_SUMMARY_MAX,
+  place: LOCATION_MAX,
+  weather: LOCATION_MAX,
+  reputation: LOCATION_MAX,
+  actionId: 32,
+  actionLabel: 48,
+  actions: { min: 3, max: 8 },
+  itemName: 80,
+  carriedMax: CARRIED_MAX,
+};
+
+function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolution): Record<string, unknown> {
+  const loot = gmLootLimits(table.settings);
+  return {
+    ...campaignVars(table.settings),
+    situation: table.situation.slice(0, 800),
+    place: table.location.place,
+    weather: table.location.weather,
+    reputation: table.location.reputation,
+    scene: table.scene,
+    currencyName: currencyLabel(table.settings.universe),
+    preferredDifficulty: preferredCheckDifficulty(table.settings),
+    injuryEnabled: injuryEnabled(table.settings) ? "on" : "off",
+    limits: { ...GM_LIMITS, currencyMax: loot.currencyMax, itemMax: loot.itemMax },
+    characters: charactersForGm(table),
+    transcript: transcriptForGm(table),
+    intent,
+    resolution: resolution ?? null,
+  };
+}
+
+function charactersForGm(table: TableState) {
+  const options = table.settings.characterOptions;
+  return table.characters
+    .filter((character) => !character.archived)
+    .map((character) => {
+      const identity = characterIdentity(character, options);
+      const skillIds = [character.abilityId, character.extraAbilityId].filter((id) => id.length > 0);
+      return {
+        characterId: character.id,
+        name: character.name,
+        classLabel: identity.className,
+        raceLabel: identity.race,
+        inScene: character.inScene,
+        wounds: character.wounds,
+        currency: character.currency,
+        inventory: character.inventory.map((item) => ({ name: item.name, equipped: item.equipped })),
+        stats: options.stats.map((stat) => ({
+          id: stat.id,
+          label: stat.label,
+          value: character.stats[stat.id] ?? 0,
+        })),
+        skills: skillIds.map((id) => {
+          const skill = options.skills.find((entry) => entry.id === id);
+          return {
+            id,
+            label: skill?.label ?? id,
+            statId: skill?.statId ?? "",
+            applies: skill?.applies ?? "",
+          };
+        }),
+      };
+    });
+}
+
+function transcriptForGm(table: TableState) {
+  const names = new Map(table.characters.map((character) => [character.id, character.name]));
+  return table.transcript.slice(-20).map((entry) => transcriptLine(entry, names));
+}
+
+function transcriptLine(entry: TranscriptEntry, names: Map<string, string>): Record<string, string> {
+  if (entry.type === "intent") {
+    return {
+      type: "intent",
+      name: names.get(entry.characterId) ?? "Someone",
+      kind: entry.kind,
+      text: entry.text,
+    };
+  }
+  if (entry.type === "check") {
+    return { type: "check", name: names.get(entry.characterId) ?? "Someone", text: entry.line };
+  }
+  if (entry.type === "wound") {
+    return {
+      type: "wound",
+      name: names.get(entry.characterId) ?? "Someone",
+      text: entry.wounds.join(", ") || "unhurt",
+    };
+  }
+  if (entry.type === "death") {
+    return { type: "death", name: names.get(entry.characterId) ?? "Someone", text: entry.penalty };
+  }
+  if (entry.type === "situation") return { type: "situation", text: entry.text };
+  if (entry.type === "narration") return { type: "narration", text: entry.text };
+  return { type: "system", text: entry.text };
+}
+
+export function buildGmReactionUserMessage(table: TableState, intent: GmIntent): string {
+  return renderTemplate(gmReactionTemplate, turnVars(table, intent));
+}
+
+export function buildGmReactionRetryMessage(
+  table: TableState,
+  intent: GmIntent,
+  validationError: string,
+): string {
+  return renderTemplate(gmReactionRetryTemplate, { ...turnVars(table, intent), validationError });
+}
+
+export function buildGmOutcomeUserMessage(
+  table: TableState,
+  intent: GmIntent,
+  resolution: CheckResolution,
+): string {
+  return renderTemplate(gmOutcomeTemplate, turnVars(table, intent, resolution));
+}
+
+export function buildGmOutcomeRetryMessage(
+  table: TableState,
+  intent: GmIntent,
+  resolution: CheckResolution,
+  validationError: string,
+): string {
+  return renderTemplate(gmOutcomeRetryTemplate, {
+    ...turnVars(table, intent, resolution),
+    validationError,
+  });
 }
 
 export function buildStartingLoadoutRetryMessage(

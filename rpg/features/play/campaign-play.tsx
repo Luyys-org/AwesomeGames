@@ -47,9 +47,11 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
     character && view?.characterOptions ? characterIdentity(character, view.characterOptions) : null;
   const universe = view?.universe ?? "custom";
   const down = character?.wounds.includes("down") === true;
+  const away = character?.inScene === false || character?.archived === true;
   const actions = view?.availableActions ?? [];
   const playReady = view?.phase === "play" && view.loadoutReady;
-  const controlsLocked = !character || down || actPending || !playReady;
+  const gmBusy = view?.gmBusy === true;
+  const controlsLocked = !character || away || down || actPending || !playReady || gmBusy;
 
   function sendSpeak() {
     if (controlsLocked) return;
@@ -144,6 +146,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
             <AgentLog
               transcript={view?.transcript ?? []}
               situation={view?.situation ?? ""}
+              gmBusy={gmBusy}
               characterNames={Object.fromEntries((view?.characters ?? []).map((entry) => [entry.id, entry.name]))}
             />
           </div>
@@ -202,7 +205,15 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
                     maxLength={400}
                     value={speech}
                     disabled={controlsLocked}
-                    placeholder={down ? "You cannot act while down." : "What does your character say?"}
+                    placeholder={
+                      down
+                        ? "You cannot act while down."
+                        : away
+                          ? "You are not in this scene."
+                          : gmBusy
+                            ? "The game master is answering."
+                            : "What does your character say?"
+                    }
                     onChange={(event) => {
                       setSpeech(event.target.value);
                       setActError(null);
@@ -252,10 +263,12 @@ function MapField({ label, value }: { label: string; value: string }) {
 function AgentLog({
   transcript,
   situation,
+  gmBusy,
   characterNames,
 }: {
   transcript: TranscriptEntry[];
   situation: string;
+  gmBusy: boolean;
   characterNames: Record<string, string>;
 }) {
   const entries =
@@ -274,6 +287,7 @@ function AgentLog({
       {entries.map((entry, index) => (
         <LogEntry key={`${entry.type}-${index}`} entry={entry} characterNames={characterNames} />
       ))}
+      {gmBusy ? <p className="text-sm text-zinc-400">The game master is answering.</p> : null}
     </div>
   );
 }
@@ -293,6 +307,36 @@ function LogEntry({
         <span className="font-medium text-zinc-50">{prefix}:</span> {entry.text}
       </p>
     );
+  }
+
+  if (entry.type === "check") {
+    const name = characterNames[entry.characterId] ?? "Someone";
+    return (
+      <p className="text-sm leading-relaxed text-zinc-300">
+        <span className="font-medium text-zinc-50">{name}:</span> {entry.line}
+      </p>
+    );
+  }
+
+  if (entry.type === "wound") {
+    const name = characterNames[entry.characterId] ?? "Someone";
+    const boxes = entry.wounds.map((wound) => wound.charAt(0).toUpperCase() + wound.slice(1)).join(", ");
+    return (
+      <p className="text-sm leading-relaxed text-zinc-400">
+        {name} is {boxes || "unhurt"}.
+      </p>
+    );
+  }
+
+  if (entry.type === "death") {
+    const name = characterNames[entry.characterId] ?? "Someone";
+    const line =
+      entry.penalty === "out-of-scene"
+        ? `${name} is out of the scene.`
+        : entry.penalty === "new-character"
+          ? `${name} is gone.`
+          : `${name} is down.`;
+    return <p className="text-sm leading-relaxed text-zinc-400">{line}</p>;
   }
 
   if (entry.type === "system") {
