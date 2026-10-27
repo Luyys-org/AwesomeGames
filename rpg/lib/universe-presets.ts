@@ -43,7 +43,7 @@ async function loadPresets(): Promise<void> {
 function parseUniverseConfig(value: unknown): UniverseConfig | null {
   if (!isRecord(value)) return null;
   if (!isListed(value.universeType, UNIVERSE_TYPES)) return null;
-  if (!PLAYER_COUNTS.some((count) => count === value.playerCount)) return null;
+  if (!isPlayerCount(value.playerCount)) return null;
   if (!isListed(value.deathPenalty, DEATH_PENALTIES)) return null;
   if (!isListed(value.enemyDifficulty, ENEMY_DIFFICULTIES)) return null;
   if (!isListed(value.lootRarity, LOOT_RARITIES)) return null;
@@ -60,6 +60,10 @@ function parseUniverseConfig(value: unknown): UniverseConfig | null {
     playerFreedom: value.playerFreedom,
     characterOptions,
   };
+}
+
+function isPlayerCount(value: unknown): value is (typeof PLAYER_COUNTS)[number] {
+  return typeof value === "number" && PLAYER_COUNTS.some((count) => count === value);
 }
 
 function isListed<T extends string>(value: unknown, options: { id: T }[]): value is T {
