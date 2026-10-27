@@ -8,6 +8,7 @@ import {
 } from "@/rpg/lib/character-options";
 import {
   addCharacter,
+  storedRacePicks,
   type CharacterDraft,
   type Owner,
   type TableCharacter,
@@ -30,8 +31,10 @@ export interface PublicCharacter {
   id: string;
   name: string;
   abilityId: string;
+  extraAbilityId: string;
   classId: string;
   raceId: string;
+  raceStatIds: string[];
   stats: Record<string, number>;
   wounds: Wound[];
   owner: Owner;
@@ -145,8 +148,10 @@ export function toPublicCharacter(character: TableCharacter): PublicCharacter {
     id: character.id,
     name: character.name,
     abilityId: character.abilityId,
+    extraAbilityId: character.extraAbilityId || "",
     classId: character.classId || "",
     raceId: character.raceId || "",
+    raceStatIds: character.raceStatIds ?? [],
     stats: character.stats,
     wounds: character.wounds,
     owner: character.owner,
@@ -215,18 +220,22 @@ function parsePublicCharacter(value: unknown, options: CharacterOptions): Public
     return null;
   }
   if (value.owner !== "host" && value.owner !== "peer") return null;
-  const stats = parseStatBlock(value.stats, options);
-  if (!stats) return null;
   const classId = readTraitId(value.classId, options.classes);
+  const stats = parseStatBlock(value.stats, options, classId ?? "");
+  if (!stats || classId === null) return null;
   const raceId = readTraitId(value.raceId, options.races);
-  if (classId === null || raceId === null) return null;
+  if (raceId === null) return null;
+  const picks = storedRacePicks(options, raceId, value.abilityId, value.extraAbilityId, value.raceStatIds);
+  if (!picks.ok) return null;
 
   return {
     id: value.id,
     name: value.name,
     abilityId: value.abilityId,
+    extraAbilityId: picks.extraAbilityId,
     classId,
     raceId,
+    raceStatIds: picks.raceStatIds,
     stats,
     wounds: readWounds(value.wounds),
     owner: value.owner,

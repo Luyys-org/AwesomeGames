@@ -1,0 +1,190 @@
+{
+  "universeType": "horror",
+  "playerCount": 3,
+  "deathPenalty": "new-character",
+  "enemyDifficulty": "severe",
+  "lootRarity": "scarce",
+  "playerFreedom": "narrow",
+  "characterOptions": {
+    "assignment": "class",
+    "statPool": 36,
+    "statCap": 10,
+    "stats": [
+      { "id": "might", "label": "Might", "covers": "Strength, physique, endurance, and resistance" },
+      { "id": "agility", "label": "Agility", "covers": "Reflexes, speed, stealth, and precision" },
+      { "id": "intellect", "label": "Intellect", "covers": "Knowledge, technology, medicine, and analysis" },
+      { "id": "empathy", "label": "Empathy", "covers": "Human relations, persuasion, and leadership" },
+      { "id": "awareness", "label": "Awareness", "covers": "Perception, vigilance, intuition, and survival" },
+      { "id": "nerve", "label": "Nerve", "covers": "Composure, courage, and resistance to fear" }
+    ],
+    "skills": [
+      { "id": "might", "label": "Might", "statId": "might", "applies": "use strength, physique, endurance, or resistance" },
+      { "id": "agility", "label": "Agility", "statId": "agility", "applies": "use reflexes, speed, stealth, or precision" },
+      { "id": "intellect", "label": "Intellect", "statId": "intellect", "applies": "use knowledge, technology, medicine, or analysis" },
+      { "id": "empathy", "label": "Empathy", "statId": "empathy", "applies": "use human relations, persuasion, or leadership" },
+      { "id": "awareness", "label": "Awareness", "statId": "awareness", "applies": "use perception, vigilance, intuition, or survival" },
+      { "id": "nerve", "label": "Nerve", "statId": "nerve", "applies": "use composure, courage, or resistance to fear" }
+    ],
+    "classes": [
+      {
+        "id": "alien-colonial-marine",
+        "label": "Colonial Marine",
+        "modifiers": [],
+        "stats": { "might": 8, "agility": 7, "intellect": 3, "empathy": 3, "awareness": 8, "nerve": 7 }
+      },
+      {
+        "id": "alien-officer",
+        "label": "Officer",
+        "modifiers": [],
+        "stats": { "might": 3, "agility": 3, "intellect": 7, "empathy": 8, "awareness": 5, "nerve": 10 }
+      },
+      {
+        "id": "alien-pilot",
+        "label": "Pilot",
+        "modifiers": [],
+        "stats": { "might": 3, "agility": 8, "intellect": 6, "empathy": 4, "awareness": 7, "nerve": 8 }
+      },
+      {
+        "id": "alien-scientist",
+        "label": "Scientist",
+        "modifiers": [],
+        "stats": { "might": 2, "agility": 3, "intellect": 10, "empathy": 4, "awareness": 7, "nerve": 10 }
+      },
+      {
+        "id": "alien-medic",
+        "label": "Medic",
+        "modifiers": [],
+        "stats": { "might": 3, "agility": 4, "intellect": 8, "empathy": 6, "awareness": 5, "nerve": 10 }
+      },
+      {
+        "id": "alien-engineer",
+        "label": "Engineer",
+        "modifiers": [],
+        "stats": { "might": 4, "agility": 4, "intellect": 10, "empathy": 3, "awareness": 7, "nerve": 8 }
+      },
+      {
+        "id": "alien-corporate-agent",
+        "label": "Corporate Agent",
+        "modifiers": [],
+        "stats": { "might": 2, "agility": 4, "intellect": 6, "empathy": 10, "awareness": 4, "nerve": 10 }
+      },
+      {
+        "id": "alien-miner",
+        "label": "Miner",
+        "modifiers": [],
+        "stats": { "might": 9, "agility": 4, "intellect": 3, "empathy": 3, "awareness": 7, "nerve": 10 }
+      },
+      {
+        "id": "alien-colonist",
+        "label": "Colonist",
+        "modifiers": [],
+        "stats": { "might": 4, "agility": 4, "intellect": 4, "empathy": 7, "awareness": 7, "nerve": 10 }
+      },
+      {
+        "id": "alien-smuggler",
+        "label": "Smuggler",
+        "modifiers": [],
+        "stats": { "might": 3, "agility": 8, "intellect": 5, "empathy": 8, "awareness": 7, "nerve": 5 }
+      },
+      {
+        "id": "alien-synthetic-specialist",
+        "label": "Synthetic Specialist",
+        "modifiers": [],
+        "stats": { "might": 5, "agility": 5, "intellect": 10, "empathy": 1, "awareness": 8, "nerve": 7 }
+      },
+      {
+        "id": "alien-bounty-hunter",
+        "label": "Bounty Hunter",
+        "modifiers": [],
+        "stats": { "might": 6, "agility": 8, "intellect": 4, "empathy": 2, "awareness": 9, "nerve": 7 }
+      }
+    ],
+    "races": [
+      {
+        "id": "alien-standard-human",
+        "label": "Standard Human",
+        "modifiers": [],
+        "extraSkills": 1,
+        "ability": { "name": "Adaptable", "description": "Gain one additional skill proficiency." }
+      },
+      {
+        "id": "alien-frontier-colonist",
+        "label": "Frontier Colonist",
+        "modifiers": [
+          { "id": "alien-frontier-might", "kind": "stat", "statId": "might", "amount": 1 },
+          { "id": "alien-frontier-empathy", "kind": "stat", "statId": "empathy", "amount": -1 },
+          { "id": "alien-frontier-awareness", "kind": "stat", "statId": "awareness", "amount": 1 },
+          { "id": "alien-frontier-nerve", "kind": "stat", "statId": "nerve", "amount": -1 }
+        ],
+        "ability": { "name": "Hardened", "description": "Used to hostile environments." }
+      },
+      {
+        "id": "alien-core-worlds",
+        "label": "Core Worlds Citizen",
+        "modifiers": [
+          { "id": "alien-core-might", "kind": "stat", "statId": "might", "amount": -1 },
+          { "id": "alien-core-intellect", "kind": "stat", "statId": "intellect", "amount": 1 },
+          { "id": "alien-core-empathy", "kind": "stat", "statId": "empathy", "amount": 1 },
+          { "id": "alien-core-awareness", "kind": "stat", "statId": "awareness", "amount": -1 }
+        ],
+        "ability": { "name": "Connected", "description": "Access to influential networks." }
+      },
+      {
+        "id": "alien-industrial-worker",
+        "label": "Industrial Worker",
+        "modifiers": [
+          { "id": "alien-worker-might", "kind": "stat", "statId": "might", "amount": 1 },
+          { "id": "alien-worker-agility", "kind": "stat", "statId": "agility", "amount": -1 },
+          { "id": "alien-worker-awareness", "kind": "stat", "statId": "awareness", "amount": 1 },
+          { "id": "alien-worker-nerve", "kind": "stat", "statId": "nerve", "amount": -1 }
+        ],
+        "ability": { "name": "Mechanic", "description": "Bonus on mechanical repairs." }
+      },
+      {
+        "id": "alien-military-raised",
+        "label": "Military Raised",
+        "modifiers": [
+          { "id": "alien-military-agility", "kind": "stat", "statId": "agility", "amount": 1 },
+          { "id": "alien-military-empathy", "kind": "stat", "statId": "empathy", "amount": -1 },
+          { "id": "alien-military-awareness", "kind": "stat", "statId": "awareness", "amount": 1 },
+          { "id": "alien-military-nerve", "kind": "stat", "statId": "nerve", "amount": -1 }
+        ],
+        "ability": { "name": "Basic training", "description": "Basic military training." }
+      },
+      {
+        "id": "alien-corporate-elite",
+        "label": "Corporate Elite",
+        "modifiers": [
+          { "id": "alien-elite-might", "kind": "stat", "statId": "might", "amount": -1 },
+          { "id": "alien-elite-intellect", "kind": "stat", "statId": "intellect", "amount": 1 },
+          { "id": "alien-elite-empathy", "kind": "stat", "statId": "empathy", "amount": 1 },
+          { "id": "alien-elite-awareness", "kind": "stat", "statId": "awareness", "amount": -1 }
+        ],
+        "ability": { "name": "Company access", "description": "Privileged access to company resources." }
+      },
+      {
+        "id": "alien-spacer",
+        "label": "Spacer",
+        "modifiers": [
+          { "id": "alien-spacer-agility", "kind": "stat", "statId": "agility", "amount": 1 },
+          { "id": "alien-spacer-empathy", "kind": "stat", "statId": "empathy", "amount": -1 },
+          { "id": "alien-spacer-awareness", "kind": "stat", "statId": "awareness", "amount": 1 },
+          { "id": "alien-spacer-nerve", "kind": "stat", "statId": "nerve", "amount": -1 }
+        ],
+        "ability": { "name": "Void adapted", "description": "Adapted to space travel." }
+      },
+      {
+        "id": "alien-synthetic",
+        "label": "Synthetic",
+        "modifiers": [
+          { "id": "alien-synthetic-might", "kind": "stat", "statId": "might", "amount": 1 },
+          { "id": "alien-synthetic-intellect", "kind": "stat", "statId": "intellect", "amount": 2 },
+          { "id": "alien-synthetic-empathy", "kind": "stat", "statId": "empathy", "amount": -3 },
+          { "id": "alien-synthetic-awareness", "kind": "stat", "statId": "awareness", "amount": 1 },
+          { "id": "alien-synthetic-nerve", "kind": "stat", "statId": "nerve", "amount": -1 }
+        ],
+        "ability": { "name": "Synthetic nature", "description": "Immune to fear, and does not tire." }
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@ import {
   type CharacterOptions,
   type CharacterOptionsDraft,
 } from "@/rpg/lib/character-options";
+import { readUniversePreset } from "@/rpg/lib/universe-preset-cache";
 
 export type UniverseId = "star-wars" | "dungeons-and-dragons" | "alien" | "custom";
 
@@ -22,7 +23,7 @@ export type LootRarityId = "scarce" | "uncommon" | "common" | "abundant";
 
 export type PlayerFreedomId = "narrow" | "guided" | "open";
 
-export type CampaignStepId = "universe" | "team" | "game";
+export type CampaignStepId = "campaign" | "character";
 
 export interface CampaignSettings {
   campaignName: string;
@@ -67,9 +68,8 @@ interface Choice<T extends string> {
 }
 
 export const CAMPAIGN_STEPS: { id: CampaignStepId; label: string }[] = [
-  { id: "universe", label: "Universe" },
-  { id: "team", label: "Team" },
-  { id: "game", label: "Game" },
+  { id: "campaign", label: "Campaign" },
+  { id: "character", label: "Character" },
 ];
 
 export const UNIVERSES: { id: UniverseId; label: string }[] = [
@@ -143,33 +143,6 @@ export const PLAYER_FREEDOMS: Choice<PlayerFreedomId>[] = [
   },
 ];
 
-export const UNIVERSE_PRESETS: Record<Exclude<UniverseId, "custom">, UniversePreset> = {
-  "star-wars": {
-    universeType: "science-fiction",
-    playerCount: 4,
-    deathPenalty: "wounded",
-    enemyDifficulty: "standard",
-    lootRarity: "uncommon",
-    playerFreedom: "open",
-  },
-  "dungeons-and-dragons": {
-    universeType: "fantasy",
-    playerCount: 4,
-    deathPenalty: "new-character",
-    enemyDifficulty: "standard",
-    lootRarity: "common",
-    playerFreedom: "guided",
-  },
-  alien: {
-    universeType: "horror",
-    playerCount: 3,
-    deathPenalty: "new-character",
-    enemyDifficulty: "severe",
-    lootRarity: "scarce",
-    playerFreedom: "narrow",
-  },
-};
-
 type Check<T> = { ok: true; value: T } | { ok: false; error: string };
 
 function hasLineBreak(value: string): boolean {
@@ -197,14 +170,16 @@ function readChoice<T extends string>(value: string, options: { id: T }[], error
 }
 
 export function universePreset(universe: string): UniversePreset | null {
-  if (
-    universe === "star-wars" ||
-    universe === "dungeons-and-dragons" ||
-    universe === "alien"
-  ) {
-    return UNIVERSE_PRESETS[universe];
-  }
-  return null;
+  const preset = readUniversePreset(universe);
+  if (!preset) return null;
+  return {
+    universeType: preset.universeType,
+    playerCount: preset.playerCount,
+    deathPenalty: preset.deathPenalty,
+    enemyDifficulty: preset.enemyDifficulty,
+    lootRarity: preset.lootRarity,
+    playerFreedom: preset.playerFreedom,
+  };
 }
 
 function readUniverseStep(input: CampaignSettingsInput): Check<{
@@ -226,13 +201,15 @@ function readUniverseStep(input: CampaignSettingsInput): Check<{
   if (!universe.ok) return universe;
 
   if (universe.value !== "custom") {
+    const preset = universePreset(universe.value);
+    if (!preset) return { ok: false, error: "The universe presets could not be loaded." };
     return {
       ok: true,
       value: {
         campaignName: campaignName.value,
         universe: universe.value,
         universeLabel: null,
-        universeType: universePreset(universe.value)?.universeType ?? null,
+        universeType: preset.universeType,
       },
     };
   }
@@ -260,7 +237,7 @@ function readUniverseStep(input: CampaignSettingsInput): Check<{
   };
 }
 
-function readTeamStep(
+function readCharacterStep(
   input: CampaignSettingsInput,
   optionsDraft: CharacterOptionsDraft,
 ): Check<{
@@ -331,17 +308,40 @@ function readGameStep(input: CampaignSettingsInput): Check<{
   };
 }
 
+function readCampaignStep(input: CampaignSettingsInput): Check<{
+  campaignName: string;
+  universe: UniverseId;
+  universeLabel: string | null;
+  universeType: UniverseTypeId | null;
+  objective: string;
+  enemyDifficulty: EnemyDifficultyId;
+  lootRarity: LootRarityId;
+  playerFreedom: PlayerFreedomId;
+}> {
+  const universe = readUniverseStep(input);
+  if (!universe.ok) return universe;
+
+  const game = readGameStep(input);
+  if (!game.ok) return game;
+
+  return {
+    ok: true,
+    value: {
+      ...universe.value,
+      ...game.value,
+    },
+  };
+}
+
 export function validateCampaignStep(
   step: CampaignStepId,
   input: CampaignSettingsInput,
   optionsDraft: CharacterOptionsDraft,
 ): { ok: true } | { ok: false; error: string } {
   const result =
-    step === "universe"
-      ? readUniverseStep(input)
-      : step === "team"
-        ? readTeamStep(input, optionsDraft)
-        : readGameStep(input);
+    step === "campaign"
+      ? readCampaignStep(input)
+      : readCharacterStep(input, optionsDraft);
   if (!result.ok) return result;
   return { ok: true };
 }
@@ -356,11 +356,11 @@ export function validateCampaignSettings(
     return { ok: false, error: "Choose a universe type." };
   }
 
-  const team = readTeamStep(input, optionsDraft);
-  if (!team.ok) return team;
-
   const game = readGameStep(input);
   if (!game.ok) return game;
+
+  const character = readCharacterStep(input, optionsDraft);
+  if (!character.ok) return character;
 
   return {
     ok: true,
@@ -369,10 +369,10 @@ export function validateCampaignSettings(
       universe: universe.value.universe,
       universeLabel: universe.value.universeLabel,
       universeType: universe.value.universeType,
-      playerCount: team.value.playerCount,
-      characterOptions: team.value.characterOptions,
+      playerCount: character.value.playerCount,
+      characterOptions: character.value.characterOptions,
       objective: game.value.objective,
-      deathPenalty: team.value.deathPenalty,
+      deathPenalty: character.value.deathPenalty,
       enemyDifficulty: game.value.enemyDifficulty,
       lootRarity: game.value.lootRarity,
       playerFreedom: game.value.playerFreedom,

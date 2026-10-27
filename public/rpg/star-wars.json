@@ -1,0 +1,252 @@
+{
+  "universeType": "science-fiction",
+  "playerCount": 4,
+  "deathPenalty": "wounded",
+  "enemyDifficulty": "standard",
+  "lootRarity": "uncommon",
+  "playerFreedom": "open",
+  "characterOptions": {
+    "assignment": "class",
+    "statPool": 36,
+    "statCap": 10,
+    "stats": [
+      { "id": "brawn", "label": "Brawn", "covers": "Strength, toughness" },
+      { "id": "finesse", "label": "Finesse", "covers": "Speed, precision, stealth" },
+      { "id": "intellect", "label": "Intellect", "covers": "Knowledge, engineering, medicine" },
+      { "id": "influence", "label": "Influence", "covers": "Persuasion, deception, leadership" },
+      { "id": "instinct", "label": "Instinct", "covers": "Perception, survival, initiative" },
+      { "id": "spirit", "label": "Spirit", "covers": "Willpower, Force sensitivity, courage" }
+    ],
+    "skills": [
+      { "id": "brawn", "label": "Brawn", "statId": "brawn", "applies": "use strength or toughness" },
+      { "id": "finesse", "label": "Finesse", "statId": "finesse", "applies": "use speed, precision, or stealth" },
+      { "id": "intellect", "label": "Intellect", "statId": "intellect", "applies": "use knowledge, engineering, or medicine" },
+      { "id": "influence", "label": "Influence", "statId": "influence", "applies": "use persuasion, deception, or leadership" },
+      { "id": "instinct", "label": "Instinct", "statId": "instinct", "applies": "use perception, survival, or initiative" },
+      { "id": "spirit", "label": "Spirit", "statId": "spirit", "applies": "use willpower, Force sensitivity, or courage" }
+    ],
+    "classes": [
+      {
+        "id": "sw-jedi-guardian",
+        "label": "Jedi Guardian",
+        "modifiers": [],
+        "stats": { "brawn": 7, "finesse": 6, "intellect": 4, "influence": 4, "instinct": 5, "spirit": 10 }
+      },
+      {
+        "id": "sw-jedi-consular",
+        "label": "Jedi Consular",
+        "modifiers": [],
+        "stats": { "brawn": 2, "finesse": 4, "intellect": 7, "influence": 6, "instinct": 7, "spirit": 10 }
+      },
+      {
+        "id": "sw-sith-warrior",
+        "label": "Sith Warrior",
+        "modifiers": [],
+        "stats": { "brawn": 8, "finesse": 5, "intellect": 3, "influence": 4, "instinct": 6, "spirit": 10 }
+      },
+      {
+        "id": "sw-sith-inquisitor",
+        "label": "Sith Inquisitor",
+        "modifiers": [],
+        "stats": { "brawn": 2, "finesse": 5, "intellect": 8, "influence": 5, "instinct": 6, "spirit": 10 }
+      },
+      {
+        "id": "sw-smuggler",
+        "label": "Smuggler",
+        "modifiers": [],
+        "stats": { "brawn": 2, "finesse": 8, "intellect": 5, "influence": 8, "instinct": 9, "spirit": 4 }
+      },
+      {
+        "id": "sw-bounty-hunter",
+        "label": "Bounty Hunter",
+        "modifiers": [],
+        "stats": { "brawn": 6, "finesse": 7, "intellect": 4, "influence": 2, "instinct": 10, "spirit": 7 }
+      },
+      {
+        "id": "sw-clone-trooper",
+        "label": "Clone Trooper",
+        "modifiers": [],
+        "stats": { "brawn": 8, "finesse": 5, "intellect": 4, "influence": 3, "instinct": 9, "spirit": 7 }
+      },
+      {
+        "id": "sw-rebel-soldier",
+        "label": "Rebel Soldier",
+        "modifiers": [],
+        "stats": { "brawn": 7, "finesse": 6, "intellect": 4, "influence": 4, "instinct": 9, "spirit": 6 }
+      },
+      {
+        "id": "sw-imperial-officer",
+        "label": "Imperial Officer",
+        "modifiers": [],
+        "stats": { "brawn": 2, "finesse": 3, "intellect": 8, "influence": 10, "instinct": 5, "spirit": 8 }
+      },
+      {
+        "id": "sw-diplomat",
+        "label": "Diplomat / Senator",
+        "modifiers": [],
+        "stats": { "brawn": 1, "finesse": 3, "intellect": 8, "influence": 10, "instinct": 5, "spirit": 9 }
+      },
+      {
+        "id": "sw-engineer",
+        "label": "Engineer / Slicer",
+        "modifiers": [],
+        "stats": { "brawn": 1, "finesse": 4, "intellect": 10, "influence": 2, "instinct": 9, "spirit": 10 }
+      },
+      {
+        "id": "sw-scoundrel",
+        "label": "Scoundrel",
+        "modifiers": [],
+        "stats": { "brawn": 2, "finesse": 9, "intellect": 4, "influence": 9, "instinct": 10, "spirit": 2 }
+      },
+      {
+        "id": "sw-mandalorian",
+        "label": "Mandalorian",
+        "modifiers": [],
+        "stats": { "brawn": 7, "finesse": 7, "intellect": 4, "influence": 3, "instinct": 10, "spirit": 5 }
+      },
+      {
+        "id": "sw-wookiee-warrior",
+        "label": "Wookiee Warrior",
+        "modifiers": [],
+        "stats": { "brawn": 10, "finesse": 2, "intellect": 2, "influence": 2, "instinct": 10, "spirit": 10 }
+      }
+    ],
+    "races": [
+      {
+        "id": "sw-human",
+        "label": "Human",
+        "modifiers": [],
+        "statChoices": 2,
+        "statChoiceAmount": 1,
+        "extraSkills": 1,
+        "ability": { "name": "Adaptable", "description": "Gain an additional skill." }
+      },
+      {
+        "id": "sw-wookiee",
+        "label": "Wookiee",
+        "modifiers": [
+          { "id": "sw-wookiee-brawn", "kind": "stat", "statId": "brawn", "amount": 2 },
+          { "id": "sw-wookiee-influence", "kind": "stat", "statId": "influence", "amount": -2 }
+        ],
+        "ability": { "name": "Brute force", "description": "Can ignore one light wound per combat." }
+      },
+      {
+        "id": "sw-twilek",
+        "label": "Twi'lek",
+        "modifiers": [
+          { "id": "sw-twilek-influence", "kind": "stat", "statId": "influence", "amount": 2 },
+          { "id": "sw-twilek-brawn", "kind": "stat", "statId": "brawn", "amount": -2 }
+        ],
+        "ability": { "name": "Natural charm", "description": "Advantage on social checks." }
+      },
+      {
+        "id": "sw-zabrak",
+        "label": "Zabrak",
+        "modifiers": [
+          { "id": "sw-zabrak-spirit", "kind": "stat", "statId": "spirit", "amount": 2 },
+          { "id": "sw-zabrak-influence", "kind": "stat", "statId": "influence", "amount": -2 }
+        ],
+        "ability": { "name": "Determination", "description": "Reroll one Willpower check per scene." }
+      },
+      {
+        "id": "sw-rodian",
+        "label": "Rodian",
+        "modifiers": [
+          { "id": "sw-rodian-instinct", "kind": "stat", "statId": "instinct", "amount": 2 },
+          { "id": "sw-rodian-spirit", "kind": "stat", "statId": "spirit", "amount": -2 }
+        ],
+        "ability": { "name": "Born hunter", "description": "Bonus to tracking and perception." }
+      },
+      {
+        "id": "sw-mon-calamari",
+        "label": "Mon Calamari",
+        "modifiers": [
+          { "id": "sw-mon-calamari-intellect", "kind": "stat", "statId": "intellect", "amount": 2 },
+          { "id": "sw-mon-calamari-brawn", "kind": "stat", "statId": "brawn", "amount": -2 }
+        ],
+        "ability": { "name": "Technical genius", "description": "Bonus to repairs and engineering." }
+      },
+      {
+        "id": "sw-mirialan",
+        "label": "Mirialan",
+        "modifiers": [
+          { "id": "sw-mirialan-spirit", "kind": "stat", "statId": "spirit", "amount": 2 },
+          { "id": "sw-mirialan-brawn", "kind": "stat", "statId": "brawn", "amount": -2 }
+        ],
+        "ability": { "name": "Jedi discipline", "description": "Bonus against mental effects." }
+      },
+      {
+        "id": "sw-togruta",
+        "label": "Togruta",
+        "modifiers": [
+          { "id": "sw-togruta-instinct", "kind": "stat", "statId": "instinct", "amount": 2 },
+          { "id": "sw-togruta-intellect", "kind": "stat", "statId": "intellect", "amount": -2 }
+        ],
+        "ability": { "name": "Echolocation", "description": "No penalty in low light." }
+      },
+      {
+        "id": "sw-nautolan",
+        "label": "Nautolan",
+        "modifiers": [
+          { "id": "sw-nautolan-instinct", "kind": "stat", "statId": "instinct", "amount": 2 },
+          { "id": "sw-nautolan-influence", "kind": "stat", "statId": "influence", "amount": -2 }
+        ],
+        "ability": { "name": "Chemical sense", "description": "Detects nearby emotions." }
+      },
+      {
+        "id": "sw-chiss",
+        "label": "Chiss",
+        "modifiers": [
+          { "id": "sw-chiss-intellect", "kind": "stat", "statId": "intellect", "amount": 2 },
+          { "id": "sw-chiss-influence", "kind": "stat", "statId": "influence", "amount": -2 }
+        ],
+        "ability": { "name": "Strategist", "description": "Bonus to tactical initiative." }
+      },
+      {
+        "id": "sw-bothan",
+        "label": "Bothan",
+        "modifiers": [
+          { "id": "sw-bothan-influence", "kind": "stat", "statId": "influence", "amount": 2 },
+          { "id": "sw-bothan-brawn", "kind": "stat", "statId": "brawn", "amount": -2 }
+        ],
+        "ability": { "name": "Informant network", "description": "Bonus to investigations." }
+      },
+      {
+        "id": "sw-duros",
+        "label": "Duros",
+        "modifiers": [
+          { "id": "sw-duros-intellect", "kind": "stat", "statId": "intellect", "amount": 2 },
+          { "id": "sw-duros-spirit", "kind": "stat", "statId": "spirit", "amount": -2 }
+        ],
+        "ability": { "name": "Navigator", "description": "Bonus to space piloting." }
+      },
+      {
+        "id": "sw-trandoshan",
+        "label": "Trandoshan",
+        "modifiers": [
+          { "id": "sw-trandoshan-brawn", "kind": "stat", "statId": "brawn", "amount": 2 },
+          { "id": "sw-trandoshan-influence", "kind": "stat", "statId": "influence", "amount": -2 }
+        ],
+        "ability": { "name": "Regeneration", "description": "Recovers faster between fights." }
+      },
+      {
+        "id": "sw-jawa",
+        "label": "Jawa",
+        "modifiers": [
+          { "id": "sw-jawa-intellect", "kind": "stat", "statId": "intellect", "amount": 2 },
+          { "id": "sw-jawa-brawn", "kind": "stat", "statId": "brawn", "amount": -2 }
+        ],
+        "ability": { "name": "Scavenger", "description": "Easily finds or recycles gear." }
+      },
+      {
+        "id": "sw-mandalorian-born",
+        "label": "Mandalorian",
+        "modifiers": [
+          { "id": "sw-mandalorian-born-finesse", "kind": "stat", "statId": "finesse", "amount": 2 },
+          { "id": "sw-mandalorian-born-spirit", "kind": "stat", "statId": "spirit", "amount": -2 }
+        ],
+        "ability": { "name": "Martial training", "description": "Can carry a second weapon." }
+      }
+    ]
+  }
+}

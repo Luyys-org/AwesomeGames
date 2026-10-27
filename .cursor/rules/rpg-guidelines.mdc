@@ -61,7 +61,7 @@ Truncate in code, with no ellipsis added: situation **800** characters, setup **
 
 ## Campaign
 
-Settings are required for a new campaign and immutable after generation. The host collects them in three steps: universe (`campaignName`, `universe`, and when `universe` is `custom` also `universeLabel` and `universeType`), team (`playerCount`, `deathPenalty`), and game (`objective`, `enemyDifficulty`, `lootRarity`, `playerFreedom`). Every field on the current step is required before the next step.
+Settings are required for a new campaign and immutable after generation. The host collects them in two steps: campaign (`campaignName`, `universe`, and when `universe` is `custom` also `universeLabel` and `universeType`, plus `objective`, `enemyDifficulty`, `lootRarity`, `playerFreedom`), and character (`playerCount`, `deathPenalty`, and character options when `universe` is `custom`). Every field on the current step is required before the next step.
 
 | Field | Rule |
 |-------|------|
@@ -77,7 +77,7 @@ Settings are required for a new campaign and immutable after generation. The hos
 | `lootRarity` | `scarce`, `uncommon`, `common`, or `abundant`. How often useful gear appears in the fiction. There is no inventory and no loot roll |
 | `playerFreedom` | `narrow`, `guided`, or `open`. `narrow` permits only actions inside the current situation. `guided` permits any action the scene can contain. `open` permits any action the character could attempt. The host still accepts a well-formed intent. The attempt can still fail |
 
-Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `universeType`, `playerCount`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, and `playerFreedom`, replacing any previous values. `custom` clears those fields and does not fill them. `campaignName`, `universeLabel`, and `objective` are never filled or cleared by a universe change. The host may edit a filled value before generation, except the character options. Those stay with the preset. `custom` leaves them empty for the creator to fill.
+Choosing `star-wars`, `dungeons-and-dragons`, or `alien` reads `public/rpg/star-wars.json`, `public/rpg/dungeons-and-dragons.json`, or `public/rpg/alien.json` and writes that file onto `universeType`, `playerCount`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, and character options, replacing any previous values. If a preset file cannot be read, that universe cannot be chosen. `custom` clears those fields and does not fill them. `custom` does not use these files. `campaignName`, `universeLabel`, and `objective` are never filled or cleared by a universe change. The host may edit a filled value before generation, except the character options. Those stay with the preset. `custom` leaves them empty for the creator to fill.
 
 | Universe | `universeType` | `playerCount` | `deathPenalty` | `enemyDifficulty` | `lootRarity` | `playerFreedom` |
 |----------|----------------|---------------|----------------|-------------------|--------------|-----------------|
@@ -85,9 +85,9 @@ Choosing `star-wars`, `dungeons-and-dragons`, or `alien` writes that row onto `u
 | `dungeons-and-dragons` | `fantasy` | 4 | `new-character` | `standard` | `common` | `guided` |
 | `alien` | `horror` | 3 | `new-character` | `severe` | `scarce` | `narrow` |
 
-Choosing a preset also writes that universe's character options. The point pool is **3**. The stats are Might, Finesse, and Wits. Players assign **2**, **1**, and **0**, each once. The skills are the eight in the ability table. Each universe has its own classes and races. A class or race modifier adds its amount to that stat, or to the roll when the check uses that stat. An empty roll stat applies to every roll. Amounts are **+1** or **−1** on the presets.
+The same file also holds that universe's character options. Star Wars, Dungeons & Dragons, and Alien use assignment `class`. Each stat has a covers line. Each class sets all six numbers, and players do not move those points. Skills are one per stat and use that covers line. The point total is **36**. Star Wars stats are Brawn, Finesse, Intellect, Influence, Instinct, and Spirit, with a cap of **10**. Dungeons & Dragons stats are Might, Finesse, Intellect, Presence, Instinct, and Willpower, with a cap of **16**. Alien stats are Might, Agility, Intellect, Empathy, Awareness, and Nerve, with a cap of **10**. Each universe has its own classes and races. A class or race modifier adds its amount to that stat, or to the roll when the check uses that stat. An empty roll stat applies to every roll. These classes have no modifiers; their points are the stat block. A race has a bonus, a malus, and one racial ability. A preset race has at most **5** stat modifiers. A **0** adds no modifier. Star Wars bonuses and penalties are **+2** and **−2** on a named stat, except Human, who has no malus, chooses two different stats, and gains **+1** in each. Dungeons & Dragons race modifiers are the non-zero numbers in that universe's race table, from **−2** to **+2**. Alien race modifiers are the non-zero numbers in that universe's race table, from **−3** to **+2**. Human on Star Wars and Dungeons & Dragons, and Standard Human on Alien, gain a second skill. The racial ability is text for the table. It does not add a die, a wound box, or another resolution step.
 
-`custom` does not fill character options. The creator sets a point pool from **1** to **12**, **1–6** stats, **1–12** skills, **1–8** classes, and **1–8** races. Players assign whole numbers from **0** through the pool, and the sum cannot exceed the pool. Each class and race has up to **4** modifiers. A modifier is `stat` or `roll`, from **−3** to **+3**, excluding **0**. A roll modifier names a stat, or applies to every roll when the stat is empty. Names are trimmed, 1–24 characters, unique in their list ignoring case. A skill names one of those stats and a 1–80 character description of when it applies.
+`custom` does not fill character options. The creator sets a point pool from **1** to **12**, a point cap from **1** through that pool, **1–6** stats, **1–12** skills, **1–8** classes, and **1–8** races. Players assign whole numbers from **0** through the cap, and the sum cannot exceed the pool. Each class and race has up to **4** modifiers. A modifier is `stat` or `roll`, from **−3** to **+3**, excluding **0**. A roll modifier names a stat, or applies to every roll when the stat is empty. Names are trimmed, 1–24 characters, unique in their list ignoring case. A skill names one of those stats and a 1–80 character description of when it applies.
 
 The host requests `{ "situation": string }` at temperature 0. An empty situation after trim is invalid. If both attempts fail, the host stays on settings and no campaign is stored. Scene **1** is that situation. The host then creates their character and the lobby opens.
 
@@ -101,8 +101,10 @@ Each living character has one owner (`host` or `peer`), one name, one skill, one
 |-------|------|
 | `id` | `pc_` plus 8 lowercase hex digits from 4 `crypto.getRandomValues` bytes |
 | `name` | Trimmed, 1–24 characters, matching `^[A-Za-z0-9 '\-]+$`, unique ignoring case, including archived names |
-| `stats` | One whole number per campaign stat. On a preset, the values are a permutation of `2`, `1`, and `0`. On a custom universe, each value is from `0` through the point pool and the sum does not exceed the pool |
+| `stats` | One whole number per campaign stat. Each value is from `0` through the point cap and the sum does not exceed the pool. When the assignment is `class`, the values are the chosen class's points. A loaded campaign that still uses ranked assignment keeps a permutation of `2`, `1`, and `0` |
 | `abilityId` | One skill id from the campaign, immutable |
+| `extraAbilityId` | Empty, or a second skill id when the race grants one. Different from `abilityId`. Immutable |
+| `raceStatIds` | Empty, or the stats chosen for a race bonus. Human stores exactly two different stat ids. Immutable |
 | `classId` | One class id from the campaign, immutable. Empty only when the campaign has no classes |
 | `raceId` | One race id from the campaign, immutable. Empty only when the campaign has no races |
 | `claimCode` | 4 characters from the room-code alphabet |
@@ -116,7 +118,7 @@ A create that would make a **7th** non-archived character is rejected. In `lobby
 
 ## Abilities
 
-Skills are these abilities, unless the universe is custom and the creator replaced the list. A matching skill adds **+2** to the check. `abilityApplies` is true only when the skill's stat equals the check's stat and the host keeps it true. The host may set it false before the roll. The host may set it true before the roll only when the stats match. Class and race modifiers are separate and always apply.
+Skills are these abilities, unless the universe replaces the list. Star Wars replaces it with one skill per stat: Brawn, Finesse, Intellect, Influence, Instinct, and Spirit. Dungeons & Dragons replaces it with Might, Finesse, Intellect, Presence, Instinct, and Willpower. Alien replaces it with Might, Agility, Intellect, Empathy, Awareness, and Nerve. A matching skill adds **+2** to the check. `abilityApplies` is true only when the skill's stat equals the check's stat and the host keeps it true. The host may set it false before the roll. The host may set it true before the roll only when the stats match. Class and race modifiers are separate and always apply.
 
 | Id | Line name | Stat | Applies when the intent is to |
 |----|-----------|------|-------------------------------|
@@ -170,7 +172,7 @@ Intents are resolved one at a time, in the order the host accepted them. The hos
 | `act` | `null` | Model proposes the check. Wounds from the result apply only to the actor |
 | `treat` | Another in-scene, non-archived character with at least one wound | Host forces the check fields below. A treat never wounds anyone |
 
-Treat fields the host writes, including when the model call fails: `risky: true`, `stat: "wits"`, `difficulty: 12`, `failure: "setback"`, `abilityApplies: true` only for `medic`, setup `Treat <target name>.` when the model supplies no valid setup. One success removes the last wound box. If the target is Down under `wounded`, success removes only `down`.
+Treat fields the host writes, including when the model call fails: `risky: true`, `stat` is the campaign skill that treats wounds (`wits` on the core list, `intellect` on Star Wars and Alien, `willpower` on Dungeons & Dragons), `difficulty: 12`, `failure: "setback"`, `abilityApplies: true` only for that skill, setup `Treat <target name>.` when the model supplies no valid setup. One success removes the last wound box. If the target is Down under `wounded`, success removes only `down`.
 
 An `act` proposal is this JSON:
 
@@ -185,7 +187,7 @@ An `act` proposal is this JSON:
 }
 ```
 
-`stat` is `might`, `finesse`, or `wits`. `difficulty` is **8**, **10**, **12**, or **15** (easy, standard, hard, severe). `failure` is `setback`, `harm`, or `severe`. When `risky` is false, `stat`, `difficulty`, and `failure` are null, `abilityApplies` is false, and `setup` is the whole outcome. No roll and no wound. Any other shape is invalid.
+`stat` is one of the campaign's stat ids. `difficulty` is **8**, **10**, **12**, or **15** (easy, standard, hard, severe). `failure` is `setback`, `harm`, or `severe`. When `risky` is false, `stat`, `difficulty`, and `failure` are null, `abilityApplies` is false, and `setup` is the whole outcome. No roll and no wound. Any other shape is invalid.
 
 When the outcome call fails twice, or a proposal fails twice, the mechanical result already committed stays. If no roll was committed, there is no wound. A system transcript entry records `The game master returned an unreadable result.` The player may submit a new intent.
 
@@ -215,7 +217,7 @@ The committed line uses an em dash and this order, omitting a `0` stat modifier 
 
 `Might 14 vs 12 — success (d20 12, +2 stat, +2 Fighter, −2 impaired)`
 
-Stat names on the line are Might, Finesse, and Wits. The impairment sign is the Unicode minus `−`. After commit, the host applies wounds, appends the line, then requests outcome JSON `{ "narration": string, "sceneBreak": boolean, "objective": null | "complete" | "failed" }` at temperature 0.7. The user message includes the line and the wound result. `sceneBreak` and `objective` are proposals. The line stays if narration fails.
+Stat names on the line are the campaign's stat labels. The impairment sign is the Unicode minus `−`. After commit, the host applies wounds, appends the line, then requests outcome JSON `{ "narration": string, "sceneBreak": boolean, "objective": null | "complete" | "failed" }` at temperature 0.7. The user message includes the line and the wound result. `sceneBreak` and `objective` are proposals. The line stays if narration fails.
 
 ---
 
@@ -244,7 +246,7 @@ Peers send only these. The host ignores an invalid message.
 | Type | Payload |
 |------|---------|
 | `join` | `roomCode` |
-| `createCharacter` | `name`, `abilityId`, `classId`, `raceId`, `stats` |
+| `createCharacter` | `name`, `abilityId`, `extraAbilityId`, `classId`, `raceId`, `raceStatIds`, `stats` |
 | `claim` | `name`, `claimCode` |
 | `intent` | `kind`, `text`, `targetCharacterId` |
 | `nameAssist` | `checkId`, `allyCharacterId` |
@@ -252,7 +254,7 @@ Peers send only these. The host ignores an invalid message.
 
 A wrong room code is ignored. In `play` or `ended`, a connection with no seat receives public snapshots and sends only `claim`. In `play`, the host accepts `createCharacter` from a connection whose seat is an archived character. On success that seat becomes the replacement. `nameAssist` is accepted only from the rolling character while the check is uncommitted. `assistResponse` is accepted only from the named ally.
 
-A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `universeType`, `playerCount`, `objective`, `objectiveStatus`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, `characterOptions`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`. Each character includes `classId` and `raceId`.
+A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName`, `universe`, `universeLabel`, `universeType`, `playerCount`, `objective`, `objectiveStatus`, `deathPenalty`, `enemyDifficulty`, `lootRarity`, `playerFreedom`, `characterOptions`, `scene`, `situation`, characters without `claimCode`, `transcript`, `openCheck`, and `intentQueue`. Each character includes `classId`, `raceId`, `extraAbilityId`, and `raceStatIds`.
 
 ---
 
@@ -289,10 +291,12 @@ A document is valid only when every rule here holds. Otherwise the host rejects 
     {
       "id": "pc_00000000",
       "name": "Ada",
-      "abilityId": "fighter",
-      "classId": "sw-soldier",
+      "abilityId": "brawn",
+      "extraAbilityId": "spirit",
+      "classId": "sw-jedi-guardian",
       "raceId": "sw-human",
-      "stats": { "might": 2, "finesse": 1, "wits": 0 },
+      "raceStatIds": ["brawn", "spirit"],
+      "stats": { "brawn": 7, "finesse": 6, "intellect": 4, "influence": 4, "instinct": 5, "spirit": 10 },
       "wounds": [],
       "claimCode": "ABCD",
       "owner": "host",
@@ -312,4 +316,4 @@ Transcript entries are append-only and use these `type` values: `situation` (`sc
 
 ## Systems in this game
 
-The game is this list: the campaign's stats and point pool, its skills, one class, one race, their stat and roll modifiers, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. Preset campaigns use Might, Finesse, Wits, the eight skills, and that universe's classes and races. Enemy difficulty, loot rarity, and player freedom are instructions to the game master. An implementation adds no other resolution, character, or session system.
+The game is this list: the campaign's stats and point pool, its skills, one class, one race, their stat and roll modifiers, one d20, difficulties 8 / 10 / 12 / 15, three wound boxes, three death penalties, one assist, host rolls, host model calls, a 6-character room code, and save schema version 1. Star Wars uses Brawn, Finesse, Intellect, Influence, Instinct, and Spirit, with those points set by the class. Dungeons & Dragons uses Might, Finesse, Intellect, Presence, Instinct, and Willpower, with those points set by the class. Alien uses Might, Agility, Intellect, Empathy, Awareness, and Nerve, with those points set by the class. Enemy difficulty, loot rarity, and player freedom are instructions to the game master. An implementation adds no other resolution, character, or session system.

@@ -15,9 +15,8 @@ import { TeamOptions } from "@/rpg/features/campaign/team-options";
 import { useNewCampaign } from "@/rpg/features/campaign/use-new-campaign";
 
 const STEP_LEADS = [
-  "A preset fills the later steps. Custom leaves them empty.",
-  "Party size, death, and what players choose when they create a character.",
-  "Opposition, gear, and which actions are permitted.",
+  "Universe, objective, opposition, gear, and how free players are in the fiction.",
+  "Party size, death penalty, and character options for a custom universe.",
 ];
 
 export function NewCampaignForm() {
@@ -86,11 +85,19 @@ export function NewCampaignForm() {
               />
             </label>
 
+            {campaign.presetsStatus === "loading" ? (
+              <p className="text-sm text-zinc-400">Loading universes.</p>
+            ) : null}
+            {campaign.presetsStatus === "failed" ? (
+              <p className="text-sm text-zinc-400">Preset universes could not be loaded.</p>
+            ) : null}
+
             <label className="block text-sm text-zinc-300" htmlFor="universe">
               Universe
               <select
                 id="universe"
                 required
+                disabled={campaign.presetsStatus === "loading"}
                 value={campaign.universe}
                 onChange={(event) => campaign.selectUniverse(event.target.value)}
                 className="field mt-1 w-full"
@@ -106,15 +113,16 @@ export function NewCampaignForm() {
 
             {preset && universeName ? (
               <p className="text-sm text-zinc-400">
-                {universeName} filled the later steps. You can change those values. Stats, skills,
-                classes, and races stay with the universe.
+                {universeName} filled difficulty, loot, and freedom below. You can change those
+                values. Stats, skills, classes, and races stay with the universe.
               </p>
             ) : null}
 
             {campaign.universe === "custom" ? (
               <>
                 <p className="text-sm text-zinc-400">
-                  Custom leaves the later steps empty, including stats, skills, classes, and races.
+                  Custom leaves difficulty, loot, freedom, and character options empty until you
+                  fill them.
                 </p>
                 <label className="block text-sm text-zinc-300" htmlFor="universe-name">
                   Universe name
@@ -147,74 +155,7 @@ export function NewCampaignForm() {
                 </label>
               </>
             ) : null}
-          </>
-        ) : null}
 
-        {campaign.step === 1 ? (
-          <>
-            <div>
-              <label className="block text-sm text-zinc-300" htmlFor="player-count">
-                Number of players
-              </label>
-              <select
-                id="player-count"
-                required
-                aria-describedby="player-count-note"
-                value={campaign.playerCount}
-                onChange={(event) => campaign.setPlayerCount(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a number</option>
-                {PLAYER_COUNTS.map((count) => (
-                  <option key={count} value={String(count)}>
-                    {count} players
-                  </option>
-                ))}
-              </select>
-              <p id="player-count-note" className="mt-2 text-sm text-zinc-400">
-                Including you.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm text-zinc-300" htmlFor="death-penalty">
-                Death penalty
-              </label>
-              <select
-                id="death-penalty"
-                required
-                aria-describedby="death-penalty-options"
-                value={campaign.deathPenalty}
-                onChange={(event) => campaign.setDeathPenalty(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a death penalty</option>
-                {DEATH_PENALTIES.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-              <ul id="death-penalty-options" className="mt-3 space-y-2">
-                {DEATH_PENALTIES.map((entry) => (
-                  <li key={entry.id} className="text-sm text-zinc-400">
-                    <span className="text-zinc-200">{entry.label}.</span> {entry.description}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <TeamOptions
-              universe={campaign.universe}
-              draft={campaign.optionsDraft}
-              onChange={campaign.setOptionsDraft}
-              nextId={campaign.nextOptionId}
-            />
-          </>
-        ) : null}
-
-        {campaign.step === 2 ? (
-          <>
             <label className="block text-sm text-zinc-300" htmlFor="objective">
               Objective
               <input
@@ -295,6 +236,69 @@ export function NewCampaignForm() {
             </div>
           </>
         ) : null}
+
+        {campaign.step === 1 ? (
+          <>
+            <div>
+              <label className="block text-sm text-zinc-300" htmlFor="player-count">
+                Number of players
+              </label>
+              <select
+                id="player-count"
+                required
+                aria-describedby="player-count-note"
+                value={campaign.playerCount}
+                onChange={(event) => campaign.setPlayerCount(event.target.value)}
+                className="field mt-1 w-full"
+              >
+                <option value="">Choose a number</option>
+                {PLAYER_COUNTS.map((count) => (
+                  <option key={count} value={String(count)}>
+                    {count} players
+                  </option>
+                ))}
+              </select>
+              <p id="player-count-note" className="mt-2 text-sm text-zinc-400">
+                Including you.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-zinc-300" htmlFor="death-penalty">
+                Death penalty
+              </label>
+              <select
+                id="death-penalty"
+                required
+                aria-describedby="death-penalty-options"
+                value={campaign.deathPenalty}
+                onChange={(event) => campaign.setDeathPenalty(event.target.value)}
+                className="field mt-1 w-full"
+              >
+                <option value="">Choose a death penalty</option>
+                {DEATH_PENALTIES.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+              <ul id="death-penalty-options" className="mt-3 space-y-2">
+                {DEATH_PENALTIES.map((entry) => (
+                  <li key={entry.id} className="text-sm text-zinc-400">
+                    <span className="text-zinc-200">{entry.label}.</span> {entry.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <TeamOptions
+              universe={campaign.universe}
+              draft={campaign.optionsDraft}
+              onChange={campaign.setOptionsDraft}
+              nextId={campaign.nextOptionId}
+            />
+          </>
+        ) : null}
       </div>
 
       {campaign.ready && !campaign.linked && isLast ? (
@@ -318,7 +322,10 @@ export function NewCampaignForm() {
         ) : null}
         <button
           type="submit"
-          disabled={isLast && (!campaign.ready || !campaign.linked || campaign.submitting)}
+          disabled={
+            campaign.presetsStatus === "loading" ||
+            (isLast && (!campaign.ready || !campaign.linked || campaign.submitting))
+          }
           className="btn btn-primary ml-auto"
         >
           {isLast ? "Create game" : "Continue"}

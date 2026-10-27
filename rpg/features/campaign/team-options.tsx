@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   characterOptionsFor,
   formatModifierList,
+  formatTraitDetail,
   statLabel,
   withModifier,
   withModifierPatch,
@@ -14,6 +15,7 @@ import {
   withSkillPatch,
   withStat,
   withStatLabel,
+  withStatCap,
   withStatPool,
   withTrait,
   withTraitLabel,
@@ -61,6 +63,22 @@ export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsPr
         />
       </label>
       <p className="text-sm text-zinc-400">The most points a player can assign across all stats.</p>
+
+      <label className="block text-sm text-zinc-300" htmlFor="stat-cap">
+        Point cap
+        <input
+          id="stat-cap"
+          type="number"
+          required
+          min={1}
+          max={12}
+          inputMode="numeric"
+          value={draft.statCap}
+          onChange={(event) => onChange((current) => withStatCap(current, event.target.value))}
+          className="field mt-1 w-full"
+        />
+      </label>
+      <p className="text-sm text-zinc-400">The most points a player can assign to one stat.</p>
 
       <OptionList
         title="Stats"
@@ -201,6 +219,7 @@ export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsPr
 }
 
 function LockedOptions({ options }: { options: CharacterOptions }) {
+  const classAssigned = options.assignment === "class";
   return (
     <section className="space-y-4 border-t border-[var(--border)] pt-4" aria-labelledby="character-options-heading">
       <div>
@@ -208,21 +227,43 @@ function LockedOptions({ options }: { options: CharacterOptions }) {
           Character creation
         </h3>
         <p className="mt-1 text-sm text-zinc-400">
-          Players choose one class, one race, and one skill, then assign the stats. These stay with
-          the universe. A custom universe can change them.
+          {classAssigned
+            ? "Players choose one class, one race, and one skill. The class sets the stats. These stay with the universe."
+            : "Players choose one class, one race, and one skill, then assign the stats. These stay with the universe. A custom universe can change them."}
         </p>
       </div>
 
       <div>
         <p className="text-sm text-zinc-300">Point pool</p>
         <p className="mt-1 text-sm text-zinc-50">{options.statPool}</p>
-        <p className="mt-1 text-sm text-zinc-400">Players assign 2, 1, and 0, each once.</p>
+        <p className="mt-1 text-sm text-zinc-400">
+          {classAssigned
+            ? "The points already assigned by each class."
+            : "The most points a player can assign across all stats."}
+        </p>
+      </div>
+      <div>
+        <p className="text-sm text-zinc-300">Point cap</p>
+        <p className="mt-1 text-sm text-zinc-50">{options.statCap}</p>
+        <p className="mt-1 text-sm text-zinc-400">
+          {classAssigned
+            ? "The most points a class can put on one stat."
+            : "The most points a player can assign to one stat."}
+        </p>
       </div>
 
-      <LockedList title="Stats" detail="Players assign these on character creation.">
+      <LockedList
+        title="Stats"
+        detail={
+          classAssigned
+            ? "Each class sets these. The note is what the stat covers."
+            : "Players assign these on character creation."
+        }
+      >
         {options.stats.map((stat) => (
-          <li key={stat.id} className="border-t border-[var(--border)] py-2 text-sm text-zinc-200 first:border-t-0">
-            {stat.label}
+          <li key={stat.id} className="border-t border-[var(--border)] py-2 text-sm first:border-t-0">
+            <span className="text-zinc-200">{stat.label}</span>
+            {stat.covers ? <span className="text-zinc-400">{`. ${stat.covers}.`}</span> : null}
           </li>
         ))}
       </LockedList>
@@ -260,7 +301,7 @@ function LockedTraits({
       {traits.map((trait) => (
         <li key={trait.id} className="border-t border-[var(--border)] py-2 text-sm first:border-t-0">
           <span className="text-zinc-200">{trait.label}.</span>{" "}
-          <span className="text-zinc-400">{formatModifierList(trait.modifiers, options.stats)}</span>
+          <span className="text-zinc-400">{formatTraitDetail(trait, options.stats)}</span>
         </li>
       ))}
     </LockedList>

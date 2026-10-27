@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useHostAi } from "@/rpg/features/landing/use-host-ai";
@@ -19,6 +19,7 @@ import { writeHostSession } from "@/rpg/lib/host-session";
 import { createRoomCode } from "@/rpg/lib/room-code";
 import { createTable } from "@/rpg/lib/table";
 import { paths } from "@/rpg/paths";
+import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 
 const EMPTY_PREFILL = {
   universeLabel: "",
@@ -45,6 +46,7 @@ export function useNewCampaign() {
   const [lootRarity, setLootRarity] = useState("");
   const [playerFreedom, setPlayerFreedom] = useState("");
   const [optionsDraft, setOptionsDraft] = useState<CharacterOptionsDraft>(emptyCharacterOptionsDraft);
+  const [presetsStatus, setPresetsStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const optionIds = useRef(1);
@@ -61,6 +63,21 @@ export function useNewCampaign() {
     lootRarity,
     playerFreedom,
   };
+
+  useEffect(() => {
+    let active = true;
+    void ensureUniversePresets().then(
+      () => {
+        if (active) setPresetsStatus("ready");
+      },
+      () => {
+        if (active) setPresetsStatus("failed");
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function clearResult() {
     setError(null);
@@ -165,6 +182,7 @@ export function useNewCampaign() {
   return {
     ready,
     linked,
+    presetsStatus,
     step,
     campaignName,
     universe,

@@ -1,10 +1,13 @@
-export type StatAssignment = "ranked" | "pool";
+import { readUniversePreset } from "@/rpg/lib/universe-preset-cache";
+
+export type StatAssignment = "ranked" | "pool" | "class";
 
 export type ModifierKind = "stat" | "roll";
 
 export interface StatDefinition {
   id: string;
   label: string;
+  covers?: string;
 }
 
 export interface SkillDefinition {
@@ -21,15 +24,26 @@ export interface TraitModifier {
   amount: number;
 }
 
+export interface RacialAbility {
+  name: string;
+  description: string;
+}
+
 export interface TraitDefinition {
   id: string;
   label: string;
   modifiers: TraitModifier[];
+  stats?: Record<string, number>;
+  ability?: RacialAbility;
+  statChoices?: number;
+  statChoiceAmount?: number;
+  extraSkills?: number;
 }
 
 export interface CharacterOptions {
   assignment: StatAssignment;
   statPool: number;
+  statCap: number;
   stats: StatDefinition[];
   skills: SkillDefinition[];
   classes: TraitDefinition[];
@@ -51,6 +65,7 @@ export interface TraitDraft {
 
 export interface CharacterOptionsDraft {
   statPool: string;
+  statCap: string;
   stats: StatDefinition[];
   skills: { id: string; label: string; statId: string; applies: string }[];
   classes: TraitDraft[];
@@ -65,10 +80,14 @@ export interface CheckAdjustments {
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string; empty?: boolean };
 
 const MAX_STAT_POOL = 12;
+const MAX_CLASS_POOL = 60;
 const MAX_STATS = 6;
 const MAX_SKILLS = 12;
 const MAX_TRAITS = 8;
+const MAX_STORED_CLASSES = 14;
+const MAX_STORED_RACES = 16;
 const MAX_MODIFIERS = 4;
+const MAX_STORED_MODIFIERS = 5;
 const MAX_LABEL = 24;
 const MAX_APPLIES = 80;
 const ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
@@ -90,124 +109,22 @@ const CORE_SKILLS: SkillDefinition[] = [
   { id: "tech", label: "Tech", statId: "wits", applies: "use, repair, or bypass a machine" },
 ];
 
-function modifier(id: string, kind: ModifierKind, statId: string, amount: number): TraitModifier {
-  return { id, kind, statId, amount };
-}
-
-function trait(id: string, label: string, modifiers: TraitModifier[]): TraitDefinition {
-  return { id, label, modifiers };
-}
-
-function coreOptions(classes: TraitDefinition[], races: TraitDefinition[]): CharacterOptions {
-  return {
-    assignment: "ranked",
-    statPool: 3,
-    stats: CORE_STATS,
-    skills: CORE_SKILLS,
-    classes,
-    races,
-  };
-}
-
-export const UNIVERSE_CHARACTER_OPTIONS: Record<
-  "star-wars" | "dungeons-and-dragons" | "alien",
-  CharacterOptions
-> = {
-  "star-wars": coreOptions(
-    [
-      trait("sw-soldier", "Soldier", [modifier("sw-soldier-might", "stat", "might", 1)]),
-      trait("sw-scoundrel", "Scoundrel", [modifier("sw-scoundrel-finesse", "stat", "finesse", 1)]),
-      trait("sw-adept", "Adept", [
-        modifier("sw-adept-wits", "stat", "wits", 1),
-        modifier("sw-adept-might", "stat", "might", -1),
-      ]),
-      trait("sw-ace", "Ace", [modifier("sw-ace-finesse", "roll", "finesse", 1)]),
-    ],
-    [
-      trait("sw-human", "Human", [modifier("sw-human-roll", "roll", "", 1)]),
-      trait("sw-wookiee", "Wookiee", [
-        modifier("sw-wookiee-might", "stat", "might", 1),
-        modifier("sw-wookiee-finesse", "stat", "finesse", -1),
-      ]),
-      trait("sw-twilek", "Twi'lek", [
-        modifier("sw-twilek-finesse", "stat", "finesse", 1),
-        modifier("sw-twilek-might", "stat", "might", -1),
-      ]),
-      trait("sw-rodian", "Rodian", [
-        modifier("sw-rodian-finesse", "roll", "finesse", 1),
-        modifier("sw-rodian-wits", "stat", "wits", -1),
-      ]),
-    ],
-  ),
-  "dungeons-and-dragons": coreOptions(
-    [
-      trait("dnd-fighter", "Fighter", [modifier("dnd-fighter-might", "stat", "might", 1)]),
-      trait("dnd-rogue", "Rogue", [modifier("dnd-rogue-finesse", "stat", "finesse", 1)]),
-      trait("dnd-wizard", "Wizard", [
-        modifier("dnd-wizard-wits", "stat", "wits", 1),
-        modifier("dnd-wizard-might", "stat", "might", -1),
-      ]),
-      trait("dnd-cleric", "Cleric", [modifier("dnd-cleric-wits", "stat", "wits", 1)]),
-    ],
-    [
-      trait("dnd-human", "Human", [modifier("dnd-human-roll", "roll", "", 1)]),
-      trait("dnd-elf", "Elf", [
-        modifier("dnd-elf-finesse", "stat", "finesse", 1),
-        modifier("dnd-elf-might", "stat", "might", -1),
-      ]),
-      trait("dnd-dwarf", "Dwarf", [
-        modifier("dnd-dwarf-might", "stat", "might", 1),
-        modifier("dnd-dwarf-finesse", "stat", "finesse", -1),
-      ]),
-      trait("dnd-halfling", "Halfling", [
-        modifier("dnd-halfling-finesse", "roll", "finesse", 1),
-        modifier("dnd-halfling-might", "stat", "might", -1),
-      ]),
-    ],
-  ),
-  alien: coreOptions(
-    [
-      trait("alien-marine", "Marine", [modifier("alien-marine-might", "stat", "might", 1)]),
-      trait("alien-officer", "Officer", [modifier("alien-officer-wits", "stat", "wits", 1)]),
-      trait("alien-scientist", "Scientist", [
-        modifier("alien-scientist-wits", "stat", "wits", 1),
-        modifier("alien-scientist-might", "stat", "might", -1),
-      ]),
-      trait("alien-engineer", "Engineer", [modifier("alien-engineer-wits", "roll", "wits", 1)]),
-    ],
-    [
-      trait("alien-human", "Human", [modifier("alien-human-roll", "roll", "", 1)]),
-      trait("alien-synthetic", "Synthetic", [
-        modifier("alien-synthetic-might", "stat", "might", 1),
-        modifier("alien-synthetic-wits", "stat", "wits", -1),
-      ]),
-      trait("alien-colonist", "Colonist", [
-        modifier("alien-colonist-might", "stat", "might", 1),
-        modifier("alien-colonist-finesse", "stat", "finesse", -1),
-      ]),
-      trait("alien-executive", "Executive", [
-        modifier("alien-executive-wits", "stat", "wits", 1),
-        modifier("alien-executive-might", "stat", "might", -1),
-      ]),
-    ],
-  ),
-};
 
 export function emptyCharacterOptionsDraft(): CharacterOptionsDraft {
-  return { statPool: "", stats: [], skills: [], classes: [], races: [] };
+  return { statPool: "", statCap: "", stats: [], skills: [], classes: [], races: [] };
 }
 
 export function characterOptionsFor(universe: string): CharacterOptions | null {
-  if (universe === "star-wars" || universe === "dungeons-and-dragons" || universe === "alien") {
-    return UNIVERSE_CHARACTER_OPTIONS[universe];
-  }
-  return null;
+  const preset = readUniversePreset(universe);
+  if (!preset) return null;
+  return cloneCharacterOptions(preset.characterOptions);
 }
 
 export function coreCharacterOptions(): CharacterOptions {
   return {
-    assignment: "ranked",
-    statPool: 3,
+    assignment: "pool",
+    statPool: 10,
+    statCap: 10,
     stats: CORE_STATS,
     skills: CORE_SKILLS,
     classes: [],
@@ -231,6 +148,10 @@ export function resolveCharacterOptions(
 
 export function withStatPool(draft: CharacterOptionsDraft, statPool: string): CharacterOptionsDraft {
   return { ...draft, statPool };
+}
+
+export function withStatCap(draft: CharacterOptionsDraft, statCap: string): CharacterOptionsDraft {
+  return { ...draft, statCap };
 }
 
 export function withStat(draft: CharacterOptionsDraft, id: string): CharacterOptionsDraft {
@@ -384,11 +305,27 @@ export function formatModifierList(modifiers: TraitModifier[], stats: StatDefini
   return modifiers.map((item) => formatModifier(item, stats)).join(", ");
 }
 
+export function formatTraitDetail(trait: TraitDefinition, stats: StatDefinition[]): string {
+  if (trait.stats) return stats.map((stat) => `${stat.label} ${trait.stats?.[stat.id] ?? 0}`).join(", ");
+  if (trait.ability || trait.statChoices || trait.extraSkills) return formatRaceDetail(trait, stats);
+  return formatModifierList(trait.modifiers, stats);
+}
+
+export function formatRaceDetail(trait: TraitDefinition, stats: StatDefinition[]): string {
+  const bonus = trait.statChoices
+    ? `+${trait.statChoiceAmount ?? 1} to ${trait.statChoices} stats of your choice`
+    : signedModifiers(trait.modifiers.filter((item) => item.amount > 0), stats);
+  const malus = signedModifiers(trait.modifiers.filter((item) => item.amount < 0), stats);
+  const ability = trait.ability ? `${trait.ability.name}: ${trait.ability.description}` : "";
+  return [`Bonus ${bonus || "none"}`, `Malus ${malus || "none"}`, ability].filter((part) => part.length > 0).join(". ");
+}
+
 export function checkAdjustments(
   options: CharacterOptions,
   classId: string,
   raceId: string,
   statId: string,
+  raceStatIds: string[] = [],
 ): CheckAdjustments {
   let stat = 0;
   let roll = 0;
@@ -400,25 +337,35 @@ export function checkAdjustments(
       if (item.kind === "roll" && (item.statId === "" || item.statId === statId)) roll += item.amount;
     }
   }
+  const race = traits[1];
+  if (race?.statChoices && race.statChoiceAmount && raceStatIds.includes(statId)) {
+    stat += race.statChoiceAmount;
+  }
   return { stat, roll };
 }
 
 export function characterSummary(
   character: {
     abilityId: string;
+    extraAbilityId?: string;
     classId: string;
     raceId: string;
+    raceStatIds?: string[];
     stats: Record<string, number>;
   },
   options: CharacterOptions,
 ): string {
-  const race = findTrait(options.races, character.raceId)?.label;
+  const race = findTrait(options.races, character.raceId);
   const className = findTrait(options.classes, character.classId)?.label;
   const skill = options.skills.find((entry) => entry.id === character.abilityId)?.label;
-  const identity = [race, className, skill].filter((entry): entry is string => Boolean(entry));
+  const extra = options.skills.find((entry) => entry.id === character.extraAbilityId)?.label;
+  const skills = [skill, extra].filter((entry): entry is string => Boolean(entry)).join(", ");
+  const ability = race?.ability ? `${race.ability.name}: ${race.ability.description}` : "";
+  const identity = [race?.label, className, skills, ability].filter((entry): entry is string => Boolean(entry));
+  const chosen = character.raceStatIds ?? [];
   const stats = options.stats.map((stat) => {
     const base = character.stats[stat.id] ?? 0;
-    const bonus = checkAdjustments(options, character.classId, character.raceId, stat.id).stat;
+    const bonus = checkAdjustments(options, character.classId, character.raceId, stat.id, chosen).stat;
     const total = formatSigned(base + bonus).replace(/^\+/, "");
     if (bonus === 0) return `${stat.label} ${total}`;
     return `${stat.label} ${total} (${formatSigned(bonus)})`;
@@ -430,6 +377,8 @@ export function characterSummary(
 export function validateCharacterOptionsDraft(draft: CharacterOptionsDraft): Parsed<CharacterOptions> {
   const statPool = readPool(draft.statPool);
   if (!statPool.ok) return statPool;
+  const statCap = readCap(draft.statCap, statPool.value);
+  if (!statCap.ok) return statCap;
 
   const stats = readStats(draft.stats);
   if (!stats.ok) return stats;
@@ -448,6 +397,7 @@ export function validateCharacterOptionsDraft(draft: CharacterOptionsDraft): Par
     value: {
       assignment: "pool",
       statPool: statPool.value,
+      statCap: statCap.value,
       stats: stats.value,
       skills: skills.value,
       classes: classes.value,
@@ -458,18 +408,24 @@ export function validateCharacterOptionsDraft(draft: CharacterOptionsDraft): Par
 
 export function parseCharacterOptions(value: unknown): CharacterOptions | null {
   if (!isRecord(value)) return null;
-  if (value.assignment !== "ranked" && value.assignment !== "pool") return null;
-  if (!isPool(value.statPool)) return null;
+  if (value.assignment !== "ranked" && value.assignment !== "pool" && value.assignment !== "class") {
+    return null;
+  }
+  if (!isStoredPool(value.statPool, value.assignment)) return null;
+  const statCap = readStoredCap(value.statCap, value.assignment, value.statPool);
+  if (statCap === null) return null;
   const stats = parseNamedList(value.stats, MAX_STATS);
   const skills = parseSkills(value.skills, stats);
-  const classes = parseTraits(value.classes, stats);
-  const races = parseTraits(value.races, stats);
+  const fixed = value.assignment === "class" ? { cap: statCap, pool: value.statPool } : null;
+  const classes = parseTraits(value.classes, stats, MAX_STORED_CLASSES, fixed);
+  const races = parseTraits(value.races, stats, MAX_STORED_RACES, null);
   if (!stats || stats.length === 0 || !skills || skills.length === 0 || !classes || !races) return null;
   if (classes.length === 0 || races.length === 0) return null;
   if (value.assignment === "ranked" && !isRankedCore(stats, value.statPool)) return null;
   return {
     assignment: value.assignment,
     statPool: value.statPool,
+    statCap,
     stats,
     skills,
     classes,
@@ -480,12 +436,13 @@ export function parseCharacterOptions(value: unknown): CharacterOptions | null {
 export function parseStatBlock(
   value: unknown,
   options: CharacterOptions,
+  classId = "",
 ): Record<string, number> | null {
   if (!isRecord(value)) return null;
   const stats: Record<string, number> = {};
   for (const stat of options.stats) {
     const raw = value[stat.id];
-    if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > options.statPool) {
+    if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > pointCap(options)) {
       return null;
     }
     stats[stat.id] = raw;
@@ -498,6 +455,10 @@ export function parseStatBlock(
     return stats;
   }
 
+  if (options.assignment === "class") {
+    return matchesClassStats(options, classId, stats) ? stats : null;
+  }
+
   const sum = numbers.reduce((total, entry) => total + entry, 0);
   if (sum > options.statPool) return null;
   return stats;
@@ -506,14 +467,16 @@ export function parseStatBlock(
 export function readAssignedStats(
   options: CharacterOptions,
   raw: Record<string, string>,
+  classId = "",
 ): Parsed<Record<string, number>> {
   const stats: Record<string, number> = {};
   for (const stat of options.stats) {
     const text = raw[stat.id] ?? "";
     if (!/^\d+$/.test(text)) return { ok: false, error: `Assign ${stat.label}.` };
     const value = Number(text);
-    if (!Number.isInteger(value) || value < 0 || value > options.statPool) {
-      return { ok: false, error: `${stat.label} must be from 0 to ${options.statPool}.` };
+    const cap = pointCap(options);
+    if (!Number.isInteger(value) || value < 0 || value > cap) {
+      return { ok: false, error: `${stat.label} must be from 0 to ${cap}.` };
     }
     stats[stat.id] = value;
   }
@@ -523,6 +486,13 @@ export function readAssignedStats(
     const sorted = numbers.slice().sort((left, right) => left - right);
     if (sorted.length !== 3 || sorted[0] !== 0 || sorted[1] !== 1 || sorted[2] !== 2) {
       return { ok: false, error: "Assign 2, 1, and 0, each once." };
+    }
+    return { ok: true, value: stats };
+  }
+
+  if (options.assignment === "class") {
+    if (!matchesClassStats(options, classId, stats)) {
+      return { ok: false, error: "Use the points from your class." };
     }
     return { ok: true, value: stats };
   }
@@ -563,6 +533,30 @@ function readPool(value: string): Parsed<number> {
   const pool = Number(trimmed);
   if (!isPool(pool)) return { ok: false, error: "Point pool must be a whole number from 1 to 12." };
   return { ok: true, value: pool };
+}
+
+function readCap(value: string, pool: number): Parsed<number> {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return { ok: false, error: "Set the point cap." };
+  const cap = Number(trimmed);
+  if (!Number.isInteger(cap) || cap < 1 || cap > pool) {
+    return { ok: false, error: `Point cap must be a whole number from 1 to ${pool}.` };
+  }
+  return { ok: true, value: cap };
+}
+
+function readStoredCap(value: unknown, assignment: StatAssignment, pool: number): number | null {
+  if (assignment === "ranked") {
+    if (value === undefined || value === 2) return 2;
+    return null;
+  }
+  if (value === undefined) return pool;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > pool) return null;
+  return value;
+}
+
+function pointCap(options: CharacterOptions): number {
+  return options.assignment === "ranked" ? 2 : options.statCap;
 }
 
 function readStats(entries: StatDefinition[]): Parsed<StatDefinition[]> {
@@ -709,9 +703,11 @@ function parseNamedList(value: unknown, max: number): StatDefinition[] | null {
     if (!isRecord(entry) || !isId(entry.id) || typeof entry.label !== "string") return null;
     const label = readLabel(entry.label);
     if (!label.ok || ids.has(entry.id) || labels.has(label.value.toLowerCase())) return null;
+    const covers = readCovers(entry.covers);
+    if (covers === null) return null;
     ids.add(entry.id);
     labels.add(label.value.toLowerCase());
-    stats.push({ id: entry.id, label: label.value });
+    stats.push(covers ? { id: entry.id, label: label.value, covers } : { id: entry.id, label: label.value });
   }
   return stats;
 }
@@ -735,8 +731,13 @@ function parseSkills(value: unknown, stats: StatDefinition[] | null): SkillDefin
   return skills;
 }
 
-function parseTraits(value: unknown, stats: StatDefinition[] | null): TraitDefinition[] | null {
-  if (!stats || !Array.isArray(value) || value.length > MAX_TRAITS) return null;
+function parseTraits(
+  value: unknown,
+  stats: StatDefinition[] | null,
+  max: number,
+  fixed: { cap: number; pool: number } | null,
+): TraitDefinition[] | null {
+  if (!stats || !Array.isArray(value) || value.length > max) return null;
   const traits: TraitDefinition[] = [];
   const ids = new Set<string>();
   const labels = new Set<string>();
@@ -744,7 +745,7 @@ function parseTraits(value: unknown, stats: StatDefinition[] | null): TraitDefin
     if (!isRecord(entry) || !isId(entry.id) || typeof entry.label !== "string") return null;
     const label = readLabel(entry.label);
     if (!label.ok || ids.has(entry.id) || labels.has(label.value.toLowerCase())) return null;
-    if (!Array.isArray(entry.modifiers) || entry.modifiers.length > MAX_MODIFIERS) return null;
+    if (!Array.isArray(entry.modifiers) || entry.modifiers.length > MAX_STORED_MODIFIERS) return null;
     const modifiers: TraitModifier[] = [];
     const modifierIds = new Set<string>();
     for (const item of entry.modifiers) {
@@ -753,11 +754,90 @@ function parseTraits(value: unknown, stats: StatDefinition[] | null): TraitDefin
       modifierIds.add(parsed.id);
       modifiers.push(parsed);
     }
+    const classStats = readFixedStats(entry.stats, stats, fixed);
+    if (classStats === null) return null;
+    const ability = readRacialAbility(entry.ability);
+    const choices = readRaceChoices(entry);
+    if (ability === null || choices === null) return null;
     ids.add(entry.id);
     labels.add(label.value.toLowerCase());
-    traits.push({ id: entry.id, label: label.value, modifiers });
+    const trait: TraitDefinition = { id: entry.id, label: label.value, modifiers };
+    if (classStats) trait.stats = classStats;
+    if (ability) trait.ability = ability;
+    if (choices.statChoices) {
+      trait.statChoices = choices.statChoices;
+      trait.statChoiceAmount = choices.statChoiceAmount;
+    }
+    if (choices.extraSkills) trait.extraSkills = choices.extraSkills;
+    traits.push(trait);
   }
   return traits;
+}
+
+function readRacialAbility(value: unknown): RacialAbility | null | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || typeof value.name !== "string" || typeof value.description !== "string") return null;
+  const name = readLabel(value.name);
+  const description = readApplies(value.description);
+  if (!name.ok || !description.ok) return null;
+  return { name: name.value, description: description.value };
+}
+
+function readRaceChoices(
+  value: Record<string, unknown>,
+): { statChoices: number; statChoiceAmount: number; extraSkills: number } | null {
+  const statChoices = value.statChoices === undefined ? 0 : value.statChoices;
+  const statChoiceAmount = value.statChoiceAmount === undefined ? 0 : value.statChoiceAmount;
+  const extraSkills = value.extraSkills === undefined ? 0 : value.extraSkills;
+  if (statChoices !== 0 && statChoices !== 2) return null;
+  if (extraSkills !== 0 && extraSkills !== 1) return null;
+  if (typeof statChoices !== "number" || typeof statChoiceAmount !== "number" || typeof extraSkills !== "number") {
+    return null;
+  }
+  if (statChoices === 2 && statChoiceAmount !== 1) return null;
+  if (statChoices === 0 && statChoiceAmount !== 0) return null;
+  return { statChoices, statChoiceAmount, extraSkills };
+}
+
+function signedModifiers(modifiers: TraitModifier[], stats: StatDefinition[]): string {
+  return modifiers.map((item) => formatModifier(item, stats)).join(", ");
+}
+
+function readFixedStats(
+  value: unknown,
+  stats: StatDefinition[],
+  fixed: { cap: number; pool: number } | null,
+): Record<string, number> | null | undefined {
+  if (!fixed) return value === undefined ? undefined : null;
+  if (!isRecord(value)) return null;
+  const assigned: Record<string, number> = {};
+  for (const stat of stats) {
+    const raw = value[stat.id];
+    if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > fixed.cap) return null;
+    assigned[stat.id] = raw;
+  }
+  if (Object.keys(value).some((key) => !stats.some((stat) => stat.id === key))) return null;
+  const sum = stats.reduce((total, stat) => total + (assigned[stat.id] ?? 0), 0);
+  if (sum !== fixed.pool) return null;
+  return assigned;
+}
+
+function readCovers(value: unknown): string | null {
+  if (value === undefined) return "";
+  if (typeof value !== "string" || value.includes("\n") || value.includes("\r")) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_APPLIES) return null;
+  return trimmed;
+}
+
+function matchesClassStats(
+  options: CharacterOptions,
+  classId: string,
+  stats: Record<string, number>,
+): boolean {
+  const chosen = options.classes.find((entry) => entry.id === classId);
+  if (!chosen?.stats) return false;
+  return options.stats.every((stat) => stats[stat.id] === chosen.stats?.[stat.id]);
 }
 
 function parseModifier(
@@ -785,7 +865,12 @@ function isRankedCore(stats: StatDefinition[], pool: number): boolean {
 }
 
 function isPool(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= MAX_STAT_POOL;
+  return isStoredPool(value, "pool");
+}
+
+function isStoredPool(value: unknown, assignment: StatAssignment): value is number {
+  const max = assignment === "class" ? MAX_CLASS_POOL : MAX_STAT_POOL;
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max;
 }
 
 function isId(value: unknown): value is string {

@@ -1,0 +1,212 @@
+{
+  "universeType": "fantasy",
+  "playerCount": 4,
+  "deathPenalty": "new-character",
+  "enemyDifficulty": "standard",
+  "lootRarity": "common",
+  "playerFreedom": "guided",
+  "characterOptions": {
+    "assignment": "class",
+    "statPool": 36,
+    "statCap": 16,
+    "stats": [
+      { "id": "might", "label": "Might", "covers": "Strength, physical power, and endurance" },
+      { "id": "finesse", "label": "Finesse", "covers": "Dexterity, speed, stealth, and precision" },
+      { "id": "intellect", "label": "Intellect", "covers": "Knowledge, memory, investigation, and magic theory" },
+      { "id": "presence", "label": "Presence", "covers": "Charisma, leadership, persuasion, and intimidation" },
+      { "id": "instinct", "label": "Instinct", "covers": "Perception, survival, and intuition" },
+      { "id": "willpower", "label": "Willpower", "covers": "Mental resilience, concentration, and magical aptitude" }
+    ],
+    "skills": [
+      { "id": "might", "label": "Might", "statId": "might", "applies": "use strength, physical power, or endurance" },
+      { "id": "finesse", "label": "Finesse", "statId": "finesse", "applies": "use dexterity, speed, stealth, or precision" },
+      { "id": "intellect", "label": "Intellect", "statId": "intellect", "applies": "use knowledge, memory, investigation, or magic theory" },
+      { "id": "presence", "label": "Presence", "statId": "presence", "applies": "use charisma, leadership, persuasion, or intimidation" },
+      { "id": "instinct", "label": "Instinct", "statId": "instinct", "applies": "use perception, survival, or intuition" },
+      { "id": "willpower", "label": "Willpower", "statId": "willpower", "applies": "use mental resilience, concentration, or magical aptitude" }
+    ],
+    "classes": [
+      {
+        "id": "dnd-fighter",
+        "label": "Fighter",
+        "modifiers": [],
+        "stats": { "might": 9, "finesse": 6, "intellect": 2, "presence": 4, "instinct": 7, "willpower": 8 }
+      },
+      {
+        "id": "dnd-barbarian",
+        "label": "Barbarian",
+        "modifiers": [],
+        "stats": { "might": 10, "finesse": 5, "intellect": 1, "presence": 2, "instinct": 8, "willpower": 10 }
+      },
+      {
+        "id": "dnd-rogue",
+        "label": "Rogue",
+        "modifiers": [],
+        "stats": { "might": 2, "finesse": 10, "intellect": 4, "presence": 6, "instinct": 10, "willpower": 4 }
+      },
+      {
+        "id": "dnd-ranger",
+        "label": "Ranger",
+        "modifiers": [],
+        "stats": { "might": 5, "finesse": 8, "intellect": 3, "presence": 4, "instinct": 10, "willpower": 6 }
+      },
+      {
+        "id": "dnd-paladin",
+        "label": "Paladin",
+        "modifiers": [],
+        "stats": { "might": 7, "finesse": 4, "intellect": 3, "presence": 7, "instinct": 5, "willpower": 10 }
+      },
+      {
+        "id": "dnd-cleric",
+        "label": "Cleric",
+        "modifiers": [],
+        "stats": { "might": 3, "finesse": 3, "intellect": 7, "presence": 5, "instinct": 6, "willpower": 12 }
+      },
+      {
+        "id": "dnd-wizard",
+        "label": "Wizard",
+        "modifiers": [],
+        "stats": { "might": 1, "finesse": 3, "intellect": 10, "presence": 2, "instinct": 4, "willpower": 16 }
+      },
+      {
+        "id": "dnd-sorcerer",
+        "label": "Sorcerer",
+        "modifiers": [],
+        "stats": { "might": 2, "finesse": 4, "intellect": 6, "presence": 8, "instinct": 4, "willpower": 12 }
+      },
+      {
+        "id": "dnd-warlock",
+        "label": "Warlock",
+        "modifiers": [],
+        "stats": { "might": 2, "finesse": 4, "intellect": 7, "presence": 7, "instinct": 4, "willpower": 12 }
+      },
+      {
+        "id": "dnd-bard",
+        "label": "Bard",
+        "modifiers": [],
+        "stats": { "might": 2, "finesse": 5, "intellect": 5, "presence": 10, "instinct": 4, "willpower": 10 }
+      },
+      {
+        "id": "dnd-monk",
+        "label": "Monk",
+        "modifiers": [],
+        "stats": { "might": 4, "finesse": 10, "intellect": 3, "presence": 2, "instinct": 7, "willpower": 10 }
+      },
+      {
+        "id": "dnd-druid",
+        "label": "Druid",
+        "modifiers": [],
+        "stats": { "might": 3, "finesse": 4, "intellect": 6, "presence": 3, "instinct": 10, "willpower": 10 }
+      }
+    ],
+    "races": [
+      {
+        "id": "dnd-human",
+        "label": "Human",
+        "modifiers": [],
+        "extraSkills": 1,
+        "ability": { "name": "Adaptable", "description": "Gain one additional skill proficiency." }
+      },
+      {
+        "id": "dnd-elf",
+        "label": "Elf",
+        "modifiers": [
+          { "id": "dnd-elf-finesse", "kind": "stat", "statId": "finesse", "amount": 2 },
+          { "id": "dnd-elf-willpower", "kind": "stat", "statId": "willpower", "amount": -2 }
+        ],
+        "ability": { "name": "Elven senses", "description": "Darkvision and advantage against sleep effects." }
+      },
+      {
+        "id": "dnd-dwarf",
+        "label": "Dwarf",
+        "modifiers": [
+          { "id": "dnd-dwarf-might", "kind": "stat", "statId": "might", "amount": 2 },
+          { "id": "dnd-dwarf-presence", "kind": "stat", "statId": "presence", "amount": -2 }
+        ],
+        "ability": { "name": "Dwarven resilience", "description": "Poison resistance." }
+      },
+      {
+        "id": "dnd-halfling",
+        "label": "Halfling",
+        "modifiers": [
+          { "id": "dnd-halfling-might", "kind": "stat", "statId": "might", "amount": -2 },
+          { "id": "dnd-halfling-finesse", "kind": "stat", "statId": "finesse", "amount": 2 }
+        ],
+        "ability": { "name": "Lucky", "description": "Reroll one failed test per session." }
+      },
+      {
+        "id": "dnd-orc",
+        "label": "Orc",
+        "modifiers": [
+          { "id": "dnd-orc-might", "kind": "stat", "statId": "might", "amount": 2 },
+          { "id": "dnd-orc-presence", "kind": "stat", "statId": "presence", "amount": -2 }
+        ],
+        "ability": { "name": "Savage attacks", "description": "Bonus damage on melee critical hits." }
+      },
+      {
+        "id": "dnd-gnome",
+        "label": "Gnome",
+        "modifiers": [
+          { "id": "dnd-gnome-might", "kind": "stat", "statId": "might", "amount": -2 },
+          { "id": "dnd-gnome-intellect", "kind": "stat", "statId": "intellect", "amount": 2 }
+        ],
+        "ability": { "name": "Arcane knowledge", "description": "Bonus on magical knowledge tests." }
+      },
+      {
+        "id": "dnd-dragonborn",
+        "label": "Dragonborn",
+        "modifiers": [
+          { "id": "dnd-dragonborn-might", "kind": "stat", "statId": "might", "amount": 2 },
+          { "id": "dnd-dragonborn-willpower", "kind": "stat", "statId": "willpower", "amount": -2 }
+        ],
+        "ability": { "name": "Breath weapon", "description": "Once per combat." }
+      },
+      {
+        "id": "dnd-tiefling",
+        "label": "Tiefling",
+        "modifiers": [
+          { "id": "dnd-tiefling-intellect", "kind": "stat", "statId": "intellect", "amount": 2 },
+          { "id": "dnd-tiefling-willpower", "kind": "stat", "statId": "willpower", "amount": -2 }
+        ],
+        "ability": { "name": "Hellish resistance", "description": "Fire resistance." }
+      },
+      {
+        "id": "dnd-half-elf",
+        "label": "Half-Elf",
+        "modifiers": [
+          { "id": "dnd-half-elf-finesse", "kind": "stat", "statId": "finesse", "amount": 1 },
+          { "id": "dnd-half-elf-presence", "kind": "stat", "statId": "presence", "amount": 1 },
+          { "id": "dnd-half-elf-willpower", "kind": "stat", "statId": "willpower", "amount": -2 }
+        ],
+        "ability": { "name": "Social grace", "description": "One extra social proficiency." }
+      },
+      {
+        "id": "dnd-half-orc",
+        "label": "Half-Orc",
+        "modifiers": [
+          { "id": "dnd-half-orc-might", "kind": "stat", "statId": "might", "amount": 2 },
+          { "id": "dnd-half-orc-willpower", "kind": "stat", "statId": "willpower", "amount": -2 }
+        ],
+        "ability": { "name": "Relentless endurance", "description": "Remain standing after a fatal wound once per rest." }
+      },
+      {
+        "id": "dnd-goblin",
+        "label": "Goblin",
+        "modifiers": [
+          { "id": "dnd-goblin-might", "kind": "stat", "statId": "might", "amount": -2 },
+          { "id": "dnd-goblin-finesse", "kind": "stat", "statId": "finesse", "amount": 2 }
+        ],
+        "ability": { "name": "Nimble", "description": "Bonus to stealth checks." }
+      },
+      {
+        "id": "dnd-aasimar",
+        "label": "Aasimar",
+        "modifiers": [
+          { "id": "dnd-aasimar-instinct", "kind": "stat", "statId": "instinct", "amount": -2 },
+          { "id": "dnd-aasimar-willpower", "kind": "stat", "statId": "willpower", "amount": 2 }
+        ],
+        "ability": { "name": "Healing touch", "description": "Once per rest." }
+      }
+    ]
+  }
+}

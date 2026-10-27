@@ -3,6 +3,7 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
+import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
   commitCharacter,
@@ -131,6 +132,7 @@ function enqueue(task: () => Promise<void>): Promise<void> {
 }
 
 async function hostRoomNow(roomCode: string): Promise<void> {
+  await ensureUniversePresets().catch(() => undefined);
   const saved = readHostSession();
   if (!saved || saved.roomCode !== roomCode) {
     throw new Error("This browser does not have the host game.");
@@ -148,6 +150,7 @@ async function hostRoomNow(roomCode: string): Promise<void> {
 }
 
 async function joinRoomNow(roomCode: string): Promise<void> {
+  await ensureUniversePresets().catch(() => undefined);
   if (sameOpenSession(roomCode, "peer")) return;
 
   const session = await openSession({
@@ -688,8 +691,10 @@ function draftPayload(draft: CharacterDraft): JsonValue {
     type: "createCharacter",
     name: draft.name,
     abilityId: draft.abilityId,
+    extraAbilityId: draft.extraAbilityId,
     classId: draft.classId,
     raceId: draft.raceId,
+    raceStatIds: draft.raceStatIds,
     stats: draft.stats,
   };
 }
@@ -706,13 +711,29 @@ function readDraft(value: Record<string, unknown>): CharacterDraft | null {
     return null;
   }
 
+  const picks = readDraftPicks(value.extraAbilityId, value.raceStatIds);
+  if (!picks) return null;
+
   return {
     name: value.name,
     abilityId: value.abilityId,
+    extraAbilityId: picks.extraAbilityId,
     classId: value.classId,
     raceId: value.raceId,
+    raceStatIds: picks.raceStatIds,
     stats,
   };
+}
+
+function readDraftPicks(
+  extraAbilityId: unknown,
+  raceStatIds: unknown,
+): { extraAbilityId: string; raceStatIds: string[] } | null {
+  const extra = extraAbilityId === undefined ? "" : extraAbilityId;
+  const chosen = raceStatIds === undefined ? [] : raceStatIds;
+  if (typeof extra !== "string" || extra.length > 32 || !Array.isArray(chosen) || chosen.length > 2) return null;
+  if (chosen.some((entry) => typeof entry !== "string" || !/^[a-z][a-z0-9-]{0,31}$/.test(entry))) return null;
+  return { extraAbilityId: extra, raceStatIds: chosen };
 }
 
 function readStatDraft(value: unknown): Record<string, string> | null {

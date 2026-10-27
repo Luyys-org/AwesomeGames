@@ -5,7 +5,7 @@ import {
   parseStatBlock,
   type CharacterOptions,
 } from "@/rpg/lib/character-options";
-import { type TableCharacter, type Wound } from "@/rpg/lib/character";
+import { storedRacePicks, type TableCharacter, type Wound } from "@/rpg/lib/character";
 import {
   DEATH_PENALTIES,
   ENEMY_DIFFICULTIES,
@@ -102,11 +102,13 @@ function readCharacter(
   if (value.owner !== "host" && value.owner !== "peer") return null;
   if (value.archived !== false || typeof value.inScene !== "boolean") return null;
 
-  const stats = parseStatBlock(value.stats, options);
-  if (!stats) return null;
   const classId = readTraitId(value.classId, options.classes, requireTraits);
+  const stats = parseStatBlock(value.stats, options, classId ?? "");
+  if (!stats || classId === null) return null;
   const raceId = readTraitId(value.raceId, options.races, requireTraits);
-  if (classId === null || raceId === null) return null;
+  if (raceId === null) return null;
+  const picks = storedRacePicks(options, raceId, value.abilityId, value.extraAbilityId, value.raceStatIds);
+  if (!picks.ok) return null;
 
   const down = value.wounds[value.wounds.length - 1] === "down";
   if (!value.inScene && value.wounds.length > 0 && !down) return null;
@@ -119,8 +121,10 @@ function readCharacter(
     id: value.id,
     name,
     abilityId: value.abilityId,
+    extraAbilityId: picks.extraAbilityId,
     classId,
     raceId,
+    raceStatIds: picks.raceStatIds,
     stats,
     wounds: value.wounds,
     claimCode: value.claimCode,
