@@ -19,7 +19,7 @@ export default function RpgHomePage() {
       </Link>
       <h1 className="mt-3 text-2xl font-semibold text-zinc-50">RPG</h1>
       <p className="mt-2 max-w-xl text-base text-zinc-400">
-        Host a table for 2–6 players, or join with a room code.
+        Host a table for 1–6 players, or join with a room code.
       </p>
       <LandingScreen />
     </main>

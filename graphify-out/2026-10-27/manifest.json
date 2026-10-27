@@ -618,10 +618,10 @@
     "semantic_hash": "719619d6a70ba400cfa86d2c367339af"
   },
   "package.json": {
-    "mtime": 1792844517.658594,
-    "seen": 1793100722.8439536,
-    "ast_hash": "24558d253268bff5ea8b3a146b3615df",
-    "semantic_hash": "24558d253268bff5ea8b3a146b3615df"
+    "mtime": 1793125525.765983,
+    "seen": 1793125826.2688174,
+    "ast_hash": "5f4bfd8804643161a70edca70df5653b",
+    "semantic_hash": ""
   },
   "postcss.config.mjs": {
     "mtime": 1792703190.590728,
@@ -726,9 +726,9 @@
     "semantic_hash": ""
   },
   "rpg/features/room/use-room.ts": {
-    "mtime": 1793122066.6160939,
-    "seen": 1793122241.7045844,
-    "ast_hash": "9b4682c23575b003f1d775f464cf91d0",
+    "mtime": 1793122954.9056253,
+    "seen": 1793123030.182555,
+    "ast_hash": "2498200395241512cc570ece2313a1af",
     "semantic_hash": ""
   },
   "rpg/lib/campaign-settings.ts": {
@@ -738,15 +738,15 @@
     "semantic_hash": ""
   },
   "rpg/lib/character-options.ts": {
-    "mtime": 1793122604.1583042,
-    "seen": 1793122647.5814347,
-    "ast_hash": "a11293a394e371d22a15de7fce70dcb1",
+    "mtime": 1793122889.404946,
+    "seen": 1793123030.1825619,
+    "ast_hash": "72f67c130bdcf6009d28a46e80b36b9c",
     "semantic_hash": ""
   },
   "rpg/lib/character.ts": {
-    "mtime": 1793122526.1355815,
-    "seen": 1793122647.5814376,
-    "ast_hash": "88758c5f9dca9cd6808fb46afa968e92",
+    "mtime": 1793122886.8555036,
+    "seen": 1793123030.182565,
+    "ast_hash": "bf61c64b5ac78adeed6a906c4b4949a8",
     "semantic_hash": ""
   },
   "rpg/lib/host-ai.ts": {
@@ -786,9 +786,9 @@
     "semantic_hash": "4ffb9218858b3eb7b05c290b95dfba1c"
   },
   "rpg/lib/table.ts": {
-    "mtime": 1793122605.7862477,
-    "seen": 1793122647.581462,
-    "ast_hash": "dd78f9bc467ca35c9a48b216853ce21c",
+    "mtime": 1793125776.1255176,
+    "seen": 1793125826.268894,
+    "ast_hash": "01c96c71c5065ca4e9bd42fae4aaa924",
     "semantic_hash": ""
   },
   "rpg/lib/universe-preset-cache.ts": {
@@ -816,9 +816,9 @@
     "semantic_hash": ""
   },
   "rpg/services/room-connection.ts": {
-    "mtime": 1793122075.7714593,
-    "seen": 1793122241.7046394,
-    "ast_hash": "cdf0e3f09cc5ca6105b4aed902f1f91f",
+    "mtime": 1793125656.6078274,
+    "seen": 1793125826.268916,
+    "ast_hash": "ec1e4ad06916ab5d013acac08b4cbd01",
     "semantic_hash": ""
   },
   "scripts/create-game.mjs": {
@@ -1056,15 +1056,15 @@
     "semantic_hash": ""
   },
   "rpg/features/play/campaign-play.tsx": {
-    "mtime": 1793122594.7028255,
-    "seen": 1793122647.581421,
-    "ast_hash": "2494f18aaf54d165774bf13e9eb33779",
+    "mtime": 1793125785.762781,
+    "seen": 1793125826.268847,
+    "ast_hash": "1689d96d7104e8f27ecc157290b91512",
     "semantic_hash": ""
   },
   "rpg/features/play/inventory-dialog.tsx": {
-    "mtime": 1793122594.3861072,
-    "seen": 1793122647.581423,
-    "ast_hash": "58605ef269b9cb4bb2397cada2fe5173",
+    "mtime": 1793122983.3930695,
+    "seen": 1793123030.1825478,
+    "ast_hash": "b16f6387944edb0b583cb2386dfb8bf1",
     "semantic_hash": ""
   },
   "rpg/lib/campaign-settings-import-export.ts": {
@@ -1074,9 +1074,9 @@
     "semantic_hash": ""
   },
   "rpg/lib/host-gm-prompt.ts": {
-    "mtime": 1793122578.783097,
-    "seen": 1793122647.5814428,
-    "ast_hash": "1dc5042c9d9530f46af3c9060dd2b7cb",
+    "mtime": 1793125664.824025,
+    "seen": 1793125826.2688718,
+    "ast_hash": "cdccd4ada2ad4d6f3e78569bc7398606",
     "semantic_hash": ""
   },
   "rpg/lib/host-model-call.ts": {
@@ -1092,15 +1092,15 @@
     "semantic_hash": ""
   },
   "rpg/lib/starting-kit.ts": {
-    "mtime": 1793122537.3880572,
-    "seen": 1793122647.5814605,
-    "ast_hash": "dc604be9df4658b89f6c99d557b7c899",
+    "mtime": 1793122895.388428,
+    "seen": 1793123030.1825886,
+    "ast_hash": "55b8ef94f873f1c92060be809331d657",
     "semantic_hash": ""
   },
   "rpg/lib/host-starting-loadout.ts": {
-    "mtime": 1793122587.0862782,
-    "seen": 1793122647.5814526,
-    "ast_hash": "a70ad9b79ae5c68409c0caac90678d9e",
+    "mtime": 1793125662.6291237,
+    "seen": 1793125826.268882,
+    "ast_hash": "a0d6fb9686161aa116ae8843385f51df",
     "semantic_hash": ""
   },
   "rpg/lib/prompt-template.ts": {
@@ -1122,15 +1122,15 @@
     "semantic_hash": ""
   },
   "rpg/prompts/starting-loadout-retry.ts": {
-    "mtime": 1793122637.3337252,
-    "seen": 1793122647.5814784,
-    "ast_hash": "8f5f64059b0831eaf7585a99ed77057a",
+    "mtime": 1793125699.263152,
+    "seen": 1793125826.2689116,
+    "ast_hash": "82ddf4ff0b2e313e59d61434d6db1590",
     "semantic_hash": ""
   },
   "rpg/prompts/starting-loadout.ts": {
-    "mtime": 1793122636.7767305,
-    "seen": 1793122647.58148,
-    "ast_hash": "8a0ff4722c736daebf2502f12eb0666e",
+    "mtime": 1793125701.3431635,
+    "seen": 1793125826.2689128,
+    "ast_hash": "62b3702d732e7c72619ce99d4b789c5d",
     "semantic_hash": ""
   },
   "rpg/prompts/system.ts": {
@@ -1140,45 +1140,57 @@
     "semantic_hash": ""
   },
   "rpg/lib/gm-turn.ts": {
-    "mtime": 1793122549.6191711,
-    "seen": 1793122647.5814395,
-    "ast_hash": "eac75bdf4c3b508e34d0dac71354f62a",
+    "mtime": 1793125669.5510788,
+    "seen": 1793125826.2688684,
+    "ast_hash": "e7be3bd9a8c49283fcebb1be3efb9894",
     "semantic_hash": ""
   },
   "rpg/lib/host-gm-turn.ts": {
-    "mtime": 1793122070.8014388,
-    "seen": 1793122241.7046006,
-    "ast_hash": "8a1645f15caa7e469d6a9d0f337564e9",
+    "mtime": 1793125656.390168,
+    "seen": 1793125826.2688737,
+    "ast_hash": "810b691a12b6b54ddd20990082631cae",
     "semantic_hash": ""
   },
   "rpg/prompts/gm-outcome-retry.ts": {
-    "mtime": 1793122636.778943,
-    "seen": 1793122647.58147,
-    "ast_hash": "e12b2bcae809019df889462ffad7b169",
+    "mtime": 1793125696.4611485,
+    "seen": 1793125826.2689018,
+    "ast_hash": "8dad00b0f041a1d9c97b0efb10183166",
     "semantic_hash": ""
   },
   "rpg/prompts/gm-outcome.ts": {
-    "mtime": 1793122634.3774102,
-    "seen": 1793122647.5814712,
-    "ast_hash": "2c9e4233d23a1bbe336910681c4af92a",
+    "mtime": 1793125682.7882028,
+    "seen": 1793125826.2689033,
+    "ast_hash": "5dd0e64ffa4adce060fb7366190a875e",
     "semantic_hash": ""
   },
   "rpg/prompts/gm-reaction-retry.ts": {
-    "mtime": 1793122636.7621188,
-    "seen": 1793122647.5814724,
-    "ast_hash": "c9676d0a9fd7175f60e6cb8fa269d197",
+    "mtime": 1793125694.5720887,
+    "seen": 1793125826.2689047,
+    "ast_hash": "a6619ea130598d4ab43fecbb7b7cf06b",
     "semantic_hash": ""
   },
   "rpg/prompts/gm-reaction.ts": {
-    "mtime": 1793122634.141925,
-    "seen": 1793122647.5814738,
-    "ast_hash": "c86ff40fca3b129a43aa46a8ee7fb126",
+    "mtime": 1793125681.165514,
+    "seen": 1793125826.2689064,
+    "ast_hash": "87ff12644c39b4d7b0ba78c5db6347ba",
+    "semantic_hash": ""
+  },
+  "rpg/features/play/stats-dialog.tsx": {
+    "mtime": 1793122983.7484052,
+    "seen": 1793123030.1825497,
+    "ast_hash": "fc634be2bc963a492c3ef50a8d7d2d6f",
+    "semantic_hash": ""
+  },
+  "rpg/lib/scene-action.ts": {
+    "mtime": 1793125790.8615134,
+    "seen": 1793125826.2688906,
+    "ast_hash": "9c6bf1043b86d2beba2ce79c6bc75113",
     "semantic_hash": ""
   },
   "package-lock.json": {
-    "mtime": 1792844517.658594,
-    "seen": 1793106698.3044083,
-    "ast_hash": "71048dc58c0fef676654010feefd44c2",
+    "mtime": 1793125525.765983,
+    "seen": 1793125826.2689743,
+    "ast_hash": "4322fac3dcd4bb89d65bed98b40782b6",
     "semantic_hash": ""
   }
 }

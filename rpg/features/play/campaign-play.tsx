@@ -1,15 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { InventoryDialog } from "@/rpg/features/play/inventory-dialog";
 import { StatsDialog } from "@/rpg/features/play/stats-dialog";
 import { useRoom } from "@/rpg/features/room/use-room";
 import { characterHp } from "@/rpg/lib/character";
-import { characterIdentity } from "@/rpg/lib/character-options";
+import { characterIdentity, type CharacterOptions } from "@/rpg/lib/character-options";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
-import { isGmErrorEntry, UNREADABLE_GM_RESULT, type TranscriptEntry } from "@/rpg/lib/table";
+import { levelRewardOptionsForView, XP_PER_LEVEL } from "@/rpg/lib/progression";
+import {
+  actionCheckPreview,
+  canPerformSceneAction,
+  failureLabel,
+  sceneActionsForCharacter,
+} from "@/rpg/lib/scene-action";
+import {
+  isGmErrorEntry,
+  UNREADABLE_GM_RESULT,
+  type PublicCharacter,
+  type SceneAction,
+  type TranscriptEntry,
+} from "@/rpg/lib/table";
 import { paths } from "@/rpg/paths";
 
 interface CampaignPlayProps {
@@ -17,7 +30,7 @@ interface CampaignPlayProps {
 }
 
 export function CampaignPlay({ roomCode }: CampaignPlayProps) {
-  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped } = useRoom(roomCode);
+  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped, chooseLevelReward } = useRoom(roomCode);
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -54,7 +67,23 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   const universe = view?.universe ?? "custom";
   const down = character?.wounds.includes("down") === true;
   const away = character?.inScene === false || character?.archived === true;
-  const actions = view?.availableActions ?? [];
+  const roster = view?.characters ?? [];
+  const actions = useMemo(() => {
+    if (!character) return [];
+    return sceneActionsForCharacter(character, view?.availableActions ?? [], roster);
+  }, [character, roster, view?.availableActions]);
+  const selectedAction = actions.find((action) => action.id === actionId) ?? null;
+
+  useEffect(() => {
+    if (actionId.length > 0 && !actions.some((action) => action.id === actionId)) {
+      setActionId("");
+    }
+  }, [actionId, actions]);
+
+  const rewardChoices =
+    character && view?.characterOptions
+      ? levelRewardOptionsForView(character, view.characterOptions, view.statCeiling || view.characterOptions.statCap)
+      : [];
   const playReady = view?.phase === "play" && view.loadoutReady;
   const gmBusy = view?.gmBusy === true;
   const controlsLocked = !character || away || down || actPending || !playReady || gmBusy;
@@ -117,6 +146,23 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
                   HP {characterHp(character.wounds).current}/{characterHp(character.wounds).max}
                 </span>
               </h1>
+              <p className="mt-1 text-sm text-zinc-300">Level {character.level}</p>
+              <div
+                className="mx-auto mt-2 h-1.5 w-40 bg-zinc-800"
+                role="meter"
+                aria-label="Experience"
+                aria-valuemin={0}
+                aria-valuemax={XP_PER_LEVEL}
+                aria-valuenow={character.xp}
+              >
+                <div
+                  className="h-full bg-[var(--primary)]"
+                  style={{ width: `${Math.min(100, (character.xp / XP_PER_LEVEL) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs tabular-nums text-zinc-500">
+                {character.xp} / {XP_PER_LEVEL}
+              </p>
               <p className="mt-1 text-sm text-zinc-400">
                 {[identity.race, identity.className].filter((part) => part.length > 0).join(" · ")}
               </p>
@@ -201,6 +247,13 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
                     ))}
                   </select>
                 </label>
+                {selectedAction && view?.characterOptions ? (
+                  <ActionCheckDetails
+                    action={selectedAction}
+                    roster={roster}
+                    options={view.characterOptions}
+                  />
+                ) : null}
                 <button
                   type="submit"
                   className="btn btn-primary mt-2"
@@ -281,6 +334,139 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           onClose={() => setStatsOpen(false)}
         />
       ) : null}
+
+      {character && character.pendingRewards > 0 && rewardChoices.length > 0 ? (
+        <LevelRewardDialog
+          level={character.level}
+          pending={character.pendingRewards}
+          choices={rewardChoices}
+          onChoose={chooseLevelReward}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ActionCheckDetails({
+  action,
+  roster,
+  options,
+}: {
+  action: SceneAction;
+  roster: PublicCharacter[];
+  options: CharacterOptions;
+}) {
+  const eligible = roster.filter(
+    (character) =>
+      !character.archived &&
+      character.inScene &&
+      !character.wounds.includes("down") &&
+      canPerformSceneAction(character, action, roster),
+  );
+  const preview = actionCheckPreview(
+    eligible[0] ?? { abilityId: "", extraAbilityId: "", classId: "", raceId: "", raceStatIds: [], stats: {}, wounds: [], inventory: [] },
+    action,
+    options,
+  );
+  const itemName = action.itemId
+    ? roster.flatMap((character) => character.inventory).find((item) => item.id === action.itemId)?.name
+    : null;
+
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-zinc-300">
+      <p className="text-zinc-50">
+        {preview.statLabel} vs {action.difficulty} · {failureLabel(action.failure)}
+      </p>
+      {itemName ? <p className="text-zinc-400">Requires item: {itemName}</p> : null}
+      {eligible.length > 0 ? (
+        <ul className="space-y-1 text-zinc-400">
+          {eligible.map((character) => {
+            const line = actionCheckPreview(character, action, options);
+            const bonus = formatSigned(line.modifierBeforeRoll);
+            return (
+              <li key={character.id}>
+                <span className="text-zinc-200">{character.name}</span>: {bonus} before the d20
+                {line.abilityApplies && line.abilityLabel ? ` (${line.abilityLabel})` : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-zinc-400">No character at the table can take this action right now.</p>
+      )}
+    </div>
+  );
+}
+
+function formatSigned(value: number): string {
+  return value >= 0 ? `+${value}` : String(value);
+}
+
+function LevelRewardDialog({
+  level,
+  pending,
+  choices,
+  onChoose,
+}: {
+  level: number;
+  pending: number;
+  choices: ReturnType<typeof levelRewardOptionsForView>;
+  onChoose: (choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string }) => Promise<string | null>;
+}) {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function choose(choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string }, id: string) {
+    if (pendingId !== null) return;
+    setPendingId(id);
+    setError(null);
+    void onChoose(choice).then((message) => {
+      setPendingId(null);
+      if (message) setError(message);
+    });
+  }
+
+  return (
+    <div className="overlay fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="level-reward-heading"
+        className="panel relative z-10 w-full max-w-md p-6"
+      >
+        <h2 id="level-reward-heading" className="text-xl font-semibold text-zinc-50">
+          Level {level} reward
+        </h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          {pending > 1 ? `${pending} rewards are waiting. Choose one.` : "Choose one reward."}
+        </p>
+        <div className="mt-4 space-y-2">
+          {choices.map((choice) => {
+            const id = choice.kind === "stat" ? choice.statId : choice.skillId;
+            return (
+              <button
+                key={`${choice.kind}-${id}`}
+                type="button"
+                className="btn btn-secondary w-full"
+                disabled={pendingId !== null}
+                onClick={() =>
+                  choose(choice.kind === "stat" ? { kind: "stat", statId: choice.statId } : { kind: "skill", skillId: choice.skillId }, id)
+                }
+              >
+                {choice.label}
+              </button>
+            );
+          })}
+        </div>
+        {choices.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-400">No reward is available at the current caps.</p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-4 text-sm text-red-200">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -455,6 +641,10 @@ function LogEntry({
         ) : null}
       </div>
     );
+  }
+
+  if (entry.type === "reward") {
+    return <p className="text-sm leading-relaxed text-zinc-300">{entry.text}</p>;
   }
 
   if (entry.type === "system") {

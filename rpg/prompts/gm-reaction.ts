@@ -21,8 +21,22 @@ Reply with JSON only, matching this schema:
       ]
     }
   ],
-  "actions": [{ "id": "string", "label": "string" }]
+  "actions": [
+    {
+      "id": "string",
+      "label": "string",
+      "stat": "string",
+      "difficulty": 8,
+      "failure": "setback",
+      "abilityId": "",
+      "characterIds": [],
+      "itemId": ""
+    }
+  ],
+  "progress": [{ "characterId": "string", "tier": "minor" }]
 }
+
+Each action lists the stat check players will compare before someone performs it. stat is a campaign stat id. difficulty is 8, 10, 12, or 15. failure is setback, harm, or severe. abilityId is a skill id when that skill alone fits the action, otherwise "". characterIds lists characterId values who may take the action when the fiction limits who can; use [] when any in-scene character may try. itemId is an inventory id from Characters when only whoever carries that item may take the action; otherwise "".
 
 encounter, when you use one, is { "name": "string", "summary": "string" }. Otherwise null.
 check, when the outcome is uncertain, is:
@@ -77,5 +91,9 @@ Match encounter frequency. Do not start an encounter on every reply. When you se
 
 Do not change the objective, stats, wound boxes, or who has died. Do not set player characters against each other when PvP is off. Do not kill a named NPC when NPC mortality is off. Player characters are allies.
 
-When check is null, replace the scene actions with 3 to 8 short commands the party can take next. Action ids are lowercase slugs with hyphens only, no underscores (for example enter-cantina, not enter_cantina). Those actions must fit the moment you just created. When check is set, return an empty actions array.
+When check is null, replace the scene actions with 3 to 8 specific commands the party can take next. Labels name a concrete task at this place, not vague verbs like Explore, Look around, or Interact. Action ids are lowercase slugs with hyphens only, no underscores (for example read-job-board, not read_job_board). Every action includes stat, difficulty, and failure for the roll if a character attempts it and the outcome is still uncertain. Use characterIds when only some characters can physically or socially attempt it. Use itemId when only the character carrying that inventory item can attempt it. Do not list an action for characters who cannot attempt it. When check is set, return an empty actions array and an empty progress array.
+
+progress lists who earned experience from this resolved situation. tier is minor, notable, or major. Use minor for a small step, notable for a clear success, and major for a real advance on the objective. Use [] when nothing was achieved. Do not write an XP number. When check is set, progress is [].
+
+When intent.selectedAction is set and the outcome is still uncertain, check must use the same stat, difficulty, and failure as that action. abilityApplies is true only when selectedAction.abilityId matches one of the acting character's skills for that stat.
 `.trim();

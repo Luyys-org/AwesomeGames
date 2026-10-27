@@ -95,7 +95,7 @@ async function requestReaction(
   if (!response.ok) return { ok: false, error: response.error, content: response.error };
   const parsed = parseJsonContent(response.content);
   if (parsed === null) return { ok: false, error: "Response JSON must be an object.", content: response.content };
-  const read = readGmReaction(parsed, table, intent.characterId);
+  const read = readGmReaction(parsed, table, intent);
   if (!read.ok) return { ok: false, error: read.error, content: response.content };
   return { ok: true, value: read.value, content: response.content };
 }
