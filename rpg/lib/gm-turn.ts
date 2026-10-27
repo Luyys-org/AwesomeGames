@@ -15,6 +15,7 @@ import { applyProgress, readProgress, rewardLine, type ProgressGrant } from "@/r
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import {
   actionAbilityApplies,
+  snapDifficulty,
   validateSceneActions,
 } from "@/rpg/lib/scene-action";
 import {
@@ -565,7 +566,10 @@ function readCheck(value: unknown, table: TableState, actorId: string): Parsed<G
   if (typeof value.stat !== "string" || !options.stats.some((stat) => stat.id === value.stat)) {
     return { ok: false, error: "Check stat must be one of the campaign stats." };
   }
-  if (!isDifficulty(value.difficulty)) return { ok: false, error: "Check difficulty must be 8, 10, 12, or 15." };
+  if (typeof value.difficulty !== "number" || !Number.isFinite(value.difficulty)) {
+    return { ok: false, error: "Check difficulty must be 8, 10, 12, or 15." };
+  }
+  const difficulty = isDifficulty(value.difficulty) ? value.difficulty : snapDifficulty(value.difficulty);
   if (!isFailure(value.failure)) return { ok: false, error: "Check failure must be setback, harm, or severe." };
   if (typeof value.abilityApplies !== "boolean") {
     return { ok: false, error: "abilityApplies must be true or false." };
@@ -585,7 +589,7 @@ function readCheck(value: unknown, table: TableState, actorId: string): Parsed<G
     value: {
       characterId: actorId,
       stat: value.stat,
-      difficulty: value.difficulty,
+      difficulty,
       failure: value.failure,
       abilityApplies: value.abilityApplies,
       setup: truncate(value.setup, SETUP_MAX),
