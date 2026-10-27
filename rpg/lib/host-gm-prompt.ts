@@ -165,7 +165,7 @@ const GM_LIMITS = {
   weather: LOCATION_MAX,
   reputation: LOCATION_MAX,
   actionId: 32,
-  actionLabel: 48,
+  actionLabel: 72,
   actions: { min: 3, max: 8 },
   itemName: 80,
   carriedMax: CARRIED_MAX,
@@ -173,6 +173,10 @@ const GM_LIMITS = {
 
 function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolution): Record<string, unknown> {
   const loot = gmLootLimits(table.settings);
+  const selectedAction =
+    intent.kind === "act" && intent.actionId
+      ? (table.availableActions.find((entry) => entry.id === intent.actionId) ?? null)
+      : null;
   return {
     ...campaignVars(table.settings),
     situation: table.situation.slice(0, 800),
@@ -186,7 +190,7 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
     limits: { ...GM_LIMITS, currencyMax: loot.currencyMax, itemMax: loot.itemMax },
     characters: charactersForGm(table),
     transcript: transcriptForGm(table),
-    intent,
+    intent: { ...intent, selectedAction },
     resolution: resolution ?? null,
   };
 }
@@ -207,6 +211,7 @@ function charactersForGm(table: TableState) {
         wounds: character.wounds,
         currency: character.currency,
         inventory: character.inventory.map((item) => ({
+          id: item.id,
           name: item.name,
           slot: item.slot,
           equipped: item.equipped,

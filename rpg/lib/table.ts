@@ -21,6 +21,9 @@ import {
   type Wound,
 } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
+import { canPerformSceneAction, parseSceneActions } from "@/rpg/lib/scene-action";
+
+export { parseSceneActions } from "@/rpg/lib/scene-action";
 import {
   currencyRange,
   emptyInventory,
@@ -40,7 +43,14 @@ export const UNREADABLE_GM_RESULT = "The game master returned an unreadable resu
 
 export type TranscriptEntry =
   | { type: "situation"; scene: number; text: string }
-  | { type: "intent"; characterId: string; kind: "act" | "treat" | "speak"; text: string; failed?: boolean }
+  | {
+      type: "intent";
+      characterId: string;
+      kind: "act" | "treat" | "speak";
+      text: string;
+      actionId?: string;
+      failed?: boolean;
+    }
   | { type: "narration"; text: string }
   | { type: "check"; characterId: string; line: string }
   | { type: "wound"; characterId: string; wounds: Wound[] }
@@ -55,9 +65,22 @@ export function isGmErrorEntry(entry: TranscriptEntry): boolean {
   );
 }
 
+export type SceneActionDifficulty = 8 | 10 | 12 | 15;
+
+export type SceneActionFailure = "setback" | "harm" | "severe";
+
 export interface SceneAction {
   id: string;
   label: string;
+  stat: string;
+  difficulty: SceneActionDifficulty;
+  failure: SceneActionFailure;
+  /** Skill id when only that skill grants +2 on this action. */
+  abilityId?: string;
+  /** When set, only these in-scene characters may take the action. Omit for anyone eligible. */
+  characterIds?: string[];
+  /** When set, only the character carrying this inventory item may take the action. */
+  itemId?: string;
 }
 
 export interface TableState {
@@ -420,7 +443,12 @@ export function commitSceneAction(
 ): { ok: true; table: TableState } | { ok: false; error: string } {
   const action = table.availableActions.find((entry) => entry.id === actionId);
   if (!action) return { ok: false, error: "Choose an action." };
-  return commitIntent(table, characterId, "act", action.label, "Choose an action.");
+  const character = table.characters.find((entry) => entry.id === characterId);
+  if (!character) return { ok: false, error: "That character is not at the table." };
+  if (!canPerformSceneAction(character, action, table.characters)) {
+    return { ok: false, error: "That character cannot take that action." };
+  }
+  return commitIntent(table, characterId, "act", action.label, "Choose an action.", action.id);
 }
 
 function commitIntent(
@@ -429,6 +457,7 @@ function commitIntent(
   kind: "act" | "speak",
   text: string,
   empty: string,
+  actionId?: string,
 ): { ok: true; table: TableState } | { ok: false; error: string } {
   if (table.phase !== "play") return { ok: false, error: "The campaign has not started." };
   if (!table.loadoutReady) return { ok: false, error: "The game master is still preparing." };
@@ -447,6 +476,7 @@ function commitIntent(
     characterId,
     kind,
     text: trimmed,
+    ...(kind === "act" && actionId ? { actionId } : {}),
   };
 
   return {
@@ -641,22 +671,6 @@ function parseInventory(value: unknown, stats: StatDefinition[]): InventoryItem[
   return items;
 }
 
-export function parseSceneActions(value: unknown): SceneAction[] {
-  if (!Array.isArray(value)) return [];
-  const actions: SceneAction[] = [];
-  const seen = new Set<string>();
-  for (const entry of value) {
-    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.label !== "string") continue;
-    const id = entry.id.trim();
-    const label = entry.label.trim();
-    if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || seen.has(id)) continue;
-    if (label.length === 0 || label.length > 48) continue;
-    seen.add(id);
-    actions.push({ id, label });
-  }
-  return actions;
-}
-
 export function markLoadoutFailed(table: TableState): TableState {
   return {
     ...table,
@@ -710,6 +724,7 @@ function parseTranscriptEntry(value: unknown): TranscriptEntry | null {
       characterId: value.characterId,
       kind: value.kind,
       text: value.text,
+      ...(typeof value.actionId === "string" && value.actionId.length > 0 ? { actionId: value.actionId } : {}),
       ...(value.failed === true ? { failed: true } : {}),
     };
   }

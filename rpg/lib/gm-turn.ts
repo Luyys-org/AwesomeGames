@@ -11,8 +11,11 @@ import {
 import type { TableCharacter, Wound } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
 import {
+  actionAbilityApplies,
+  validateSceneActions,
+} from "@/rpg/lib/scene-action";
+import {
   isGmErrorEntry,
-  parseSceneActions,
   UNREADABLE_GM_RESULT,
   type SceneAction,
   type SceneLocation,
@@ -58,6 +61,7 @@ export interface GmIntent {
   characterName: string;
   kind: "speak" | "act";
   text: string;
+  actionId?: string;
 }
 
 export interface GmEncounter {
@@ -137,7 +141,12 @@ export function gmLootLimits(settings: CampaignSettings): { currencyMax: number;
   return { currencyMax: CURRENCY_MAX[currency], itemMax: ITEM_MAX[items] };
 }
 
-export function readGmReaction(value: unknown, table: TableState, actorId: string): Parsed<GmReaction> {
+export function readGmReaction(
+  value: unknown,
+  table: TableState,
+  intent: GmIntent,
+): Parsed<GmReaction> {
+  const actorId = intent.characterId;
   if (!isRecord(value)) return { ok: false, error: "Response JSON must be an object." };
   const check = readCheck(value.check, table, actorId);
   if (!check.ok) return check;
@@ -145,6 +154,10 @@ export function readGmReaction(value: unknown, table: TableState, actorId: strin
   if (!beat.ok) return beat;
   if (check.value && beat.value.loot.length > 0) {
     return { ok: false, error: "Leave loot empty when you call a check." };
+  }
+  if (intent.kind === "act" && intent.actionId && check.value) {
+    const matched = matchChosenActionCheck(table, intent, check.value);
+    if (!matched.ok) return matched;
   }
 
   const narration = narrationWithEncounter(beat.value.narration || check.value?.setup || "", beat.value.encounter);
@@ -325,7 +338,7 @@ function readBeat(value: unknown, table: TableState, actionsRequired: boolean): 
   if (!reputation.ok) return reputation;
   const loot = readLoot(value.loot, table);
   if (!loot.ok) return loot;
-  const actions = readActions(value.actions, actionsRequired);
+  const actions = readActions(value.actions, table, actionsRequired);
   if (!actions.ok) return actions;
 
   return {
@@ -441,11 +454,39 @@ function readGrant(
   };
 }
 
-function readActions(value: unknown, required: boolean): Parsed<SceneAction[]> {
+function readActions(value: unknown, table: TableState, required: boolean): Parsed<SceneAction[]> {
   if (!required) return { ok: true, value: [] };
-  const actions = parseSceneActions(value);
-  if (actions.length < 3 || actions.length > 8) return { ok: false, error: "Return 3 to 8 actions." };
-  return { ok: true, value: actions };
+  const actions = validateSceneActions(value, table);
+  if (!actions.ok) return actions;
+  if (actions.value.length < 3 || actions.value.length > 8) {
+    return { ok: false, error: "Return 3 to 8 actions." };
+  }
+  return actions;
+}
+
+function matchChosenActionCheck(
+  table: TableState,
+  intent: GmIntent,
+  check: GmCheckProposal,
+): Parsed<null> {
+  const action = table.availableActions.find((entry) => entry.id === intent.actionId);
+  if (!action) return { ok: true, value: null };
+  if (check.stat !== action.stat) {
+    return { ok: false, error: "Check stat must match the chosen action." };
+  }
+  if (check.difficulty !== action.difficulty) {
+    return { ok: false, error: "Check difficulty must match the chosen action." };
+  }
+  if (check.failure !== action.failure) {
+    return { ok: false, error: "Check failure must match the chosen action." };
+  }
+  const character = table.characters.find((entry) => entry.id === intent.characterId);
+  if (!character) return { ok: false, error: "The acting character cannot be checked." };
+  const expectedAbility = actionAbilityApplies(character, table.settings.characterOptions, action);
+  if (check.abilityApplies !== expectedAbility) {
+    return { ok: false, error: "abilityApplies must match the chosen action and acting character." };
+  }
+  return { ok: true, value: null };
 }
 
 function narrationWithEncounter(narration: string, encounter: GmEncounter | null): string {

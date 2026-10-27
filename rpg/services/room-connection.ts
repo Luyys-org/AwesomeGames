@@ -695,6 +695,7 @@ function queuedIntent(table: TableState): GmIntent | null {
       characterName: character?.name ?? "Someone",
       kind: entry.kind,
       text: entry.text,
+      ...(entry.actionId ? { actionId: entry.actionId } : {}),
     };
   }
   return null;

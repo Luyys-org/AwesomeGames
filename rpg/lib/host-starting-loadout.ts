@@ -19,7 +19,8 @@ import {
   type DraftInventoryItem,
   type DraftStartingKit,
 } from "@/rpg/lib/starting-kit";
-import { applyStartingLoadout, parseSceneActions, type SceneAction, type TableState } from "@/rpg/lib/table";
+import { validateSceneActions } from "@/rpg/lib/scene-action";
+import { applyStartingLoadout, type SceneAction, type TableState } from "@/rpg/lib/table";
 
 export async function generateStartingLoadout(
   table: TableState,
@@ -126,12 +127,13 @@ function readLoadout(
     return { ok: false, error: "Return one kit for each living character." };
   }
 
-  const actions = parseSceneActions(record.actions);
-  if (actions.length < 3 || actions.length > 8) {
+  const actions = validateSceneActions(record.actions, table);
+  if (!actions.ok) return actions;
+  if (actions.value.length < 3 || actions.value.length > 8) {
     return { ok: false, error: "Return 3 to 8 actions." };
   }
 
-  return { ok: true, kits, actions };
+  return { ok: true, kits, actions: actions.value };
 }
 
 function readKit(value: unknown, stats: StatDefinition[]): DraftStartingKit | null {
