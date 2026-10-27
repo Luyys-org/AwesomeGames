@@ -145,6 +145,12 @@ function readCharacter(
       ? Math.floor(value.currency)
       : 0,
     inventory: [],
+    level: typeof value.level === "number" && Number.isInteger(value.level) && value.level > 0 ? value.level : 1,
+    xp: typeof value.xp === "number" && Number.isFinite(value.xp) && value.xp >= 0 ? Math.min(1000, Math.floor(value.xp)) : 0,
+    pendingRewards:
+      typeof value.pendingRewards === "number" && Number.isInteger(value.pendingRewards) && value.pendingRewards > 0
+        ? value.pendingRewards
+        : 0,
   };
 }
 

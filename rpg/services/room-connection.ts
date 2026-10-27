@@ -3,6 +3,7 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
 import { markGmUnreadable, removeGmError, type GmIntent } from "@/rpg/lib/gm-turn";
+import { progressionRules } from "@/rpg/lib/progression";
 import { readHostAi } from "@/rpg/lib/host-ai";
 import { runGmTurn } from "@/rpg/lib/host-gm-turn";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
@@ -13,6 +14,7 @@ import {
   applyStartingLoadout,
   canStartCampaign,
   commitCharacter,
+  commitLevelReward,
   commitSceneAction,
   commitSetItemEquipped,
   commitSpeak,
@@ -68,6 +70,7 @@ export interface RoomView {
   availableActions: SceneAction[];
   loadoutReady: boolean;
   gmBusy: boolean;
+  statCeiling: number;
   scene: number | null;
   seat: RoomSeat | null;
   joiningCount: number;
@@ -297,6 +300,42 @@ export async function submitSetItemEquipped(itemId: string, equipped: boolean): 
   try {
     const response = await session.mesh.request(
       { type: "setItemEquipped", itemId, equipped },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
+export async function submitLevelReward(
+  choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string },
+): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result = commitLevelReward(session.table, session.seat.characterId, choice);
+    if (!result.ok) return result.error;
+    rememberTable(session, result.table);
+    try {
+      await broadcastSnapshot(session);
+    } catch {
+      // The saved table is sent with the next snapshot.
+    }
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      choice.kind === "stat"
+        ? { type: "levelReward", kind: "stat", statId: choice.statId }
+        : { type: "levelReward", kind: "skill", skillId: choice.skillId },
       { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
     );
     return applyActionResponse(session, response, "");
@@ -659,6 +698,23 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
   }
 
+  if (data.type === "levelReward" && session.table) {
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const choice =
+      data.kind === "stat" && typeof data.statId === "string"
+        ? { kind: "stat" as const, statId: data.statId }
+        : data.kind === "skill" && typeof data.skillId === "string"
+          ? { kind: "skill" as const, skillId: data.skillId }
+          : null;
+    if (!choice) return { ok: false };
+    const result = commitLevelReward(session.table, characterId, choice);
+    if (!result.ok) return { ok: false, error: result.error };
+    rememberTable(session, result.table);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
+  }
+
   if (data.type === "dismissGmError" && typeof data.index === "number" && session.table) {
     const next = removeGmError(session.table, data.index);
     if (!next) return { ok: false, error: "That message is already gone." };
@@ -1008,6 +1064,7 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     availableActions: source?.availableActions ?? table?.availableActions ?? [],
     loadoutReady: source?.loadoutReady ?? table?.loadoutReady ?? false,
     gmBusy: source?.gmBusy ?? table?.gmBusy ?? false,
+    statCeiling: source?.statCeiling ?? (table ? progressionRules(table.settings).statCeiling : 10),
     scene: source?.scene ?? table?.scene ?? null,
     seat: session.seat,
     joiningCount:

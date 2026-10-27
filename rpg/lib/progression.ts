@@ -125,7 +125,7 @@ function addExperience(
     level += 1;
     levelsGained += 1;
     const atMilestone = level % rules.milestone === 0;
-    if (atMilestone && levelRewardOptions({ ...character, level }, settings).length > 0) {
+    if (atMilestone && levelRewardOptions(character, settings).length > 0) {
       pending += 1;
     }
   }
@@ -138,7 +138,7 @@ function addExperience(
 }
 
 export function levelRewardOptions(
-  character: Pick<TableCharacter, "stats" | "abilityId" | "extraAbilityId" | "level">,
+  character: Pick<TableCharacter, "stats" | "abilityId" | "extraAbilityId">,
   settings: CampaignSettings,
 ): LevelRewardChoice[] {
   const rules = progressionRules(settings);
@@ -187,22 +187,23 @@ export function rewardLine(input: {
   currencyName?: string;
   items?: string[];
 }): string | null {
-  const parts: string[] = [];
-  if (input.xp && input.xp > 0) parts.push(`${input.xp} XP`);
-  if (input.levelsGained && input.levelsGained > 0 && input.level) {
-    parts.push(input.levelsGained === 1 ? `level ${input.level}` : `level ${input.level}`);
-  }
+  const gains: string[] = [];
+  if (input.xp && input.xp > 0) gains.push(`${input.xp} XP`);
   if (input.currency && input.currency > 0) {
-    parts.push(`${input.currency} ${input.currencyName ?? "currency"}`);
+    gains.push(`${input.currency} ${input.currencyName ?? "currency"}`);
   }
-  if (input.items && input.items.length > 0) parts.push(input.items.join(", "));
-  if (parts.length === 0) return null;
-  const gained = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
-  if (input.levelsGained && input.levelsGained > 0) {
-    return `${input.name} gains ${gained}.`.replace(
-      `level ${input.level}`,
-      `reaches level ${input.level}`,
-    );
+  if (input.items && input.items.length > 0) gains.push(input.items.join(", "));
+  const gained = joinList(gains);
+  if (input.levelsGained && input.levelsGained > 0 && input.level) {
+    const reached = `${input.name} reaches level ${input.level}`;
+    return gained ? `${reached} and gains ${gained}.` : `${reached}.`;
   }
+  if (!gained) return null;
   return `${input.name} gains ${gained}.`;
+}
+
+function joinList(parts: string[]): string {
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }

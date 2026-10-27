@@ -42,7 +42,7 @@ export async function callHostChat(
         },
         body: JSON.stringify({
           model: hostAi.model,
-          max_tokens: 1024,
+          max_tokens: 2048,
           temperature: options.temperature,
           system: options.system,
           messages: [{ role: "user", content: options.user }],
@@ -70,7 +70,7 @@ export async function callHostChat(
       body: JSON.stringify({
         model: hostAi.model,
         temperature: options.temperature,
-        max_tokens: 1024,
+        max_tokens: 2048,
         messages: [
           { role: "system", content: options.system },
           { role: "user", content: options.user },

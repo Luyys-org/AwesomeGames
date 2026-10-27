@@ -51,6 +51,9 @@ export interface TableCharacter {
   ready: boolean;
   currency: number;
   inventory: InventoryItem[];
+  level: number;
+  xp: number;
+  pendingRewards: number;
 }
 
 const NAME_PATTERN = /^[A-Za-z0-9 '\-]+$/;
@@ -127,6 +130,9 @@ export function addCharacter(
       ready: false,
       currency: 0,
       inventory: [],
+      level: 1,
+      xp: 0,
+      pendingRewards: 0,
     },
   };
 }

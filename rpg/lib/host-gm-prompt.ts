@@ -210,6 +210,9 @@ function charactersForGm(table: TableState) {
         inScene: character.inScene,
         wounds: character.wounds,
         currency: character.currency,
+        level: character.level > 0 ? character.level : 1,
+        xp: character.xp,
+        pendingRewards: character.pendingRewards,
         inventory: character.inventory.map((item) => ({
           id: item.id,
           name: item.name,
@@ -281,6 +284,7 @@ function transcriptLine(entry: TranscriptEntry, names: Map<string, string>): Rec
   }
   if (entry.type === "situation") return { type: "situation", text: entry.text };
   if (entry.type === "narration") return { type: "narration", text: entry.text };
+  if (entry.type === "reward") return { type: "reward", name: names.get(entry.characterId) ?? "Someone", text: entry.text };
   return { type: "system", text: entry.text };
 }
 

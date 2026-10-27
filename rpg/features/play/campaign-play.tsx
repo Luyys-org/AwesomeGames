@@ -9,6 +9,7 @@ import { useRoom } from "@/rpg/features/room/use-room";
 import { characterHp } from "@/rpg/lib/character";
 import { characterIdentity, type CharacterOptions } from "@/rpg/lib/character-options";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
+import { levelRewardOptionsForView, XP_PER_LEVEL } from "@/rpg/lib/progression";
 import {
   actionCheckPreview,
   canPerformSceneAction,
@@ -29,7 +30,7 @@ interface CampaignPlayProps {
 }
 
 export function CampaignPlay({ roomCode }: CampaignPlayProps) {
-  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped } = useRoom(roomCode);
+  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped, chooseLevelReward } = useRoom(roomCode);
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -79,6 +80,10 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
     }
   }, [actionId, actions]);
 
+  const rewardChoices =
+    character && view?.characterOptions
+      ? levelRewardOptionsForView(character, view.characterOptions, view.statCeiling || view.characterOptions.statCap)
+      : [];
   const playReady = view?.phase === "play" && view.loadoutReady;
   const gmBusy = view?.gmBusy === true;
   const controlsLocked = !character || away || down || actPending || !playReady || gmBusy;
@@ -141,6 +146,23 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
                   HP {characterHp(character.wounds).current}/{characterHp(character.wounds).max}
                 </span>
               </h1>
+              <p className="mt-1 text-sm text-zinc-300">Level {character.level}</p>
+              <div
+                className="mx-auto mt-2 h-1.5 w-40 bg-zinc-800"
+                role="meter"
+                aria-label="Experience"
+                aria-valuemin={0}
+                aria-valuemax={XP_PER_LEVEL}
+                aria-valuenow={character.xp}
+              >
+                <div
+                  className="h-full bg-[var(--primary)]"
+                  style={{ width: `${Math.min(100, (character.xp / XP_PER_LEVEL) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs tabular-nums text-zinc-500">
+                {character.xp} / {XP_PER_LEVEL}
+              </p>
               <p className="mt-1 text-sm text-zinc-400">
                 {[identity.race, identity.className].filter((part) => part.length > 0).join(" · ")}
               </p>
@@ -312,6 +334,15 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           onClose={() => setStatsOpen(false)}
         />
       ) : null}
+
+      {character && character.pendingRewards > 0 && rewardChoices.length > 0 ? (
+        <LevelRewardDialog
+          level={character.level}
+          pending={character.pendingRewards}
+          choices={rewardChoices}
+          onChoose={chooseLevelReward}
+        />
+      ) : null}
     </div>
   );
 }
@@ -369,6 +400,75 @@ function ActionCheckDetails({
 
 function formatSigned(value: number): string {
   return value >= 0 ? `+${value}` : String(value);
+}
+
+function LevelRewardDialog({
+  level,
+  pending,
+  choices,
+  onChoose,
+}: {
+  level: number;
+  pending: number;
+  choices: ReturnType<typeof levelRewardOptionsForView>;
+  onChoose: (choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string }) => Promise<string | null>;
+}) {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function choose(choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string }, id: string) {
+    if (pendingId !== null) return;
+    setPendingId(id);
+    setError(null);
+    void onChoose(choice).then((message) => {
+      setPendingId(null);
+      if (message) setError(message);
+    });
+  }
+
+  return (
+    <div className="overlay fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="level-reward-heading"
+        className="panel relative z-10 w-full max-w-md p-6"
+      >
+        <h2 id="level-reward-heading" className="text-xl font-semibold text-zinc-50">
+          Level {level} reward
+        </h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          {pending > 1 ? `${pending} rewards are waiting. Choose one.` : "Choose one reward."}
+        </p>
+        <div className="mt-4 space-y-2">
+          {choices.map((choice) => {
+            const id = choice.kind === "stat" ? choice.statId : choice.skillId;
+            return (
+              <button
+                key={`${choice.kind}-${id}`}
+                type="button"
+                className="btn btn-secondary w-full"
+                disabled={pendingId !== null}
+                onClick={() =>
+                  choose(choice.kind === "stat" ? { kind: "stat", statId: choice.statId } : { kind: "skill", skillId: choice.skillId }, id)
+                }
+              >
+                {choice.label}
+              </button>
+            );
+          })}
+        </div>
+        {choices.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-400">No reward is available at the current caps.</p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-4 text-sm text-red-200">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function BinIcon() {
@@ -541,6 +641,10 @@ function LogEntry({
         ) : null}
       </div>
     );
+  }
+
+  if (entry.type === "reward") {
+    return <p className="text-sm leading-relaxed text-zinc-300">{entry.text}</p>;
   }
 
   if (entry.type === "system") {

@@ -31,7 +31,8 @@ Reply with JSON only, matching this schema:
       "characterIds": [],
       "itemId": ""
     }
-  ]
+  ],
+  "progress": [{ "characterId": "string", "tier": "notable" }]
 }
 
 Limits:
@@ -68,5 +69,5 @@ Resolved check:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and narrate the resolved check. Do not contradict the line or the wounds. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty, failure, and ids using hyphens only, no underscores.
+Task: Fix the JSON and narrate the resolved check. Do not contradict the line or the wounds. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty, failure, and ids using hyphens only, no underscores. progress uses minor, notable, or major, or []. Do not write an XP number.
 `.trim();

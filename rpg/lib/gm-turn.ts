@@ -10,6 +10,8 @@ import {
 } from "@/rpg/lib/character-options";
 import type { TableCharacter, Wound } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
+import { applyProgress, readProgress, rewardLine, type ProgressGrant } from "@/rpg/lib/progression";
+import { currencyLabel } from "@/rpg/lib/starting-kit";
 import {
   actionAbilityApplies,
   validateSceneActions,
@@ -23,7 +25,7 @@ import {
   type TranscriptEntry,
 } from "@/rpg/lib/table";
 
-export const NARRATION_MAX = 600;
+export const NARRATION_MAX = 2400;
 export const SETUP_MAX = 280;
 export const LOCATION_MAX = 80;
 export const ENCOUNTER_NAME_MAX = 48;
@@ -99,6 +101,7 @@ export interface GmBeat {
   reputation: string;
   loot: GmLootGrant[];
   actions: SceneAction[];
+  progress: ProgressGrant[];
 }
 
 export interface GmReaction extends GmBeat {
@@ -155,6 +158,9 @@ export function readGmReaction(
   if (check.value && beat.value.loot.length > 0) {
     return { ok: false, error: "Leave loot empty when you call a check." };
   }
+  if (check.value && beat.value.progress.length > 0) {
+    return { ok: false, error: "Leave progress empty when you call a check." };
+  }
   if (intent.kind === "act" && intent.actionId && check.value) {
     const matched = matchChosenActionCheck(table, intent, check.value);
     if (!matched.ok) return matched;
@@ -190,8 +196,15 @@ export function applyResolvedBeat(
 ): { ok: true; table: TableState } | { ok: false; error: string } {
   const granted = grantLoot(table.characters, beat.loot);
   if (!granted.ok) return granted;
+  const progressed = applyProgress(granted.characters, beat.progress, table.settings);
   const narration = truncate(beat.narration, NARRATION_MAX);
   if (!narration) return { ok: false, error: "Narration must not be empty." };
+  const rewards = rewardEntries(
+    progressed.characters,
+    beat.loot,
+    progressed.gains,
+    currencyLabel(table.settings.universe),
+  );
 
   return {
     ok: true,
@@ -199,10 +212,10 @@ export function applyResolvedBeat(
       ...table,
       revision: table.revision + 1,
       gmBusy,
-      characters: granted.characters,
+      characters: progressed.characters,
       location: nextLocation(table.location, beat),
       availableActions: beat.actions.length > 0 ? beat.actions : table.availableActions,
-      transcript: [...table.transcript, { type: "narration", text: narration }],
+      transcript: [...table.transcript, { type: "narration", text: narration }, ...rewards],
     },
   };
 }
@@ -340,6 +353,8 @@ function readBeat(value: unknown, table: TableState, actionsRequired: boolean): 
   if (!loot.ok) return loot;
   const actions = readActions(value.actions, table, actionsRequired);
   if (!actions.ok) return actions;
+  const progress = readProgress(value.progress, table.characters);
+  if (!progress.ok) return progress;
 
   return {
     ok: true,
@@ -351,6 +366,7 @@ function readBeat(value: unknown, table: TableState, actionsRequired: boolean): 
       reputation: reputation.value,
       loot: loot.value,
       actions: actions.value,
+      progress: progress.value,
     },
   };
 }
@@ -649,6 +665,32 @@ function grantLoot(
     });
   }
   return { ok: true, characters: next };
+}
+
+function rewardEntries(
+  characters: TableCharacter[],
+  loot: GmLootGrant[],
+  gains: { characterId: string; xp: number; levelsGained: number; level: number }[],
+  currencyName: string,
+): TranscriptEntry[] {
+  const ids = [...new Set([...loot.map((grant) => grant.characterId), ...gains.map((gain) => gain.characterId)])];
+  const entries: TranscriptEntry[] = [];
+  for (const characterId of ids) {
+    const character = characters.find((entry) => entry.id === characterId);
+    const grant = loot.find((entry) => entry.characterId === characterId);
+    const gain = gains.find((entry) => entry.characterId === characterId);
+    const text = rewardLine({
+      name: character?.name ?? "Someone",
+      xp: gain?.xp,
+      levelsGained: gain?.levelsGained,
+      level: gain?.level,
+      currency: grant?.currency,
+      currencyName,
+      items: grant?.items.map((item) => item.name),
+    });
+    if (text) entries.push({ type: "reward", characterId, text });
+  }
+  return entries;
 }
 
 function nextLocation(current: SceneLocation, beat: Pick<GmBeat, "place" | "weather" | "reputation">): SceneLocation {

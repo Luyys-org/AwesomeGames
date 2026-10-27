@@ -11,6 +11,7 @@ import {
   submitCharacter,
   submitChosenAction,
   dismissGmError,
+  submitLevelReward,
   submitSetItemEquipped,
   submitClaim,
   submitReady,
@@ -40,5 +41,8 @@ export function useRoom(roomCode: string) {
     submitAction: (actionId: string) => submitChosenAction(actionId),
     dismissGmError: (index: number) => dismissGmError(index),
     setItemEquipped: (itemId: string, equipped: boolean) => submitSetItemEquipped(itemId, equipped),
+    chooseLevelReward: (
+      choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string },
+    ) => submitLevelReward(choice),
   };
 }

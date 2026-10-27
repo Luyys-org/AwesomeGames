@@ -22,6 +22,7 @@ import {
 } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
 import { canPerformSceneAction, parseSceneActions } from "@/rpg/lib/scene-action";
+import { levelRewardOptions, progressionRules } from "@/rpg/lib/progression";
 
 export { parseSceneActions } from "@/rpg/lib/scene-action";
 import {
@@ -56,7 +57,8 @@ export type TranscriptEntry =
   | { type: "wound"; characterId: string; wounds: Wound[] }
   | { type: "death"; characterId: string; penalty: CampaignSettings["deathPenalty"] }
   | { type: "system"; text: string }
-  | { type: "gm-error"; text: string };
+  | { type: "gm-error"; text: string }
+  | { type: "reward"; characterId: string; text: string };
 
 export function isGmErrorEntry(entry: TranscriptEntry): boolean {
   return (
@@ -116,6 +118,9 @@ export interface PublicCharacter {
   ready: boolean;
   currency: number;
   inventory: InventoryItem[];
+  level: number;
+  xp: number;
+  pendingRewards: number;
 }
 
 export interface TableSnapshot {
@@ -143,6 +148,7 @@ export interface TableSnapshot {
   availableActions: SceneAction[];
   loadoutReady: boolean;
   gmBusy: boolean;
+  statCeiling: number;
   openCheck: null;
   intentQueue: [];
 }
@@ -520,6 +526,7 @@ export function toSnapshot(table: TableState): TableSnapshot | null {
     availableActions: table.availableActions,
     loadoutReady: table.loadoutReady,
     gmBusy: table.gmBusy === true,
+    statCeiling: progressionRules(table.settings).statCeiling,
     openCheck: null,
     intentQueue: [],
   };
@@ -548,6 +555,12 @@ export function toPublicCharacter(character: TableCharacter): PublicCharacter {
           modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
         }))
       : [],
+    level: character.level > 0 ? character.level : 1,
+    xp: Number.isFinite(character.xp) && character.xp >= 0 ? Math.floor(character.xp) : 0,
+    pendingRewards:
+      Number.isFinite(character.pendingRewards) && character.pendingRewards > 0
+        ? Math.floor(character.pendingRewards)
+        : 0,
   };
 }
 
@@ -596,6 +609,7 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
     availableActions: parseSceneActions(value.availableActions),
     loadoutReady: value.loadoutReady === true,
     gmBusy: value.gmBusy === true,
+    statCeiling: readStatCeiling(value.statCeiling, characterOptions.statCap),
     openCheck: null,
     intentQueue: [],
   };
@@ -639,6 +653,9 @@ function parsePublicCharacter(value: unknown, options: CharacterOptions): Public
     ready: value.ready === true,
     currency: readCurrency(value.currency),
     inventory: parseInventory(value.inventory, options.stats),
+    level: readLevel(value.level),
+    xp: readXp(value.xp),
+    pendingRewards: readPendingRewards(value.pendingRewards),
   };
 }
 
@@ -651,6 +668,68 @@ function readTraitId(value: unknown, traits: { id: string }[]): string | null {
 function readCurrency(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return 0;
   return Math.floor(value);
+}
+
+function readLevel(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) return 1;
+  return value;
+}
+
+function readXp(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return 0;
+  return Math.min(1000, Math.floor(value));
+}
+
+function readPendingRewards(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return 0;
+  return value;
+}
+
+function readStatCeiling(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) return fallback;
+  return value;
+}
+
+export function commitLevelReward(
+  table: TableState,
+  characterId: string,
+  choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string },
+): { ok: true; table: TableState } | { ok: false; error: string } {
+  const character = table.characters.find((entry) => entry.id === characterId);
+  if (!character || character.archived) return { ok: false, error: "That character is not at the table." };
+  if (character.pendingRewards < 1) return { ok: false, error: "That character has no level reward to choose." };
+  const options = levelRewardOptions(character, table.settings);
+  const match =
+    choice.kind === "stat"
+      ? options.find((entry) => entry.kind === "stat" && entry.statId === choice.statId)
+      : options.find((entry) => entry.kind === "skill" && entry.skillId === choice.skillId);
+  if (!match) return { ok: false, error: "Choose a reward from the list." };
+
+  const nextCharacter: TableCharacter =
+    match.kind === "stat"
+      ? {
+          ...character,
+          pendingRewards: character.pendingRewards - 1,
+          stats: { ...character.stats, [match.statId]: (character.stats[match.statId] ?? 0) + 1 },
+        }
+      : {
+          ...character,
+          pendingRewards: character.pendingRewards - 1,
+          extraAbilityId: match.skillId,
+        };
+
+  return {
+    ok: true,
+    table: {
+      ...table,
+      revision: table.revision + 1,
+      characters: table.characters.map((entry) => (entry.id === character.id ? nextCharacter : entry)),
+      transcript: [
+        ...table.transcript,
+        { type: "reward", characterId: character.id, text: `${character.name} chooses ${match.label}.` },
+      ],
+    },
+  };
 }
 
 function parseInventory(value: unknown, stats: StatDefinition[]): InventoryItem[] {
@@ -751,6 +830,9 @@ function parseTranscriptEntry(value: unknown): TranscriptEntry | null {
   }
   if (value.type === "gm-error" && typeof value.text === "string") {
     return { type: "gm-error", text: value.text };
+  }
+  if (value.type === "reward" && typeof value.characterId === "string" && typeof value.text === "string") {
+    return { type: "reward", characterId: value.characterId, text: value.text };
   }
   return null;
 }
