@@ -1,0 +1,19 @@
+{
+  "8": "RoomMemberView",
+  "10": "host-save.ts",
+  "13": "table.ts",
+  "23": "rules.test.ts",
+  "25": "campaign-settings.ts",
+  "28": "game-state.ts",
+  "34": "campaign-tab-config.ts",
+  "36": "new-campaign-form.tsx",
+  "38": "use-game-page.ts",
+  "41": "package.json",
+  "44": "room-chat-panel.tsx",
+  "46": "leaders/app/page.tsx",
+  "61": "RoomConnectionError",
+  "68": "game-view-model.ts",
+  "73": "dashboard-page.tsx",
+  "78": "character-tab-config.ts",
+  "80": "turn.ts"
+}

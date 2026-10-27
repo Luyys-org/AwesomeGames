@@ -1,9 +1,26 @@
 import {
+  legacyEnemyDifficultyFromConfig,
+  legacyLootRarityFromConfig,
+  legacyPlayerFreedomFromConfig,
+  type CampaignConfiguration,
+  type CampaignConfigurationInput,
+  validateCampaignConfiguration,
+} from "@/rpg/lib/campaign-tab-config";
+import {
+  legacyDeathPenaltyFromRecovery,
+  type CharacterConfiguration,
+  type CharacterConfigurationInput,
+  validateCharacterConfiguration,
+} from "@/rpg/lib/character-tab-config";
+import {
   resolveCharacterOptions,
   type CharacterOptions,
   type CharacterOptionsDraft,
 } from "@/rpg/lib/character-options";
 import { readUniversePreset } from "@/rpg/lib/universe-preset-cache";
+
+export type { CampaignConfiguration, CampaignConfigurationInput } from "@/rpg/lib/campaign-tab-config";
+export type { CharacterConfiguration, CharacterConfigurationInput } from "@/rpg/lib/character-tab-config";
 
 export type UniverseId = "star-wars" | "dungeons-and-dragons" | "alien" | "custom";
 
@@ -37,6 +54,10 @@ export interface CampaignSettings {
   enemyDifficulty: EnemyDifficultyId;
   lootRarity: LootRarityId;
   playerFreedom: PlayerFreedomId;
+  /** Present on campaigns created with the expanded campaign tab; omitted on older saves. */
+  campaignConfiguration?: CampaignConfiguration;
+  /** Present on campaigns created with the expanded character tab; omitted on older saves. */
+  characterConfiguration?: CharacterConfiguration;
 }
 
 export interface CampaignSettingsInput {
@@ -44,12 +65,9 @@ export interface CampaignSettingsInput {
   universe: string;
   universeLabel: string;
   universeType: string;
-  playerCount: string;
   objective: string;
-  deathPenalty: string;
-  enemyDifficulty: string;
-  lootRarity: string;
-  playerFreedom: string;
+  campaignConfiguration: CampaignConfigurationInput;
+  characterConfiguration: CharacterConfigurationInput;
 }
 
 export interface UniversePreset {
@@ -237,6 +255,17 @@ function readUniverseStep(input: CampaignSettingsInput): Check<{
   };
 }
 
+function optionsDraftWithPools(
+  draft: CharacterOptionsDraft,
+  config: CharacterConfigurationInput,
+): CharacterOptionsDraft {
+  return {
+    ...draft,
+    statPool: config.pointPool,
+    statCap: config.pointCapPerAbility,
+  };
+}
+
 function readCharacterStep(
   input: CampaignSettingsInput,
   optionsDraft: CharacterOptionsDraft,
@@ -244,25 +273,32 @@ function readCharacterStep(
   playerCount: number;
   deathPenalty: DeathPenaltyId;
   characterOptions: CharacterOptions;
+  characterConfiguration: CharacterConfiguration;
 }> {
-  if (!PLAYER_COUNTS.some((count) => String(count) === input.playerCount)) {
-    return { ok: false, error: "Choose the number of players." };
-  }
+  const characterConfiguration = validateCharacterConfiguration(input.characterConfiguration);
+  if (!characterConfiguration.ok) return characterConfiguration;
 
-  const deathPenalty = readChoice(input.deathPenalty, DEATH_PENALTIES, "Choose a death penalty.");
-  if (!deathPenalty.ok) return deathPenalty;
-
-  const characterOptions = resolveCharacterOptions(input.universe, optionsDraft);
+  const config = characterConfiguration.value;
+  const mergedDraft = optionsDraftWithPools(optionsDraft, input.characterConfiguration);
+  const characterOptions = resolveCharacterOptions(input.universe, mergedDraft);
   if (!characterOptions.ok) return characterOptions;
 
   return {
     ok: true,
     value: {
-      playerCount: Number(input.playerCount),
-      deathPenalty: deathPenalty.value,
+      playerCount: config.playerCount,
+      deathPenalty: legacyDeathPenaltyFromRecovery(config.deathRecovery),
       characterOptions: characterOptions.value,
+      characterConfiguration: config,
     },
   };
+}
+
+function readMultiline(value: string, empty: string, tooLong: string, max: number): Check<string> {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return { ok: false, error: empty };
+  if (trimmed.length > max) return { ok: false, error: tooLong };
+  return { ok: true, value: trimmed };
 }
 
 function readGameStep(input: CampaignSettingsInput): Check<{
@@ -270,40 +306,29 @@ function readGameStep(input: CampaignSettingsInput): Check<{
   enemyDifficulty: EnemyDifficultyId;
   lootRarity: LootRarityId;
   playerFreedom: PlayerFreedomId;
+  campaignConfiguration: CampaignConfiguration;
 }> {
-  const objective = readTrimmed(
+  const objective = readMultiline(
     input.objective,
     "Enter an objective.",
-    "Objective cannot contain line breaks.",
-    "Objective must be 280 characters or fewer.",
-    280,
+    "Objective must be 2000 characters or fewer.",
+    2000,
   );
   if (!objective.ok) return objective;
 
-  const enemyDifficulty = readChoice(
-    input.enemyDifficulty,
-    ENEMY_DIFFICULTIES,
-    "Choose an enemy difficulty.",
-  );
-  if (!enemyDifficulty.ok) return enemyDifficulty;
+  const campaignConfiguration = validateCampaignConfiguration(input.campaignConfiguration);
+  if (!campaignConfiguration.ok) return campaignConfiguration;
 
-  const lootRarity = readChoice(input.lootRarity, LOOT_RARITIES, "Choose a loot rarity.");
-  if (!lootRarity.ok) return lootRarity;
-
-  const playerFreedom = readChoice(
-    input.playerFreedom,
-    PLAYER_FREEDOMS,
-    "Choose how free the players are.",
-  );
-  if (!playerFreedom.ok) return playerFreedom;
+  const config = campaignConfiguration.value;
 
   return {
     ok: true,
     value: {
       objective: objective.value,
-      enemyDifficulty: enemyDifficulty.value,
-      lootRarity: lootRarity.value,
-      playerFreedom: playerFreedom.value,
+      enemyDifficulty: legacyEnemyDifficultyFromConfig(config.enemyDifficulty),
+      lootRarity: legacyLootRarityFromConfig(config.lootRarity),
+      playerFreedom: legacyPlayerFreedomFromConfig(config.playerFreedom),
+      campaignConfiguration: config,
     },
   };
 }
@@ -317,6 +342,7 @@ function readCampaignStep(input: CampaignSettingsInput): Check<{
   enemyDifficulty: EnemyDifficultyId;
   lootRarity: LootRarityId;
   playerFreedom: PlayerFreedomId;
+  campaignConfiguration: CampaignConfiguration;
 }> {
   const universe = readUniverseStep(input);
   if (!universe.ok) return universe;
@@ -376,6 +402,8 @@ export function validateCampaignSettings(
       enemyDifficulty: game.value.enemyDifficulty,
       lootRarity: game.value.lootRarity,
       playerFreedom: game.value.playerFreedom,
+      campaignConfiguration: game.value.campaignConfiguration,
+      characterConfiguration: character.value.characterConfiguration,
     },
   };
 }

@@ -29,59 +29,94 @@ interface TeamOptionsProps {
   draft: CharacterOptionsDraft;
   onChange: (update: (draft: CharacterOptionsDraft) => CharacterOptionsDraft) => void;
   nextId: (prefix: string) => string;
+  hidePoolFields?: boolean;
+  hideHeader?: boolean;
+  abilitiesTitle?: string;
+  statsTitle?: string;
+  classesTitle?: string;
+  racesTitle?: string;
 }
 
-export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsProps) {
+export function TeamOptions({
+  universe,
+  draft,
+  onChange,
+  nextId,
+  hidePoolFields = false,
+  hideHeader = false,
+  abilitiesTitle = "Skills",
+  statsTitle = "Stats",
+  classesTitle = "Classes",
+  racesTitle = "Races",
+}: TeamOptionsProps) {
   const preset = characterOptionsFor(universe);
-  if (preset) return <LockedOptions options={preset} />;
+  if (preset) {
+    return (
+      <LockedOptions
+        options={preset}
+        hidePoolFields={hidePoolFields}
+        hideHeader={hideHeader}
+        abilitiesTitle={abilitiesTitle}
+        statsTitle={statsTitle}
+        classesTitle={classesTitle}
+        racesTitle={racesTitle}
+      />
+    );
+  }
   if (universe !== "custom") return null;
 
   return (
-    <section className="space-y-4 border-t border-[var(--border)] pt-4" aria-labelledby="character-options-heading">
-      <div>
-        <h3 id="character-options-heading" className="text-base font-semibold text-zinc-50">
-          Character creation
-        </h3>
-        <p className="mt-1 text-sm text-zinc-400">
-          Players choose one class, one race, and one skill, then assign stats from the pool.
-          Bonuses change that stat or the roll.
-        </p>
-      </div>
+    <section className="space-y-4" aria-labelledby={hideHeader ? undefined : "character-options-heading"}>
+      {hideHeader ? null : (
+        <div>
+          <h3 id="character-options-heading" className="text-base font-semibold text-zinc-50">
+            Character creation
+          </h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Players choose one class, one race, and one skill, then assign stats from the pool.
+            Bonuses change that stat or the roll.
+          </p>
+        </div>
+      )}
 
-      <label className="block text-sm text-zinc-300" htmlFor="stat-pool">
-        Point pool
-        <input
-          id="stat-pool"
-          type="number"
-          required
-          min={1}
-          max={12}
-          inputMode="numeric"
-          value={draft.statPool}
-          onChange={(event) => onChange((current) => withStatPool(current, event.target.value))}
-          className="field mt-1 w-full"
-        />
-      </label>
-      <p className="text-sm text-zinc-400">The most points a player can assign across all stats.</p>
+      {hidePoolFields ? null : (
+        <>
+          <label className="block text-sm text-zinc-300" htmlFor="stat-pool">
+            Point pool
+            <input
+              id="stat-pool"
+              type="number"
+              required
+              min={1}
+              max={12}
+              inputMode="numeric"
+              value={draft.statPool}
+              onChange={(event) => onChange((current) => withStatPool(current, event.target.value))}
+              className="field mt-1 w-full"
+            />
+          </label>
+          <p className="text-sm text-zinc-400">The most points a player can assign across all stats.</p>
 
-      <label className="block text-sm text-zinc-300" htmlFor="stat-cap">
-        Point cap
-        <input
-          id="stat-cap"
-          type="number"
-          required
-          min={1}
-          max={12}
-          inputMode="numeric"
-          value={draft.statCap}
-          onChange={(event) => onChange((current) => withStatCap(current, event.target.value))}
-          className="field mt-1 w-full"
-        />
-      </label>
-      <p className="text-sm text-zinc-400">The most points a player can assign to one stat.</p>
+          <label className="block text-sm text-zinc-300" htmlFor="stat-cap">
+            Point cap
+            <input
+              id="stat-cap"
+              type="number"
+              required
+              min={1}
+              max={12}
+              inputMode="numeric"
+              value={draft.statCap}
+              onChange={(event) => onChange((current) => withStatCap(current, event.target.value))}
+              className="field mt-1 w-full"
+            />
+          </label>
+          <p className="text-sm text-zinc-400">The most points a player can assign to one stat.</p>
+        </>
+      )}
 
       <OptionList
-        title="Stats"
+        title={statsTitle}
         detail="Players assign these on character creation."
         empty="No stats yet."
         addLabel="Add stat"
@@ -115,7 +150,7 @@ export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsPr
       </OptionList>
 
       <OptionList
-        title="Classes"
+        title={classesTitle}
         detail="Players choose one."
         empty="No classes yet."
         addLabel="Add class"
@@ -134,7 +169,7 @@ export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsPr
       </OptionList>
 
       <OptionList
-        title="Races"
+        title={racesTitle}
         detail="Players choose one."
         empty="No races yet."
         addLabel="Add race"
@@ -153,10 +188,10 @@ export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsPr
       </OptionList>
 
       <OptionList
-        title="Skills"
-        detail="Players choose one. A matching skill adds +2 to that stat's roll."
-        empty="No skills yet."
-        addLabel="Add skill"
+        title={abilitiesTitle}
+        detail="Players choose one. A matching ability adds +2 to that stat's roll."
+        empty={`No ${abilitiesTitle.toLowerCase()} yet.`}
+        addLabel={`Add ${abilitiesTitle === "Abilities" ? "ability" : "skill"}`}
         onAdd={() => onChange((current) => withSkill(current, nextId("skill")))}
       >
         {draft.skills.map((skill) => (
@@ -218,42 +253,64 @@ export function TeamOptions({ universe, draft, onChange, nextId }: TeamOptionsPr
   );
 }
 
-function LockedOptions({ options }: { options: CharacterOptions }) {
+function LockedOptions({
+  options,
+  hidePoolFields = false,
+  hideHeader = false,
+  abilitiesTitle = "Skills",
+  statsTitle = "Stats",
+  classesTitle = "Classes",
+  racesTitle = "Races",
+}: {
+  options: CharacterOptions;
+  hidePoolFields?: boolean;
+  hideHeader?: boolean;
+  abilitiesTitle?: string;
+  statsTitle?: string;
+  classesTitle?: string;
+  racesTitle?: string;
+}) {
   const classAssigned = options.assignment === "class";
   return (
-    <section className="space-y-4 border-t border-[var(--border)] pt-4" aria-labelledby="character-options-heading">
-      <div>
-        <h3 id="character-options-heading" className="text-base font-semibold text-zinc-50">
-          Character creation
-        </h3>
-        <p className="mt-1 text-sm text-zinc-400">
-          {classAssigned
-            ? "Players choose one class, one race, and one skill. The class sets the stats. These stay with the universe."
-            : "Players choose one class, one race, and one skill, then assign the stats. These stay with the universe. A custom universe can change them."}
-        </p>
-      </div>
+    <section className="space-y-4" aria-labelledby={hideHeader ? undefined : "character-options-heading"}>
+      {hideHeader ? null : (
+        <div>
+          <h3 id="character-options-heading" className="text-base font-semibold text-zinc-50">
+            Character creation
+          </h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            {classAssigned
+              ? "Players choose one class, one race, and one skill. The class sets the stats. These stay with the universe."
+              : "Players choose one class, one race, and one skill, then assign the stats. These stay with the universe. A custom universe can change them."}
+          </p>
+        </div>
+      )}
 
-      <div>
-        <p className="text-sm text-zinc-300">Point pool</p>
-        <p className="mt-1 text-sm text-zinc-50">{options.statPool}</p>
-        <p className="mt-1 text-sm text-zinc-400">
-          {classAssigned
-            ? "The points already assigned by each class."
-            : "The most points a player can assign across all stats."}
-        </p>
-      </div>
-      <div>
-        <p className="text-sm text-zinc-300">Point cap</p>
-        <p className="mt-1 text-sm text-zinc-50">{options.statCap}</p>
-        <p className="mt-1 text-sm text-zinc-400">
-          {classAssigned
-            ? "The most points a class can put on one stat."
-            : "The most points a player can assign to one stat."}
-        </p>
-      </div>
+      {hidePoolFields ? null : (
+        <>
+          <div>
+            <p className="text-sm text-zinc-300">Point pool</p>
+            <p className="mt-1 text-sm text-zinc-50">{options.statPool}</p>
+            <p className="mt-1 text-sm text-zinc-400">
+              {classAssigned
+                ? "The points already assigned by each class."
+                : "The most points a player can assign across all stats."}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-zinc-300">Point cap</p>
+            <p className="mt-1 text-sm text-zinc-50">{options.statCap}</p>
+            <p className="mt-1 text-sm text-zinc-400">
+              {classAssigned
+                ? "The most points a class can put on one stat."
+                : "The most points a player can assign to one stat."}
+            </p>
+          </div>
+        </>
+      )}
 
       <LockedList
-        title="Stats"
+        title={statsTitle}
         detail={
           classAssigned
             ? "Each class sets these. The note is what the stat covers."
@@ -268,10 +325,13 @@ function LockedOptions({ options }: { options: CharacterOptions }) {
         ))}
       </LockedList>
 
-      <LockedTraits title="Classes" detail="Players choose one." traits={options.classes} options={options} />
-      <LockedTraits title="Races" detail="Players choose one." traits={options.races} options={options} />
+      <LockedTraits title={classesTitle} detail="Players choose one." traits={options.classes} options={options} />
+      <LockedTraits title={racesTitle} detail="Players choose one." traits={options.races} options={options} />
 
-      <LockedList title="Skills" detail="Players choose one. A matching skill adds +2 to that stat's roll.">
+      <LockedList
+        title={abilitiesTitle}
+        detail="Players choose one. A matching ability adds +2 to that stat's roll."
+      >
         {options.skills.map((skill) => (
           <li key={skill.id} className="border-t border-[var(--border)] py-2 text-sm first:border-t-0">
             <span className="text-zinc-200">{skill.label}.</span>{" "}

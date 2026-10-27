@@ -1,31 +1,855 @@
 "use client";
 
-import {
-  CAMPAIGN_STEPS,
-  DEATH_PENALTIES,
-  ENEMY_DIFFICULTIES,
-  LOOT_RARITIES,
-  PLAYER_COUNTS,
-  PLAYER_FREEDOMS,
-  UNIVERSES,
-  UNIVERSE_TYPES,
-  universePreset,
-} from "@/rpg/lib/campaign-settings";
+import type { ReactNode } from "react";
+
 import { TeamOptions } from "@/rpg/features/campaign/team-options";
 import { useNewCampaign } from "@/rpg/features/campaign/use-new-campaign";
+import {
+  CAMPAIGN_STEPS,
+  UNIVERSES,
+  UNIVERSE_TYPES,
+} from "@/rpg/lib/campaign-settings";
+import {
+  BOSS_DIFFICULTIES,
+  CAMPAIGN_TAGS,
+  MISSION_FAILURE_IMPACTS,
+  REPUTATION_TRACKING_OPTIONS,
+  SETTING_LEVELS,
+  type CampaignConfigurationInput,
+} from "@/rpg/lib/campaign-tab-config";
+import {
+  DEATH_RECOVERY_OPTIONS,
+  EQUIPMENT_VALIDATION_RULES,
+  type CharacterConfigurationInput,
+} from "@/rpg/lib/character-tab-config";
 
 const STEP_LEADS = [
-  "Universe, objective, opposition, gear, and how free players are in the fiction.",
-  "Party size, death penalty, and character options for a custom universe.",
+  "Universe, narrative context, challenge tuning, rewards, exploration, and house rules for the AI game master.",
+  "Party size, creation rules, statistics, equipment, and morality settings for player characters.",
 ];
+
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-4 border-t border-zinc-800 pt-6 first:border-t-0 first:pt-0">
+      <h3 className="text-sm font-medium text-zinc-200">{title}</h3>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function FieldDescription({ children }: { children: ReactNode }) {
+  return <p className="mt-1 text-sm text-zinc-500">{children}</p>;
+}
+
+function TextField({
+  id,
+  label,
+  description,
+  value,
+  onChange,
+  required,
+  maxLength,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  maxLength?: number;
+}) {
+  return (
+    <div>
+      <label className="block text-sm text-zinc-300" htmlFor={id}>
+        {label}
+      </label>
+      <FieldDescription>{description}</FieldDescription>
+      <input
+        id={id}
+        type="text"
+        required={required}
+        maxLength={maxLength}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="field mt-2 w-full"
+      />
+    </div>
+  );
+}
+
+function TextAreaField({
+  id,
+  label,
+  description,
+  value,
+  onChange,
+  required,
+  maxLength,
+  rows = 4,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  maxLength?: number;
+  rows?: number;
+}) {
+  return (
+    <div>
+      <label className="block text-sm text-zinc-300" htmlFor={id}>
+        {label}
+      </label>
+      <FieldDescription>{description}</FieldDescription>
+      <textarea
+        id={id}
+        required={required}
+        maxLength={maxLength}
+        rows={rows}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="field mt-2 w-full resize-y"
+      />
+    </div>
+  );
+}
+
+function SelectField<K extends string>({
+  id,
+  label,
+  description,
+  value,
+  onChange,
+  required,
+  placeholder,
+  options,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  value: K | "";
+  onChange: (value: K) => void;
+  required?: boolean;
+  placeholder: string;
+  options: { id: K; label: string }[];
+}) {
+  return (
+    <div>
+      <label className="block text-sm text-zinc-300" htmlFor={id}>
+        {label}
+      </label>
+      <FieldDescription>{description}</FieldDescription>
+      <select
+        id={id}
+        required={required}
+        value={value}
+        onChange={(event) => onChange(event.target.value as K)}
+        className="field mt-2 w-full"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((entry) => (
+          <option key={entry.id} value={entry.id}>
+            {entry.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function CheckboxField({
+  id,
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex gap-3">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-1 size-4 shrink-0 rounded border-zinc-600 bg-zinc-900"
+      />
+      <div>
+        <label className="block text-sm text-zinc-300" htmlFor={id}>
+          {label}
+        </label>
+        <FieldDescription>{description}</FieldDescription>
+      </div>
+    </div>
+  );
+}
+
+function NumberField({
+  id,
+  label,
+  description,
+  value,
+  onChange,
+  required,
+  min = 1,
+  max,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  min?: number;
+  max?: number;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-sm text-zinc-300" htmlFor={id}>
+        {label}
+      </label>
+      <FieldDescription>{description}</FieldDescription>
+      <input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        step={1}
+        required={required}
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="field mt-2 w-full"
+      />
+    </div>
+  );
+}
+
+function CampaignTabPanel({
+  campaign,
+}: {
+  campaign: ReturnType<typeof useNewCampaign>;
+}) {
+  const config = campaign.campaignConfiguration;
+  const patch = (fields: Partial<CampaignConfigurationInput>) => campaign.patchConfiguration(fields);
+
+  return (
+    <div className="space-y-2">
+      <FormSection title="Basic Information">
+        <TextField
+          id="campaign-name"
+          label="Campaign name"
+          description="For display purpose only."
+          value={campaign.campaignName}
+          onChange={campaign.setCampaignName}
+          required
+          maxLength={60}
+        />
+
+        {campaign.presetsStatus === "loading" ? (
+          <p className="text-sm text-zinc-400">Loading universes.</p>
+        ) : null}
+        {campaign.presetsStatus === "failed" ? (
+          <p className="text-sm text-zinc-400">Preset universes could not be loaded.</p>
+        ) : null}
+
+        <div>
+          <label className="block text-sm text-zinc-300" htmlFor="universe">
+            Universe
+          </label>
+          <FieldDescription>To prefill entries for a faster startup.</FieldDescription>
+          <select
+            id="universe"
+            required
+            disabled={campaign.presetsStatus === "loading"}
+            value={campaign.universe}
+            onChange={(event) => campaign.selectUniverse(event.target.value)}
+            className="field mt-2 w-full"
+          >
+            <option value="">Choose a universe</option>
+            {UNIVERSES.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {campaign.universe === "custom" ? (
+          <>
+            <TextField
+              id="universe-name"
+              label="Universe name"
+              description="Display name for your custom universe."
+              value={campaign.universeLabel}
+              onChange={campaign.setUniverseLabel}
+              required
+              maxLength={40}
+            />
+            <div>
+              <label className="block text-sm text-zinc-300" htmlFor="universe-type">
+                Universe type
+              </label>
+              <FieldDescription>Genre framing for generated fiction.</FieldDescription>
+              <select
+                id="universe-type"
+                required
+                value={campaign.universeType}
+                onChange={(event) => campaign.setUniverseType(event.target.value)}
+                className="field mt-2 w-full"
+              >
+                <option value="">Choose a type</option>
+                {UNIVERSE_TYPES.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        ) : null}
+
+        <TextAreaField
+          id="short-description"
+          label="Short description"
+          description="For agent context, when generating encounters, events, loots, etc."
+          value={config.shortDescription}
+          onChange={(value) => patch({ shortDescription: value })}
+          required
+          maxLength={2000}
+        />
+
+        <TextAreaField
+          id="objective"
+          label="Objective"
+          description="For agent context on main quest, to keep it focused on objectives to give to the players."
+          value={campaign.objective}
+          onChange={campaign.setObjective}
+          required
+          maxLength={2000}
+        />
+
+        <fieldset>
+          <legend className="block text-sm text-zinc-300">Campaign tags</legend>
+          <FieldDescription>
+            For agent context when generating events and to focus specific syntax on text generation.
+          </FieldDescription>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {CAMPAIGN_TAGS.map((entry) => {
+              const checked = config.campaignTags.includes(entry.id);
+              return (
+                <label key={entry.id} className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) =>
+                      campaign.toggleCampaignTag(entry.id, event.target.checked)
+                    }
+                    className="size-4 rounded border-zinc-600 bg-zinc-900"
+                  />
+                  {entry.label}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <TextAreaField
+          id="gm-notes"
+          label="GM notes"
+          description="For agent context, to give any relevant information that is not included in the previous fields."
+          value={config.gmNotes}
+          onChange={(value) => patch({ gmNotes: value })}
+          required
+          maxLength={4000}
+          rows={5}
+        />
+      </FormSection>
+
+      <FormSection title="Difficulty & Challenge">
+        <SelectField
+          id="enemy-difficulty"
+          label="Enemy difficulty"
+          description="Enemies global stats (HP, armor, abilities, etc.)."
+          value={config.enemyDifficulty}
+          onChange={(value) => patch({ enemyDifficulty: value })}
+          required
+          placeholder="Choose enemy difficulty"
+          options={BOSS_DIFFICULTIES}
+        />
+        <SelectField
+          id="boss-difficulty"
+          label="Boss difficulty"
+          description="Bosses global stats (HP, armor, abilities, etc.)."
+          value={config.bossDifficulty}
+          onChange={(value) => patch({ bossDifficulty: value })}
+          required
+          placeholder="Choose boss difficulty"
+          options={BOSS_DIFFICULTIES}
+        />
+        <SelectField
+          id="encounter-frequency"
+          label="Encounter frequency"
+          description="How frequently players encounter enemies or bosses."
+          value={config.encounterFrequency}
+          onChange={(value) => patch({ encounterFrequency: value })}
+          required
+          placeholder="Choose encounter frequency"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="healing-availability"
+          label="Healing availability"
+          description="How easy it is to find healing items."
+          value={config.healingAvailability}
+          onChange={(value) => patch({ healingAvailability: value })}
+          required
+          placeholder="Choose healing availability"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="resurrection-availability"
+          label="Resurrection availability"
+          description="How easy it is to resurrect dead allies."
+          value={config.resurrectionAvailability}
+          onChange={(value) => patch({ resurrectionAvailability: value })}
+          required
+          placeholder="Choose resurrection availability"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="investigation-difficulty"
+          label="Investigation difficulty"
+          description="How easy it is to investigate and succeed in ability-based events."
+          value={config.investigationDifficulty}
+          onChange={(value) => patch({ investigationDifficulty: value })}
+          required
+          placeholder="Choose investigation difficulty"
+          options={SETTING_LEVELS}
+        />
+      </FormSection>
+
+      <FormSection title="Reward System">
+        <SelectField
+          id="loot-rarity"
+          label="Loot rarity"
+          description="How rare found items are."
+          value={config.lootRarity}
+          onChange={(value) => patch({ lootRarity: value })}
+          required
+          placeholder="Choose loot rarity"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="loot-quantity"
+          label="Loot quantity"
+          description="How often items are found."
+          value={config.lootQuantity}
+          onChange={(value) => patch({ lootQuantity: value })}
+          required
+          placeholder="Choose loot quantity"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="currency-abundance"
+          label="Currency abundance"
+          description="Quantity of currency found and available across merchants."
+          value={config.currencyAbundance}
+          onChange={(value) => patch({ currencyAbundance: value })}
+          required
+          placeholder="Choose currency abundance"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="unique-artifact-frequency"
+          label="Unique artifact frequency"
+          description="How often a unique artifact appears instead of a standard item."
+          value={config.uniqueArtifactFrequency}
+          onChange={(value) => patch({ uniqueArtifactFrequency: value })}
+          required
+          placeholder="Choose unique artifact frequency"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="resource-scarcity"
+          label="Resource scarcity"
+          description="Global amount of resource scattered per single action."
+          value={config.resourceScarcity}
+          onChange={(value) => patch({ resourceScarcity: value })}
+          required
+          placeholder="Choose resource scarcity"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="reputation-reward-multiplier"
+          label="Reputation reward multiplier"
+          description="How fast reputation gain increases or decreases."
+          value={config.reputationRewardMultiplier}
+          onChange={(value) => patch({ reputationRewardMultiplier: value })}
+          required
+          placeholder="Choose reputation reward multiplier"
+          options={SETTING_LEVELS}
+        />
+      </FormSection>
+
+      <FormSection title="Exploration">
+        <SelectField
+          id="player-freedom"
+          label="Player freedom"
+          description="How free players are, including travel, actions, or NPC discussion."
+          value={config.playerFreedom}
+          onChange={(value) => patch({ playerFreedom: value })}
+          required
+          placeholder="Choose player freedom"
+          options={SETTING_LEVELS}
+        />
+        <CheckboxField
+          id="fast-travel"
+          label="Fast travel availability"
+          description="If fast travel is permitted, with a cost on use."
+          checked={config.fastTravelAvailable}
+          onChange={(checked) => patch({ fastTravelAvailable: checked })}
+        />
+        <SelectField
+          id="discovery-importance"
+          label="Discovery importance"
+          description="How rewarded discovery is."
+          value={config.discoveryImportance}
+          onChange={(value) => patch({ discoveryImportance: value })}
+          required
+          placeholder="Choose discovery importance"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="random-encounter-frequency"
+          label="Random encounter frequency"
+          description="How frequently a random encounter event occurs (friendly or neutral NPC only)."
+          value={config.randomEncounterFrequency}
+          onChange={(value) => patch({ randomEncounterFrequency: value })}
+          required
+          placeholder="Choose random encounter frequency"
+          options={SETTING_LEVELS}
+        />
+      </FormSection>
+
+      <FormSection title="Narrative Configuration">
+        <SelectField
+          id="side-quest-density"
+          label="Side quest density"
+          description="How frequently side quests are given."
+          value={config.sideQuestDensity}
+          onChange={(value) => patch({ sideQuestDensity: value })}
+          required
+          placeholder="Choose side quest density"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="moral-choice-impact"
+          label="Moral choice impact"
+          description="How morality impacts event outcomes."
+          value={config.moralChoiceImpact}
+          onChange={(value) => patch({ moralChoiceImpact: value })}
+          required
+          placeholder="Choose moral choice impact"
+          options={SETTING_LEVELS}
+        />
+        <CheckboxField
+          id="faction-influence"
+          label="Faction influence"
+          description="Whether faction influence is included."
+          checked={config.factionInfluence}
+          onChange={(checked) => patch({ factionInfluence: checked })}
+        />
+      </FormSection>
+
+      <FormSection title="PvP Configuration">
+        <CheckboxField
+          id="pvp-allowed"
+          label="PvP allowed"
+          description="Whether players can hurt each other."
+          checked={config.pvpAllowed}
+          onChange={(checked) => patch({ pvpAllowed: checked })}
+        />
+        <CheckboxField
+          id="theft-between-players"
+          label="Theft between players"
+          description="Whether players can steal from each other."
+          checked={config.theftBetweenPlayers}
+          onChange={(checked) => patch({ theftBetweenPlayers: checked })}
+        />
+        <CheckboxField
+          id="secret-objectives"
+          label="Secret objectives"
+          description="Whether players can receive secret betrayal win conditions."
+          checked={config.secretObjectives}
+          onChange={(checked) => patch({ secretObjectives: checked })}
+        />
+      </FormSection>
+
+      <FormSection title="Death & Failure">
+        <CheckboxField
+          id="campaign-can-fail"
+          label="Campaign can be failed"
+          description="Whether the campaign can be lost based on predetermined conditions such as player or NPC death."
+          checked={config.campaignCanFail}
+          onChange={(checked) => patch({ campaignCanFail: checked })}
+        />
+        <SelectField
+          id="mission-failure-impact"
+          label="Mission failure impact"
+          description="Impact on NPCs or characters for failing a quest."
+          value={config.missionFailureImpact}
+          onChange={(value) => patch({ missionFailureImpact: value })}
+          required
+          placeholder="Choose mission failure impact"
+          options={MISSION_FAILURE_IMPACTS}
+        />
+      </FormSection>
+
+      <FormSection title="NPC System">
+        <CheckboxField
+          id="npc-mortality"
+          label="NPC mortality"
+          description="Whether NPCs can be killed by enemies, the environment, or characters."
+          checked={config.npcMortality}
+          onChange={(checked) => patch({ npcMortality: checked })}
+        />
+        <SelectField
+          id="reputation-tracking"
+          label="Reputation tracking"
+          description="Whether NPC factions track player reputation based on quest success, failure, theft, murder, etc."
+          value={config.reputationTracking}
+          onChange={(value) => patch({ reputationTracking: value })}
+          required
+          placeholder="Choose reputation tracking"
+          options={REPUTATION_TRACKING_OPTIONS}
+        />
+      </FormSection>
+
+      <FormSection title="Progression Rules">
+        <NumberField
+          id="level-cap"
+          label="Level cap"
+          description="Maximum level a character can reach."
+          value={config.levelCap}
+          onChange={(value) => patch({ levelCap: value })}
+          required
+        />
+        <NumberField
+          id="milestone-progression"
+          label="Milestone progression"
+          description="Levels gained to earn rewards such as skill points or items."
+          value={config.milestoneProgression}
+          onChange={(value) => patch({ milestoneProgression: value })}
+          required
+        />
+        <SelectField
+          id="experience-gain-multiplier"
+          label="Experience gain multiplier"
+          description="How fast experience increases."
+          value={config.experienceGainMultiplier}
+          onChange={(value) => patch({ experienceGainMultiplier: value })}
+          required
+          placeholder="Choose experience gain multiplier"
+          options={SETTING_LEVELS}
+        />
+      </FormSection>
+    </div>
+  );
+}
+
+function CharacterTabPanel({
+  campaign,
+}: {
+  campaign: ReturnType<typeof useNewCampaign>;
+}) {
+  const config = campaign.characterConfiguration;
+  const patch = (fields: Partial<CharacterConfigurationInput>) =>
+    campaign.patchCharacterConfiguration(fields);
+  const poolLocked = !campaign.isCustomUniverse && campaign.presetCharacterOptions !== null;
+
+  return (
+    <div className="space-y-2">
+      <FormSection title="Player Setup">
+        <NumberField
+          id="player-count"
+          label="Number of players"
+          description="Number of expected players, including you (2–6)."
+          value={config.playerCount}
+          onChange={(value) => patch({ playerCount: value })}
+          required
+          min={2}
+          max={6}
+        />
+      </FormSection>
+
+      <FormSection title="Character Creation Rules">
+        <NumberField
+          id="point-pool"
+          label="Point pool"
+          description="Point pool to assign across stats."
+          value={config.pointPool}
+          onChange={(value) => patch({ pointPool: value })}
+          required
+          min={1}
+          max={12}
+          disabled={poolLocked}
+        />
+        <NumberField
+          id="point-cap-per-ability"
+          label="Point cap per ability"
+          description="Maximum points a single ability (stat) can be set to."
+          value={config.pointCapPerAbility}
+          onChange={(value) => patch({ pointCapPerAbility: value })}
+          required
+          min={1}
+          max={12}
+          disabled={poolLocked}
+        />
+        {poolLocked ? (
+          <p className="text-sm text-zinc-400">
+            Point pool and cap come from the chosen universe and stay fixed for preset universes.
+          </p>
+        ) : null}
+        <SelectField
+          id="starting-equipment"
+          label="Starting equipment"
+          description="How much equipment is given to players at start."
+          value={config.startingEquipment}
+          onChange={(value) => patch({ startingEquipment: value })}
+          required
+          placeholder="Choose starting equipment"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="starting-wealth"
+          label="Starting wealth"
+          description="How much money is given to players at start."
+          value={config.startingWealth}
+          onChange={(value) => patch({ startingWealth: value })}
+          required
+          placeholder="Choose starting wealth"
+          options={SETTING_LEVELS}
+        />
+        <SelectField
+          id="death-recovery"
+          label="Death & recovery"
+          description="What happens when a character is removed from play."
+          value={config.deathRecovery}
+          onChange={(value) => patch({ deathRecovery: value })}
+          required
+          placeholder="Choose death and recovery"
+          options={DEATH_RECOVERY_OPTIONS}
+        />
+        <CheckboxField
+          id="injury-system"
+          label="Injury system"
+          description="Whether characters can be injured by wounds."
+          checked={config.injurySystem}
+          onChange={(checked) => patch({ injurySystem: checked })}
+        />
+        <CheckboxField
+          id="permanent-wounds"
+          label="Permanent wounds"
+          description="Whether characters can be permanently wounded; permanent wounds cannot be cured."
+          checked={config.permanentWounds}
+          onChange={(checked) => patch({ permanentWounds: checked })}
+        />
+      </FormSection>
+
+      <FormSection title="Statistics">
+        <TeamOptions
+          universe={campaign.universe}
+          draft={campaign.optionsDraft}
+          onChange={campaign.setOptionsDraft}
+          nextId={campaign.nextOptionId}
+          hidePoolFields
+          hideHeader
+          abilitiesTitle="Available abilities"
+          statsTitle="Available stats"
+          classesTitle="Available classes"
+          racesTitle="Available races"
+        />
+
+        <CheckboxField
+          id="equipment-rules"
+          label="Equipment rules"
+          description="Whether equipment needs validation before being equipped."
+          checked={config.equipmentRules}
+          onChange={(checked) => patch({ equipmentRules: checked })}
+        />
+
+        {config.equipmentRules ? (
+          <fieldset>
+            <legend className="block text-sm text-zinc-300">Equipment validation rules</legend>
+            <FieldDescription>
+              Requirements checked before a character can equip an item.
+            </FieldDescription>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {EQUIPMENT_VALIDATION_RULES.map((entry) => (
+                <label key={entry.id} className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={config.equipmentValidationRules[entry.id]}
+                    onChange={(event) =>
+                      campaign.toggleEquipmentValidationRule(entry.id, event.target.checked)
+                    }
+                    className="size-4 rounded border-zinc-600 bg-zinc-900"
+                  />
+                  {entry.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
+
+        <CheckboxField
+          id="weight-system"
+          label="Weight system"
+          description="Enable carrying weight; overloading affects stats."
+          checked={config.weightSystem}
+          onChange={(checked) => patch({ weightSystem: checked })}
+        />
+        <CheckboxField
+          id="ammunition-tracking"
+          label="Ammunition tracking"
+          description="Whether ammunition use is tracked."
+          checked={config.ammunitionTracking}
+          onChange={(checked) => patch({ ammunitionTracking: checked })}
+        />
+      </FormSection>
+
+      <FormSection title="Sanity / Morality">
+        <CheckboxField
+          id="morality-tracking"
+          label="Morality tracking"
+          description="Whether the morality system is enabled."
+          checked={config.moralityTracking}
+          onChange={(checked) => patch({ moralityTracking: checked })}
+        />
+        <CheckboxField
+          id="sanity-system"
+          label="Sanity system"
+          description="Whether the sanity system is enabled; useful for horror-based campaigns."
+          checked={config.sanitySystem}
+          onChange={(checked) => patch({ sanitySystem: checked })}
+        />
+      </FormSection>
+    </div>
+  );
+}
 
 export function NewCampaignForm() {
   const campaign = useNewCampaign();
-  const preset = universePreset(campaign.universe);
-  const universeName = UNIVERSES.find((entry) => entry.id === campaign.universe)?.label;
-  const enemy =
-    ENEMY_DIFFICULTIES.find((entry) => entry.id === campaign.enemyDifficulty) ?? null;
-  const loot = LOOT_RARITIES.find((entry) => entry.id === campaign.lootRarity) ?? null;
   const isLast = campaign.step === CAMPAIGN_STEPS.length - 1;
 
   return (
@@ -70,235 +894,9 @@ export function NewCampaignForm() {
           <p className="mt-1 text-sm text-zinc-400">{STEP_LEADS[campaign.step]}</p>
         </div>
 
-        {campaign.step === 0 ? (
-          <>
-            <label className="block text-sm text-zinc-300" htmlFor="campaign-name">
-              Campaign name
-              <input
-                id="campaign-name"
-                type="text"
-                required
-                maxLength={60}
-                value={campaign.campaignName}
-                onChange={(event) => campaign.setCampaignName(event.target.value)}
-                className="field mt-1 w-full"
-              />
-            </label>
+        {campaign.step === 0 ? <CampaignTabPanel campaign={campaign} /> : null}
 
-            {campaign.presetsStatus === "loading" ? (
-              <p className="text-sm text-zinc-400">Loading universes.</p>
-            ) : null}
-            {campaign.presetsStatus === "failed" ? (
-              <p className="text-sm text-zinc-400">Preset universes could not be loaded.</p>
-            ) : null}
-
-            <label className="block text-sm text-zinc-300" htmlFor="universe">
-              Universe
-              <select
-                id="universe"
-                required
-                disabled={campaign.presetsStatus === "loading"}
-                value={campaign.universe}
-                onChange={(event) => campaign.selectUniverse(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a universe</option>
-                {UNIVERSES.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {preset && universeName ? (
-              <p className="text-sm text-zinc-400">
-                {universeName} filled difficulty, loot, and freedom below. You can change those
-                values. Stats, skills, classes, and races stay with the universe.
-              </p>
-            ) : null}
-
-            {campaign.universe === "custom" ? (
-              <>
-                <p className="text-sm text-zinc-400">
-                  Custom leaves difficulty, loot, freedom, and character options empty until you
-                  fill them.
-                </p>
-                <label className="block text-sm text-zinc-300" htmlFor="universe-name">
-                  Universe name
-                  <input
-                    id="universe-name"
-                    type="text"
-                    required
-                    maxLength={40}
-                    value={campaign.universeLabel}
-                    onChange={(event) => campaign.setUniverseLabel(event.target.value)}
-                    className="field mt-1 w-full"
-                  />
-                </label>
-                <label className="block text-sm text-zinc-300" htmlFor="universe-type">
-                  Universe type
-                  <select
-                    id="universe-type"
-                    required
-                    value={campaign.universeType}
-                    onChange={(event) => campaign.setUniverseType(event.target.value)}
-                    className="field mt-1 w-full"
-                  >
-                    <option value="">Choose a type</option>
-                    {UNIVERSE_TYPES.map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            ) : null}
-
-            <label className="block text-sm text-zinc-300" htmlFor="objective">
-              Objective
-              <input
-                id="objective"
-                type="text"
-                required
-                maxLength={280}
-                value={campaign.objective}
-                onChange={(event) => campaign.setObjective(event.target.value)}
-                className="field mt-1 w-full"
-              />
-            </label>
-
-            <label className="block text-sm text-zinc-300" htmlFor="enemy-difficulty">
-              Enemy difficulty
-              <select
-                id="enemy-difficulty"
-                required
-                value={campaign.enemyDifficulty}
-                onChange={(event) => campaign.setEnemyDifficulty(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a difficulty</option>
-                {ENEMY_DIFFICULTIES.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-              {enemy ? <span className="mt-2 block text-zinc-400">{enemy.description}</span> : null}
-            </label>
-
-            <label className="block text-sm text-zinc-300" htmlFor="loot-rarity">
-              Loot rarity
-              <select
-                id="loot-rarity"
-                required
-                value={campaign.lootRarity}
-                onChange={(event) => campaign.setLootRarity(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a rarity</option>
-                {LOOT_RARITIES.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-              {loot ? <span className="mt-2 block text-zinc-400">{loot.description}</span> : null}
-            </label>
-
-            <div>
-              <label className="block text-sm text-zinc-300" htmlFor="player-freedom">
-                Player freedom
-              </label>
-              <select
-                id="player-freedom"
-                required
-                aria-describedby="player-freedom-options"
-                value={campaign.playerFreedom}
-                onChange={(event) => campaign.setPlayerFreedom(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a level of freedom</option>
-                {PLAYER_FREEDOMS.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-              <ul id="player-freedom-options" className="mt-3 space-y-2">
-                {PLAYER_FREEDOMS.map((entry) => (
-                  <li key={entry.id} className="text-sm text-zinc-400">
-                    <span className="text-zinc-200">{entry.label}.</span> {entry.description}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        ) : null}
-
-        {campaign.step === 1 ? (
-          <>
-            <div>
-              <label className="block text-sm text-zinc-300" htmlFor="player-count">
-                Number of players
-              </label>
-              <select
-                id="player-count"
-                required
-                aria-describedby="player-count-note"
-                value={campaign.playerCount}
-                onChange={(event) => campaign.setPlayerCount(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a number</option>
-                {PLAYER_COUNTS.map((count) => (
-                  <option key={count} value={String(count)}>
-                    {count} players
-                  </option>
-                ))}
-              </select>
-              <p id="player-count-note" className="mt-2 text-sm text-zinc-400">
-                Including you.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm text-zinc-300" htmlFor="death-penalty">
-                Death penalty
-              </label>
-              <select
-                id="death-penalty"
-                required
-                aria-describedby="death-penalty-options"
-                value={campaign.deathPenalty}
-                onChange={(event) => campaign.setDeathPenalty(event.target.value)}
-                className="field mt-1 w-full"
-              >
-                <option value="">Choose a death penalty</option>
-                {DEATH_PENALTIES.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-              <ul id="death-penalty-options" className="mt-3 space-y-2">
-                {DEATH_PENALTIES.map((entry) => (
-                  <li key={entry.id} className="text-sm text-zinc-400">
-                    <span className="text-zinc-200">{entry.label}.</span> {entry.description}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <TeamOptions
-              universe={campaign.universe}
-              draft={campaign.optionsDraft}
-              onChange={campaign.setOptionsDraft}
-              nextId={campaign.nextOptionId}
-            />
-          </>
-        ) : null}
+        {campaign.step === 1 ? <CharacterTabPanel campaign={campaign} /> : null}
       </div>
 
       {campaign.ready && !campaign.linked && isLast ? (

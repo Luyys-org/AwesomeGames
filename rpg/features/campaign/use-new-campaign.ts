@@ -12,6 +12,21 @@ import {
   validateCampaignStep,
 } from "@/rpg/lib/campaign-settings";
 import {
+  configEnemyDifficultyFromLegacy,
+  configLootRarityFromLegacy,
+  configPlayerFreedomFromLegacy,
+  emptyCampaignConfigurationInput,
+  type CampaignConfigurationInput,
+  type CampaignTagId,
+} from "@/rpg/lib/campaign-tab-config";
+import {
+  deathRecoveryFromLegacy,
+  emptyCharacterConfigurationInput,
+  type CharacterConfigurationInput,
+  type EquipmentValidationRuleId,
+} from "@/rpg/lib/character-tab-config";
+import {
+  characterOptionsFor,
   emptyCharacterOptionsDraft,
   type CharacterOptionsDraft,
 } from "@/rpg/lib/character-options";
@@ -24,12 +39,22 @@ import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 const EMPTY_PREFILL = {
   universeLabel: "",
   universeType: "",
-  playerCount: "",
-  deathPenalty: "",
-  enemyDifficulty: "",
-  lootRarity: "",
-  playerFreedom: "",
 };
+
+function presetCharacterConfiguration(
+  universe: string,
+  playerCount: number,
+  deathPenalty: Parameters<typeof deathRecoveryFromLegacy>[0],
+): CharacterConfigurationInput {
+  const options = characterOptionsFor(universe);
+  return {
+    ...emptyCharacterConfigurationInput(),
+    playerCount: String(playerCount),
+    deathRecovery: deathRecoveryFromLegacy(deathPenalty),
+    pointPool: options ? String(options.statPool) : "",
+    pointCapPerAbility: options ? String(options.statCap) : "",
+  };
+}
 
 export function useNewCampaign() {
   const router = useRouter();
@@ -39,12 +64,13 @@ export function useNewCampaign() {
   const [universe, setUniverse] = useState("");
   const [universeLabel, setUniverseLabel] = useState("");
   const [universeType, setUniverseType] = useState("");
-  const [playerCount, setPlayerCount] = useState("");
-  const [deathPenalty, setDeathPenalty] = useState("");
   const [objective, setObjective] = useState("");
-  const [enemyDifficulty, setEnemyDifficulty] = useState("");
-  const [lootRarity, setLootRarity] = useState("");
-  const [playerFreedom, setPlayerFreedom] = useState("");
+  const [campaignConfiguration, setCampaignConfiguration] = useState<CampaignConfigurationInput>(
+    emptyCampaignConfigurationInput,
+  );
+  const [characterConfiguration, setCharacterConfiguration] = useState<CharacterConfigurationInput>(
+    emptyCharacterConfigurationInput,
+  );
   const [optionsDraft, setOptionsDraft] = useState<CharacterOptionsDraft>(emptyCharacterOptionsDraft);
   const [presetsStatus, setPresetsStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState<string | null>(null);
@@ -56,12 +82,9 @@ export function useNewCampaign() {
     universe,
     universeLabel,
     universeType,
-    playerCount,
     objective,
-    deathPenalty,
-    enemyDifficulty,
-    lootRarity,
-    playerFreedom,
+    campaignConfiguration,
+    characterConfiguration,
   };
 
   useEffect(() => {
@@ -99,6 +122,16 @@ export function useNewCampaign() {
     setOptionsDraft(emptyCharacterOptionsDraft());
   }
 
+  function applyPresetToConfiguration(preset: NonNullable<ReturnType<typeof universePreset>>) {
+    setCampaignConfiguration((current) => ({
+      ...current,
+      enemyDifficulty: configEnemyDifficultyFromLegacy(preset.enemyDifficulty),
+      bossDifficulty: configEnemyDifficultyFromLegacy(preset.enemyDifficulty),
+      lootRarity: configLootRarityFromLegacy(preset.lootRarity),
+      playerFreedom: configPlayerFreedomFromLegacy(preset.playerFreedom),
+    }));
+  }
+
   function selectUniverse(value: string) {
     setUniverse(value);
     clearResult();
@@ -108,21 +141,54 @@ export function useNewCampaign() {
     if (!preset) {
       setUniverseLabel(EMPTY_PREFILL.universeLabel);
       setUniverseType(EMPTY_PREFILL.universeType);
-      setPlayerCount(EMPTY_PREFILL.playerCount);
-      setDeathPenalty(EMPTY_PREFILL.deathPenalty);
-      setEnemyDifficulty(EMPTY_PREFILL.enemyDifficulty);
-      setLootRarity(EMPTY_PREFILL.lootRarity);
-      setPlayerFreedom(EMPTY_PREFILL.playerFreedom);
+      setCampaignConfiguration(emptyCampaignConfigurationInput());
+      setCharacterConfiguration(emptyCharacterConfigurationInput());
       return;
     }
 
     setUniverseLabel("");
     setUniverseType(preset.universeType);
-    setPlayerCount(String(preset.playerCount));
-    setDeathPenalty(preset.deathPenalty);
-    setEnemyDifficulty(preset.enemyDifficulty);
-    setLootRarity(preset.lootRarity);
-    setPlayerFreedom(preset.playerFreedom);
+    applyPresetToConfiguration(preset);
+    setCharacterConfiguration(
+      presetCharacterConfiguration(value, preset.playerCount, preset.deathPenalty),
+    );
+  }
+
+  function patchConfiguration(patch: Partial<CampaignConfigurationInput>) {
+    setCampaignConfiguration((current) => ({ ...current, ...patch }));
+  }
+
+  function patchCharacterConfiguration(patch: Partial<CharacterConfigurationInput>) {
+    setCharacterConfiguration((current) => {
+      const next = { ...current, ...patch };
+      if (patch.pointPool !== undefined || patch.pointCapPerAbility !== undefined) {
+        setOptionsDraft((draft) => ({
+          ...draft,
+          statPool: next.pointPool,
+          statCap: next.pointCapPerAbility,
+        }));
+      }
+      return next;
+    });
+  }
+
+  function toggleCampaignTag(tag: CampaignTagId, checked: boolean) {
+    setCampaignConfiguration((current) => {
+      const next = checked
+        ? [...current.campaignTags, tag]
+        : current.campaignTags.filter((entry) => entry !== tag);
+      return { ...current, campaignTags: next };
+    });
+  }
+
+  function toggleEquipmentValidationRule(rule: EquipmentValidationRuleId, checked: boolean) {
+    setCharacterConfiguration((current) => ({
+      ...current,
+      equipmentValidationRules: {
+        ...current.equipmentValidationRules,
+        [rule]: checked,
+      },
+    }));
   }
 
   function goToStep(index: number) {
@@ -179,6 +245,9 @@ export function useNewCampaign() {
     }
   }
 
+  const isCustomUniverse = universe === "custom";
+  const presetCharacterOptions = universe && !isCustomUniverse ? characterOptionsFor(universe) : null;
+
   return {
     ready,
     linked,
@@ -188,25 +257,27 @@ export function useNewCampaign() {
     universe,
     universeLabel,
     universeType,
-    playerCount,
-    deathPenalty,
     objective,
-    enemyDifficulty,
-    lootRarity,
-    playerFreedom,
+    campaignConfiguration,
+    characterConfiguration,
     optionsDraft,
+    isCustomUniverse,
+    presetCharacterOptions,
     error,
     submitting,
     setCampaignName: (value: string) => edit(() => setCampaignName(value)),
     selectUniverse,
     setUniverseLabel: (value: string) => edit(() => setUniverseLabel(value)),
     setUniverseType: (value: string) => edit(() => setUniverseType(value)),
-    setPlayerCount: (value: string) => edit(() => setPlayerCount(value)),
-    setDeathPenalty: (value: string) => edit(() => setDeathPenalty(value)),
     setObjective: (value: string) => edit(() => setObjective(value)),
-    setEnemyDifficulty: (value: string) => edit(() => setEnemyDifficulty(value)),
-    setLootRarity: (value: string) => edit(() => setLootRarity(value)),
-    setPlayerFreedom: (value: string) => edit(() => setPlayerFreedom(value)),
+    patchConfiguration: (patch: Partial<CampaignConfigurationInput>) =>
+      edit(() => patchConfiguration(patch)),
+    patchCharacterConfiguration: (patch: Partial<CharacterConfigurationInput>) =>
+      edit(() => patchCharacterConfiguration(patch)),
+    toggleCampaignTag: (tag: CampaignTagId, checked: boolean) =>
+      edit(() => toggleCampaignTag(tag, checked)),
+    toggleEquipmentValidationRule: (rule: EquipmentValidationRuleId, checked: boolean) =>
+      edit(() => toggleEquipmentValidationRule(rule, checked)),
     setOptionsDraft: (update: (current: CharacterOptionsDraft) => CharacterOptionsDraft) =>
       edit(() => setOptionsDraft(update)),
     nextOptionId,
