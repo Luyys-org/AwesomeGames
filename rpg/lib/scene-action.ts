@@ -126,7 +126,9 @@ export function validateSceneActions(
 
   for (const entry of value) {
     const parsed = parseSceneActionEntry(entry);
-    if (!parsed) continue;
+    if (!parsed) {
+      return { ok: false, error: "Each action needs a valid id, label, stat, difficulty, and failure." };
+    }
     if (seen.has(parsed.id)) return { ok: false, error: "Action ids must be unique." };
     seen.add(parsed.id);
     if (!options.stats.some((stat) => stat.id === parsed.stat)) {

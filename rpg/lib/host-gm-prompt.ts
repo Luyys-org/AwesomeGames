@@ -32,6 +32,7 @@ import openingSituationTemplate from "@/rpg/prompts/opening-situation";
 import startingLoadoutRetryTemplate from "@/rpg/prompts/starting-loadout-retry";
 import startingLoadoutTemplate from "@/rpg/prompts/starting-loadout";
 import systemTemplate from "@/rpg/prompts/system";
+import { journeyForGm } from "@/rpg/lib/journey";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import { isGmErrorEntry, type TableState, type TranscriptEntry } from "@/rpg/lib/table";
 
@@ -189,7 +190,8 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
     injuryEnabled: injuryEnabled(table.settings) ? "on" : "off",
     limits: { ...GM_LIMITS, currencyMax: loot.currencyMax, itemMax: loot.itemMax },
     characters: charactersForGm(table),
-    transcript: transcriptForGm(table),
+    memory: memoryForGm(table),
+    journey: journeyForGm(table.journey),
     intent: { ...intent, selectedAction },
     resolution: resolution ?? null,
   };
@@ -234,16 +236,60 @@ function charactersForGm(table: TableState) {
             applies: skill?.applies ?? "",
           };
         }),
+        modifiers: sheetModifiers(character, options),
       };
     });
 }
 
-function transcriptForGm(table: TableState) {
+const MEMORY_NARRATION_MAX = 400;
+const MEMORY_INTENT_MAX = 200;
+const MEMORY_EVENT_MAX = 12;
+
+export function memoryForGm(table: TableState): {
+  latestNarration: string;
+  events: Record<string, string>[];
+} {
   const names = new Map(table.characters.map((character) => [character.id, character.name]));
-  return table.transcript
-    .filter((entry, index) => !excludedFromGm(table.transcript, entry, index))
-    .slice(-20)
-    .map((entry) => transcriptLine(entry, names));
+  const events: Record<string, string>[] = [];
+  let latestNarration = "";
+
+  table.transcript.forEach((entry, index) => {
+    if (excludedFromGm(table.transcript, entry, index)) return;
+    if (entry.type === "system" || entry.type === "situation") return;
+    if (entry.type === "narration") {
+      latestNarration = cap(entry.text, MEMORY_NARRATION_MAX);
+      return;
+    }
+    const line = transcriptLine(entry, names);
+    if (line.type === "intent") {
+      events.push({ ...line, text: cap(line.text ?? "", MEMORY_INTENT_MAX) });
+      return;
+    }
+    events.push(line);
+  });
+
+  return { latestNarration, events: events.slice(-MEMORY_EVENT_MAX) };
+}
+
+function sheetModifiers(
+  character: TableState["characters"][number],
+  options: CharacterOptions,
+): { source: "class" | "race"; kind: string; statId: string; amount: number }[] {
+  const rows: { source: "class" | "race"; kind: string; statId: string; amount: number }[] = [];
+  const classTrait = options.classes.find((entry) => entry.id === character.classId);
+  const raceTrait = options.races.find((entry) => entry.id === character.raceId);
+  for (const modifier of classTrait?.modifiers ?? []) {
+    rows.push({ source: "class", kind: modifier.kind, statId: modifier.statId, amount: modifier.amount });
+  }
+  for (const modifier of raceTrait?.modifiers ?? []) {
+    rows.push({ source: "race", kind: modifier.kind, statId: modifier.statId, amount: modifier.amount });
+  }
+  if (raceTrait?.statChoices && raceTrait.statChoiceAmount) {
+    for (const statId of character.raceStatIds) {
+      rows.push({ source: "race", kind: "stat", statId, amount: raceTrait.statChoiceAmount });
+    }
+  }
+  return rows;
 }
 
 function excludedFromGm(transcript: TranscriptEntry[], entry: TranscriptEntry, index: number): boolean {
@@ -258,6 +304,11 @@ function excludedFromGm(transcript: TranscriptEntry[], entry: TranscriptEntry, i
     return false;
   }
   return false;
+}
+
+function cap(value: string, max: number): string {
+  const trimmed = value.trim();
+  return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
 }
 
 function transcriptLine(entry: TranscriptEntry, names: Map<string, string>): Record<string, string> {

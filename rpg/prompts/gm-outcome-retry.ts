@@ -45,7 +45,7 @@ Campaign:
 {{json:campaign}}
 
 Scene {{scene}}
-Situation:
+Opening situation (scene 1 only):
 {{situation}}
 
 Place: {{place}}
@@ -57,8 +57,11 @@ Injury system: {{injuryEnabled}}
 Characters:
 {{json:characters}}
 
-Recent transcript:
-{{json:transcript}}
+Journey (places, people, and resolved events already lived):
+{{json:journey}}
+
+Recent memory:
+{{json:memory}}
 
 Player intent:
 {{json:intent}}
@@ -69,5 +72,5 @@ Resolved check:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and narrate the resolved check. Do not contradict the line or the wounds. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty, failure, and ids using hyphens only, no underscores. progress uses minor, notable, or major, or []. Do not write an XP number.
+Task: Fix the JSON and narrate the resolved check. The latest narration in memory is atmosphere from before the roll. The resolution object is the result. Do not repeat it, and do not contradict success, woundsApplied, or deathPenalty. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty, failure, and ids using hyphens only, no underscores. progress uses minor, notable, or major, or []. Do not write an XP number. Stay consistent with the journey.
 `.trim();

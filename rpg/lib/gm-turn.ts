@@ -10,6 +10,7 @@ import {
 } from "@/rpg/lib/character-options";
 import type { TableCharacter, Wound } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
+import { emptyJourney, rememberJourney } from "@/rpg/lib/journey";
 import { applyProgress, readProgress, rewardLine, type ProgressGrant } from "@/rpg/lib/progression";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import {
@@ -166,6 +167,10 @@ export function readGmReaction(
     if (!matched.ok) return matched;
   }
 
+  if (check.value && statesCheckResult(`${beat.value.narration}\n${check.value.setup}`)) {
+    return { ok: false, error: "Narration and setup must stop before the result." };
+  }
+
   const narration = narrationWithEncounter(beat.value.narration || check.value?.setup || "", beat.value.encounter);
   if (!narration) return { ok: false, error: "Narration must not be empty." };
 
@@ -215,6 +220,11 @@ export function applyResolvedBeat(
       characters: progressed.characters,
       location: nextLocation(table.location, beat),
       availableActions: beat.actions.length > 0 ? beat.actions : table.availableActions,
+      journey: noteJourney(
+        table,
+        beat,
+        rewards.flatMap((entry) => (entry.type === "reward" ? [entry.text] : [])),
+      ),
       transcript: [...table.transcript, { type: "narration", text: narration }, ...rewards],
     },
   };
@@ -278,6 +288,7 @@ export function commitCheckBeat(
       gmBusy,
       location: nextLocation(table.location, beat),
       characters: table.characters.map((entry) => (entry.id === character.id ? injured.character : entry)),
+      journey: noteJourney(table, beat, checkNotes(character.name, rolled.line, injured.death)),
       transcript,
     },
   };
@@ -503,6 +514,34 @@ function matchChosenActionCheck(
     return { ok: false, error: "abilityApplies must match the chosen action and acting character." };
   }
   return { ok: true, value: null };
+}
+
+const OUTCOME_WORD = /\b(success|failure|succeeds|succeeded|fails|failed|d20)\b/i;
+const DIE_RESULT = /\bnatural\s+\d{1,2}\b|\brolled\s+(?:a\s+)?\d{1,2}\b/i;
+const WOUND_MARK =
+  /\bwound box\b|\bmarks?\s+(?:a\s+)?wound\b|\btakes?\s+(?:a\s+)?wound\b|\b(?:is|becomes|now)\s+(?:hurt|impaired|down)\b/i;
+
+function statesCheckResult(text: string): boolean {
+  return OUTCOME_WORD.test(text) || DIE_RESULT.test(text) || WOUND_MARK.test(text);
+}
+
+function checkNotes(name: string, line: string, death: CampaignSettings["deathPenalty"] | null): string[] {
+  const notes = [`${name}: ${line}`];
+  if (death) notes.push(`${name}: ${death}.`);
+  return notes;
+}
+
+function noteJourney(
+  table: TableState,
+  beat: Pick<GmBeat, "place" | "encounter">,
+  events: string[],
+) {
+  return rememberJourney(table.journey ?? emptyJourney(), {
+    scene: table.scene,
+    place: beat.place || table.location.place,
+    encounter: beat.encounter,
+    events,
+  });
 }
 
 function narrationWithEncounter(narration: string, encounter: GmEncounter | null): string {
