@@ -9,7 +9,13 @@ import {
   hostRoom,
   joinRoom,
   submitCharacter,
+  submitChosenAction,
+  dismissGmError,
+  submitLevelReward,
+  submitSetItemEquipped,
   submitClaim,
+  submitReady,
+  submitSpeak,
   subscribeRoom,
 } from "@/rpg/services/room-connection";
 import type { CharacterDraft } from "@/rpg/lib/character";
@@ -30,5 +36,13 @@ export function useRoom(roomCode: string) {
     view,
     createCharacter: (draft: CharacterDraft) => submitCharacter(draft),
     claimCharacter: (name: string, claimCode: string) => submitClaim(name, claimCode),
+    setReady: (ready: boolean) => submitReady(ready),
+    submitSpeak: (text: string) => submitSpeak(text),
+    submitAction: (actionId: string) => submitChosenAction(actionId),
+    dismissGmError: (index: number) => dismissGmError(index),
+    setItemEquipped: (itemId: string, equipped: boolean) => submitSetItemEquipped(itemId, equipped),
+    chooseLevelReward: (
+      choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string },
+    ) => submitLevelReward(choice),
   };
 }

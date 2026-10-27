@@ -5,7 +5,7 @@ import {
   parseStatBlock,
   type CharacterOptions,
 } from "@/rpg/lib/character-options";
-import { type TableCharacter, type Wound } from "@/rpg/lib/character";
+import { storedRacePicks, type TableCharacter, type Wound } from "@/rpg/lib/character";
 import {
   DEATH_PENALTIES,
   ENEMY_DIFFICULTIES,
@@ -22,6 +22,8 @@ import {
   type UniverseId,
   type UniverseTypeId,
 } from "@/rpg/lib/campaign-settings";
+import { parseStoredCampaignConfiguration } from "@/rpg/lib/campaign-tab-config";
+import { parseStoredCharacterConfiguration } from "@/rpg/lib/character-tab-config";
 import { createRoomCode, isClaimCode } from "@/rpg/lib/room-code";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import type { TableState } from "@/rpg/lib/table";
@@ -71,6 +73,13 @@ function readLine(value: unknown, max: number): string | null {
   return trimmed;
 }
 
+function readMultiline(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > max) return null;
+  return trimmed;
+}
+
 function isWoundPrefix(value: unknown): value is Wound[] {
   if (!Array.isArray(value)) return false;
   return WOUND_PREFIXES.some(
@@ -102,11 +111,13 @@ function readCharacter(
   if (value.owner !== "host" && value.owner !== "peer") return null;
   if (value.archived !== false || typeof value.inScene !== "boolean") return null;
 
-  const stats = parseStatBlock(value.stats, options);
-  if (!stats) return null;
   const classId = readTraitId(value.classId, options.classes, requireTraits);
+  const stats = parseStatBlock(value.stats, options, classId ?? "");
+  if (!stats || classId === null) return null;
   const raceId = readTraitId(value.raceId, options.races, requireTraits);
-  if (classId === null || raceId === null) return null;
+  if (raceId === null) return null;
+  const picks = storedRacePicks(options, raceId, value.abilityId, value.extraAbilityId, value.raceStatIds);
+  if (!picks.ok) return null;
 
   const down = value.wounds[value.wounds.length - 1] === "down";
   if (!value.inScene && value.wounds.length > 0 && !down) return null;
@@ -119,14 +130,27 @@ function readCharacter(
     id: value.id,
     name,
     abilityId: value.abilityId,
+    extraAbilityId: picks.extraAbilityId,
     classId,
     raceId,
+    raceStatIds: picks.raceStatIds,
     stats,
     wounds: value.wounds,
     claimCode: value.claimCode,
     owner: value.owner,
     archived: false,
     inScene: value.inScene,
+    ready: value.ready === true,
+    currency: typeof value.currency === "number" && Number.isFinite(value.currency) && value.currency >= 0
+      ? Math.floor(value.currency)
+      : 0,
+    inventory: [],
+    level: typeof value.level === "number" && Number.isInteger(value.level) && value.level > 0 ? value.level : 1,
+    xp: typeof value.xp === "number" && Number.isFinite(value.xp) && value.xp >= 0 ? Math.min(1000, Math.floor(value.xp)) : 0,
+    pendingRewards:
+      typeof value.pendingRewards === "number" && Number.isInteger(value.pendingRewards) && value.pendingRewards > 0
+        ? value.pendingRewards
+        : 0,
   };
 }
 
@@ -152,7 +176,7 @@ function parseLobbySave(value: unknown): ParsedSave {
   }
 
   const campaignName = readLine(value.campaignName, 60);
-  const objective = readLine(value.objective, 280);
+  const objective = readMultiline(value.objective, 2000) ?? readLine(value.objective, 280);
   const situation = typeof value.situation === "string" ? value.situation.trim() : "";
   if (!campaignName || !objective || situation.length === 0 || situation.length > 800) {
     return { ok: false, error: INVALID_SAVE };
@@ -209,6 +233,20 @@ function parseLobbySave(value: unknown): ParsedSave {
     return { ok: false, error: INVALID_SAVE };
   }
 
+  let campaignConfiguration: CampaignSettings["campaignConfiguration"];
+  if (value.campaignConfiguration !== undefined) {
+    const parsed = parseStoredCampaignConfiguration(value.campaignConfiguration);
+    if (!parsed) return { ok: false, error: INVALID_SAVE };
+    campaignConfiguration = parsed;
+  }
+
+  let characterConfiguration: CampaignSettings["characterConfiguration"];
+  if (value.characterConfiguration !== undefined) {
+    const parsed = parseStoredCharacterConfiguration(value.characterConfiguration);
+    if (!parsed) return { ok: false, error: INVALID_SAVE };
+    characterConfiguration = parsed;
+  }
+
   return {
     ok: true,
     value: {
@@ -224,6 +262,8 @@ function parseLobbySave(value: unknown): ParsedSave {
         enemyDifficulty: value.enemyDifficulty,
         lootRarity: value.lootRarity,
         playerFreedom: value.playerFreedom,
+        campaignConfiguration,
+        characterConfiguration,
       },
       objectiveStatus: value.objectiveStatus,
       scene,
@@ -271,8 +311,18 @@ export function startLobbyFromSave(
       objectiveStatus: save.value.objectiveStatus,
       scene: save.value.scene,
       situation: save.value.situation,
+      location: { place: "", weather: "", reputation: "" },
       revision: save.value.revision,
-      characters: save.value.characters,
+      characters: save.value.characters.map((character) => ({
+        ...character,
+        ready: false,
+        currency: character.currency ?? 0,
+        inventory: character.inventory ?? [],
+      })),
+      transcript: [],
+      availableActions: [],
+      loadoutReady: false,
+      gmBusy: false,
     };
     writeHostSession({ roomCode, table });
     return { ok: true, roomCode };

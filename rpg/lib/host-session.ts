@@ -3,7 +3,7 @@ import {
   coreCharacterOptions,
 } from "@/rpg/lib/character-options";
 import { isRoomCode } from "@/rpg/lib/room-code";
-import type { TableState } from "@/rpg/lib/table";
+import { normalizeTable, type TableState } from "@/rpg/lib/table";
 
 const HOST_SESSION_KEY = "rpg.host.session";
 
@@ -32,13 +32,19 @@ function parseHostSession(value: unknown): HostSession | null {
   if (!isRecord(value) || !isRecord(value.table)) return null;
   if (typeof value.roomCode !== "string" || !isRoomCode(value.roomCode)) return null;
   if (value.table.roomCode !== value.roomCode) return null;
-  if (value.table.phase !== "waiting" && value.table.phase !== "lobby") return null;
+  if (
+    value.table.phase !== "waiting" &&
+    value.table.phase !== "lobby" &&
+    value.table.phase !== "play"
+  ) {
+    return null;
+  }
   if (!Array.isArray(value.table.characters)) return null;
   if (!isRecord(value.table.settings) || typeof value.table.settings.campaignName !== "string") {
     return null;
   }
 
-  const table = value.table as unknown as TableState;
+  const table = normalizeTable(value.table as unknown as TableState);
   if (!table.settings.characterOptions) {
     table.settings.characterOptions =
       characterOptionsFor(table.settings.universe) ?? coreCharacterOptions();

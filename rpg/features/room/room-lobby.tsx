@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { characterSummary } from "@/rpg/lib/character-options";
 import { CharacterForm, ClaimForm } from "@/rpg/features/room/character-form";
 import { useRoom } from "@/rpg/features/room/use-room";
+import { paths } from "@/rpg/paths";
 
 interface RoomLobbyProps {
   roomCode: string;
 }
 
 export function RoomLobby({ roomCode }: RoomLobbyProps) {
-  const { view, createCharacter, claimCharacter } = useRoom(roomCode);
+  const { view, createCharacter, claimCharacter, setReady } = useRoom(roomCode);
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [readyPending, setReadyPending] = useState(false);
   const characters = (view?.characters ?? []).filter((character) => !character.archived);
   const canCreate =
     view !== null &&
@@ -21,6 +25,12 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
       ? view.error !== "This room already has a host."
       : view.phase === "lobby" && view.link === "open");
   const mustClaim = view?.seat?.status === "replaced" && view.link === "open";
+
+  useEffect(() => {
+    if (view?.phase === "play") {
+      router.replace(paths.campaign(roomCode));
+    }
+  }, [roomCode, router, view?.phase]);
 
   return (
     <>
@@ -32,6 +42,9 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
       ) : null}
       {view?.objective ? (
         <p className="mt-1 text-base text-zinc-400">{view.objective}</p>
+      ) : null}
+      {view?.situation ? (
+        <p className="mt-4 text-sm leading-relaxed text-zinc-300">{view.situation}</p>
       ) : null}
 
       <div className="mt-6 flex items-center gap-3">
@@ -96,19 +109,44 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
             {characters.map((character) => {
               const yours = view?.seat?.characterId === character.id && view.seat.status === "active";
               return (
-                <li key={character.id} className="border-t border-[var(--border)] py-3 first:border-t-0">
-                  <p className="text-sm text-zinc-50">
-                    {character.name}
-                    {yours ? " (you)" : ""}
-                  </p>
-                  <p className="mt-1 text-sm text-zinc-400">
-                    {view?.characterOptions ? characterSummary(character, view.characterOptions) : ""}
-                  </p>
-                  {yours && view?.seat ? (
-                    <p className="mt-1 font-mono text-sm text-zinc-300">
-                      Claim code {view.seat.claimCode}
+                <li
+                  key={character.id}
+                  className="flex items-start justify-between gap-3 border-t border-[var(--border)] py-3 first:border-t-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-zinc-50">
+                      {character.name}
+                      {yours ? " (you)" : ""}
                     </p>
-                  ) : null}
+                    <p className="mt-1 text-sm text-zinc-400">
+                      {view?.characterOptions ? characterSummary(character, view.characterOptions) : ""}
+                    </p>
+                    {yours && view?.seat ? (
+                      <p className="mt-1 font-mono text-sm text-zinc-300">
+                        Claim code {view.seat.claimCode}
+                      </p>
+                    ) : null}
+                  </div>
+                  {yours ? (
+                    <button
+                      type="button"
+                      className={character.ready ? "btn btn-secondary shrink-0" : "btn btn-primary shrink-0"}
+                      disabled={readyPending || view?.link !== "open"}
+                      aria-pressed={character.ready}
+                      onClick={() => {
+                        setReadyPending(true);
+                        void setReady(!character.ready).then(() => {
+                          setReadyPending(false);
+                        });
+                      }}
+                    >
+                      {character.ready ? "Unready" : "Ready"}
+                    </button>
+                  ) : (
+                    <span className={character.ready ? "badge badge-ready shrink-0" : "badge badge-idle shrink-0"}>
+                      {character.ready ? "Ready" : "Not ready"}
+                    </span>
+                  )}
                 </li>
               );
             })}
