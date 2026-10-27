@@ -8,10 +8,11 @@ import {
   getServerRoomView,
   hostRoom,
   joinRoom,
-  submitAct,
   submitCharacter,
+  submitChosenAction,
   submitClaim,
   submitReady,
+  submitSpeak,
   subscribeRoom,
 } from "@/rpg/services/room-connection";
 import type { CharacterDraft } from "@/rpg/lib/character";
@@ -33,6 +34,7 @@ export function useRoom(roomCode: string) {
     createCharacter: (draft: CharacterDraft) => submitCharacter(draft),
     claimCharacter: (name: string, claimCode: string) => submitClaim(name, claimCode),
     setReady: (ready: boolean) => submitReady(ready),
-    submitAct: (text: string) => submitAct(text),
+    submitSpeak: (text: string) => submitSpeak(text),
+    submitAction: (actionId: string) => submitChosenAction(actionId),
   };
 }

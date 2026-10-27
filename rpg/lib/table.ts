@@ -15,7 +15,13 @@ import {
   type TableCharacter,
   type Wound,
 } from "@/rpg/lib/character";
-import { emptyInventory, startingCurrency } from "@/rpg/lib/starting-kit";
+import { createItemId } from "@/rpg/lib/ids";
+import {
+  currencyRange,
+  emptyInventory,
+  equipmentCountRange,
+  type DraftStartingKit,
+} from "@/rpg/lib/starting-kit";
 
 export type TablePhase = "waiting" | "lobby" | "play";
 
@@ -27,9 +33,14 @@ export interface SceneLocation {
 
 export type TranscriptEntry =
   | { type: "situation"; scene: number; text: string }
-  | { type: "intent"; characterId: string; kind: "act" | "treat"; text: string }
+  | { type: "intent"; characterId: string; kind: "act" | "treat" | "speak"; text: string }
   | { type: "narration"; text: string }
   | { type: "system"; text: string };
+
+export interface SceneAction {
+  id: string;
+  label: string;
+}
 
 export interface TableState {
   roomCode: string;
@@ -43,6 +54,8 @@ export interface TableState {
   revision: number;
   characters: TableCharacter[];
   transcript: TranscriptEntry[];
+  availableActions: SceneAction[];
+  loadoutReady: boolean;
 }
 
 export interface PublicCharacter {
@@ -85,6 +98,8 @@ export interface TableSnapshot {
   location: SceneLocation;
   characters: PublicCharacter[];
   transcript: TranscriptEntry[];
+  availableActions: SceneAction[];
+  loadoutReady: boolean;
   openCheck: null;
   intentQueue: [];
 }
@@ -98,6 +113,8 @@ export function normalizeTable(table: TableState): TableState {
     ...table,
     location: table.location ?? emptyLocation(),
     transcript: Array.isArray(table.transcript) ? table.transcript : [],
+    availableActions: Array.isArray(table.availableActions) ? table.availableActions : [],
+    loadoutReady: table.loadoutReady === true,
     characters: table.characters.map(normalizeTableCharacter),
   };
 }
@@ -124,6 +141,8 @@ export function createTable(roomCode: string, settings: CampaignSettings): Table
     revision: 0,
     characters: [],
     transcript: [],
+    availableActions: [],
+    loadoutReady: false,
   };
 }
 
@@ -147,7 +166,7 @@ export function commitCharacter(
   const character: TableCharacter = {
     ...created.character,
     ready: false,
-    currency: startingCurrency(table.settings.characterConfiguration?.startingWealth),
+    currency: 0,
     inventory: emptyInventory(),
   };
 
@@ -222,20 +241,119 @@ export function startCampaign(
         character.archived ? character : { ...character, inScene: true },
       ),
       transcript: table.transcript.length > 0 ? table.transcript : [situationEntry],
+      availableActions: [],
+      loadoutReady: false,
     },
   };
 }
 
+export function applyStartingLoadout(
+  table: TableState,
+  kits: DraftStartingKit[],
+  actions: SceneAction[],
+): { ok: true; table: TableState } | { ok: false; error: string } {
+  if (table.phase !== "play") return { ok: false, error: "The campaign has not started." };
+  const living = table.characters.filter((character) => !character.archived);
+  if (kits.length !== living.length) {
+    return { ok: false, error: "Return one kit for each living character." };
+  }
+
+  const byId = new Map(kits.map((kit) => [kit.characterId, kit]));
+  const characters: TableCharacter[] = [];
+  for (const character of table.characters) {
+    if (character.archived) {
+      characters.push(character);
+      continue;
+    }
+    const kit = byId.get(character.id);
+    if (!kit) return { ok: false, error: `Missing kit for ${character.name}.` };
+    const checked = checkKit(table, character, kit);
+    if (!checked.ok) return checked;
+    characters.push({
+      ...character,
+      currency: kit.currency,
+      inventory: kit.inventory.map((item) => ({
+        id: createItemId(),
+        name: item.name,
+        equipped: item.equipped,
+      })),
+    });
+  }
+
+  return {
+    ok: true,
+    table: {
+      ...table,
+      revision: table.revision + 1,
+      characters,
+      availableActions: actions,
+      loadoutReady: true,
+    },
+  };
+}
+
+function checkKit(
+  table: TableState,
+  character: TableCharacter,
+  kit: DraftStartingKit,
+): { ok: true } | { ok: false; error: string } {
+  const wealth = table.settings.characterConfiguration?.startingWealth;
+  const abundance = table.settings.campaignConfiguration?.currencyAbundance;
+  const money = currencyRange(wealth, abundance);
+  if (!Number.isInteger(kit.currency) || kit.currency < money.min || kit.currency > money.max) {
+    return {
+      ok: false,
+      error: `Currency for ${character.name} must be an integer from ${money.min} to ${money.max}.`,
+    };
+  }
+
+  const gear = equipmentCountRange(table.settings.characterConfiguration?.startingEquipment);
+  if (kit.inventory.length < gear.min || kit.inventory.length > gear.max) {
+    return {
+      ok: false,
+      error: `${character.name} must have ${gear.min} to ${gear.max} starting items.`,
+    };
+  }
+
+  for (const item of kit.inventory) {
+    if (item.name.trim().length === 0 || item.name.length > 80) {
+      return { ok: false, error: `Each item name for ${character.name} must be 1 to 80 characters.` };
+    }
+  }
+
+  return { ok: true };
+}
+
 const INTENT_MAX = 400;
 
-export function commitAct(
+export function commitSpeak(
   table: TableState,
   characterId: string,
   text: string,
 ): { ok: true; table: TableState } | { ok: false; error: string } {
+  return commitIntent(table, characterId, "speak", text, "Say something.");
+}
+
+export function commitSceneAction(
+  table: TableState,
+  characterId: string,
+  actionId: string,
+): { ok: true; table: TableState } | { ok: false; error: string } {
+  const action = table.availableActions.find((entry) => entry.id === actionId);
+  if (!action) return { ok: false, error: "Choose an action." };
+  return commitIntent(table, characterId, "act", action.label, "Choose an action.");
+}
+
+function commitIntent(
+  table: TableState,
+  characterId: string,
+  kind: "act" | "speak",
+  text: string,
+  empty: string,
+): { ok: true; table: TableState } | { ok: false; error: string } {
   if (table.phase !== "play") return { ok: false, error: "The campaign has not started." };
   const trimmed = text.trim();
-  if (trimmed.length === 0) return { ok: false, error: "Say what you do or speak." };
+  if (trimmed.length === 0) return { ok: false, error: empty };
   if (trimmed.length > INTENT_MAX) return { ok: false, error: "That action is too long." };
 
   const character = table.characters.find((entry) => entry.id === characterId);
@@ -246,7 +364,7 @@ export function commitAct(
   const entry: TranscriptEntry = {
     type: "intent",
     characterId,
-    kind: "act",
+    kind,
     text: trimmed,
   };
 
@@ -288,6 +406,8 @@ export function toSnapshot(table: TableState): TableSnapshot | null {
     location: table.location,
     characters: table.characters.map(toPublicCharacter),
     transcript: table.transcript,
+    availableActions: table.availableActions,
+    loadoutReady: table.loadoutReady,
     openCheck: null,
     intentQueue: [],
   };
@@ -355,6 +475,8 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
     location: parseLocation(value.location),
     characters,
     transcript: parseTranscript(value.transcript),
+    availableActions: parseSceneActions(value.availableActions),
+    loadoutReady: value.loadoutReady === true,
     openCheck: null,
     intentQueue: [],
   };
@@ -424,6 +546,34 @@ function parseInventory(value: unknown): InventoryItem[] {
   return items;
 }
 
+export function parseSceneActions(value: unknown): SceneAction[] {
+  if (!Array.isArray(value)) return [];
+  const actions: SceneAction[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.label !== "string") continue;
+    const id = entry.id.trim();
+    const label = entry.label.trim();
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || seen.has(id)) continue;
+    if (label.length === 0 || label.length > 48) continue;
+    seen.add(id);
+    actions.push({ id, label });
+  }
+  return actions;
+}
+
+export function markLoadoutFailed(table: TableState): TableState {
+  return {
+    ...table,
+    revision: table.revision + 1,
+    loadoutReady: true,
+    transcript: [
+      ...table.transcript,
+      { type: "system", text: "The game master returned an unreadable starting loadout." },
+    ],
+  };
+}
+
 function parseLocation(value: unknown): SceneLocation {
   if (!isRecord(value)) return emptyLocation();
   return {
@@ -458,7 +608,7 @@ function parseTranscriptEntry(value: unknown): TranscriptEntry | null {
     value.type === "intent" &&
     typeof value.characterId === "string" &&
     typeof value.text === "string" &&
-    (value.kind === "act" || value.kind === "treat")
+    (value.kind === "act" || value.kind === "treat" || value.kind === "speak")
   ) {
     return { type: "intent", characterId: value.characterId, kind: value.kind, text: value.text };
   }

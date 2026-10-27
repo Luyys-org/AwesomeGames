@@ -15,10 +15,11 @@ interface CampaignPlayProps {
 }
 
 export function CampaignPlay({ roomCode }: CampaignPlayProps) {
-  const { view, submitAct } = useRoom(roomCode);
+  const { view, submitSpeak, submitAction } = useRoom(roomCode);
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [speech, setSpeech] = useState("");
+  const [actionId, setActionId] = useState("");
   const [actPending, setActPending] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
 
@@ -46,18 +47,35 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
     character && view?.characterOptions ? characterIdentity(character, view.characterOptions) : null;
   const universe = view?.universe ?? "custom";
   const down = character?.wounds.includes("down") === true;
+  const actions = view?.availableActions ?? [];
+  const playReady = view?.phase === "play" && view.loadoutReady;
+  const controlsLocked = !character || down || actPending || !playReady;
 
-  function sendAct() {
-    if (actPending || !character) return;
+  function sendSpeak() {
+    if (controlsLocked) return;
     setActPending(true);
     setActError(null);
-    void submitAct(speech).then((message) => {
+    void submitSpeak(speech).then((message) => {
       setActPending(false);
       if (message) {
         setActError(message);
         return;
       }
       setSpeech("");
+    });
+  }
+
+  function sendAction() {
+    if (controlsLocked) return;
+    setActPending(true);
+    setActError(null);
+    void submitAction(actionId).then((message) => {
+      setActPending(false);
+      if (message) {
+        setActError(message);
+        return;
+      }
+      setActionId("");
     });
   }
 
@@ -120,6 +138,9 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+            {!view?.loadoutReady && view?.phase === "play" ? (
+              <p className="mb-4 text-sm text-zinc-400">The game master is preparing starting gear.</p>
+            ) : null}
             <AgentLog
               transcript={view?.transcript ?? []}
               situation={view?.situation ?? ""}
@@ -127,48 +148,88 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
             />
           </div>
 
-          <form
-            className="flex shrink-0 gap-3 border-t border-[var(--border)] p-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              sendAct();
-            }}
-          >
-            <label className="sr-only" htmlFor="character-speech">
-              Speak
-            </label>
-            <textarea
-              id="character-speech"
-              className="field min-h-[72px] flex-1 resize-y"
-              rows={3}
-              maxLength={400}
-              value={speech}
-              disabled={!character || down || actPending || view?.phase !== "play"}
-              placeholder={down ? "You cannot act while down." : "What do you say or do?"}
-              onChange={(event) => {
-                setSpeech(event.target.value);
-                setActError(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          <div className="shrink-0 border-t border-[var(--border)] p-4">
+            <div className="grid gap-4 sm:grid-cols-[minmax(12rem,16rem)_1fr]">
+              <form
+                onSubmit={(event) => {
                   event.preventDefault();
-                  sendAct();
-                }
-              }}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary self-end"
-              disabled={!character || down || actPending || view?.phase !== "play"}
-            >
-              Act
-            </button>
-          </form>
-          {actError ? (
-            <p role="alert" className="shrink-0 px-4 pb-3 text-sm text-red-200">
-              {actError}
-            </p>
-          ) : null}
+                  sendAction();
+                }}
+              >
+                <label className="block text-sm text-zinc-300" htmlFor="scene-action">
+                  Action
+                  <select
+                    id="scene-action"
+                    className="field mt-1 w-full"
+                    value={actionId}
+                    disabled={controlsLocked || actions.length === 0}
+                    onChange={(event) => {
+                      setActionId(event.target.value);
+                      setActError(null);
+                    }}
+                  >
+                    <option value="">
+                      {actions.length === 0 ? "No actions yet" : "Choose an action"}
+                    </option>
+                    {actions.map((action) => (
+                      <option key={action.id} value={action.id}>
+                        {action.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  className="btn btn-primary mt-2"
+                  disabled={controlsLocked || actionId.length === 0}
+                >
+                  Act
+                </button>
+              </form>
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  sendSpeak();
+                }}
+              >
+                <label className="block text-sm text-zinc-300" htmlFor="character-speech">
+                  Speak
+                  <textarea
+                    id="character-speech"
+                    className="field mt-1 min-h-[72px] w-full resize-y"
+                    rows={3}
+                    maxLength={400}
+                    value={speech}
+                    disabled={controlsLocked}
+                    placeholder={down ? "You cannot act while down." : "What does your character say?"}
+                    onChange={(event) => {
+                      setSpeech(event.target.value);
+                      setActError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                        event.preventDefault();
+                        sendSpeak();
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="btn btn-secondary mt-2"
+                  disabled={controlsLocked || speech.trim().length === 0}
+                >
+                  Speak
+                </button>
+              </form>
+            </div>
+            {actError ? (
+              <p role="alert" className="mt-3 text-sm text-red-200">
+                {actError}
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -226,9 +287,10 @@ function LogEntry({
 }) {
   if (entry.type === "intent") {
     const name = characterNames[entry.characterId] ?? "Someone";
+    const prefix = entry.kind === "speak" ? `${name} says` : name;
     return (
       <p className="text-sm leading-relaxed text-zinc-300">
-        <span className="font-medium text-zinc-50">{name}:</span> {entry.text}
+        <span className="font-medium text-zinc-50">{prefix}:</span> {entry.text}
       </p>
     );
   }

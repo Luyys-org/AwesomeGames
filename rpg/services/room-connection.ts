@@ -2,20 +2,26 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
+import { readHostAi } from "@/rpg/lib/host-ai";
+import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
+  applyStartingLoadout,
   canStartCampaign,
-  commitAct,
   commitCharacter,
+  commitSceneAction,
+  commitSpeak,
   emptyLocation,
+  markLoadoutFailed,
   parseSnapshot,
   setCharacterReady,
   startCampaign,
   toPublicCharacter,
   toSnapshot,
   type PublicCharacter,
+  type SceneAction,
   type SceneLocation,
   type TableSnapshot,
   type TableState,
@@ -56,6 +62,8 @@ export interface RoomView {
   phase: "waiting" | "lobby" | "play";
   characters: PublicCharacter[];
   transcript: TranscriptEntry[];
+  availableActions: SceneAction[];
+  loadoutReady: boolean;
   scene: number | null;
   seat: RoomSeat | null;
   joiningCount: number;
@@ -103,6 +111,7 @@ interface Session {
   hostWaiters: HostWaiter[];
   hostTimer: ReturnType<typeof setTimeout> | null;
   claimAttempted: boolean;
+  loadoutRequested: boolean;
 }
 
 let current: Session | null = null;
@@ -159,6 +168,7 @@ async function hostRoomNow(roomCode: string): Promise<void> {
     seat: hostSeat(saved.table),
   });
   await finishOpen(session);
+  requestStartingLoadout(session);
 }
 
 async function joinRoomNow(roomCode: string): Promise<void> {
@@ -249,7 +259,15 @@ export async function submitReady(ready: boolean): Promise<string | null> {
   }
 }
 
-export async function submitAct(text: string): Promise<string | null> {
+export async function submitSpeak(text: string): Promise<string | null> {
+  return submitHostOrPeerIntent("speak", text);
+}
+
+export async function submitChosenAction(actionId: string): Promise<string | null> {
+  return submitHostOrPeerIntent("act", actionId);
+}
+
+async function submitHostOrPeerIntent(kind: "speak" | "act", value: string): Promise<string | null> {
   const session = current;
   if (!session || session.hidden || session.link === "failed") {
     return session?.error ?? "Connecting to the room.";
@@ -258,7 +276,10 @@ export async function submitAct(text: string): Promise<string | null> {
 
   if (session.role === "host") {
     if (!session.table) return "This browser does not have the host game.";
-    const result = commitAct(session.table, session.seat.characterId, text);
+    const result =
+      kind === "speak"
+        ? commitSpeak(session.table, session.seat.characterId, value)
+        : commitSceneAction(session.table, session.seat.characterId, value);
     if (!result.ok) return result.error;
     session.table = result.table;
     writeHostSession({ roomCode: session.roomCode, table: result.table });
@@ -270,7 +291,9 @@ export async function submitAct(text: string): Promise<string | null> {
   if (!session.hostPeerId) return "Waiting for the host.";
   try {
     const response = await session.mesh.request(
-      { type: "intent", kind: "act", text, targetCharacterId: null },
+      kind === "speak"
+        ? { type: "intent", kind: "speak", text: value, targetCharacterId: null }
+        : { type: "intent", kind: "act", actionId: value, targetCharacterId: null },
       { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
     );
     return applyActionResponse(session, response, "");
@@ -326,6 +349,7 @@ async function openSession(input: {
     hostWaiters: [],
     hostTimer: null,
     claimAttempted: false,
+    loadoutRequested: false,
   };
 
   current = session;
@@ -538,10 +562,15 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
   }
 
   if (data.type === "intent") {
-    if (data.kind !== "act" || typeof data.text !== "string") return { ok: false };
     const characterId = session.peers.get(peerId)?.characterId;
     if (!characterId) return { ok: false, error: "Create a character first." };
-    const result = commitAct(session.table, characterId, data.text);
+    const result =
+      data.kind === "speak" && typeof data.text === "string"
+        ? commitSpeak(session.table, characterId, data.text)
+        : data.kind === "act" && typeof data.actionId === "string"
+          ? commitSceneAction(session.table, characterId, data.actionId)
+          : null;
+    if (!result) return { ok: false };
     if (!result.ok) return { ok: false, error: result.error };
     session.table = result.table;
     writeHostSession({ roomCode: session.roomCode, table: result.table });
@@ -561,6 +590,42 @@ function maybeStartCampaign(session: Session): void {
   if (!started.ok) return;
   session.table = started.table;
   writeHostSession({ roomCode: session.roomCode, table: started.table });
+  publish(session);
+  void broadcastSnapshot(session);
+  requestStartingLoadout(session);
+}
+
+function requestStartingLoadout(session: Session): void {
+  if (session.role !== "host" || !session.table) return;
+  if (session.table.phase !== "play" || session.table.loadoutReady || session.loadoutRequested) return;
+  session.loadoutRequested = true;
+  void fillStartingLoadout(session);
+}
+
+async function fillStartingLoadout(session: Session): Promise<void> {
+  if (!session.table || session.hidden || session.link === "failed") return;
+  const hostAi = readHostAi();
+  if (!hostAi) {
+    session.table = markLoadoutFailed(session.table);
+    writeHostSession({ roomCode: session.roomCode, table: session.table });
+    publish(session);
+    void broadcastSnapshot(session);
+    return;
+  }
+
+  const generated = await generateStartingLoadout(session.table, hostAi);
+  if (session.hidden || current !== session || !session.table) return;
+  if (!generated.ok) {
+    session.table = markLoadoutFailed(session.table);
+    writeHostSession({ roomCode: session.roomCode, table: session.table });
+    publish(session);
+    void broadcastSnapshot(session);
+    return;
+  }
+
+  const applied = applyStartingLoadout(session.table, generated.kits, generated.actions);
+  session.table = applied.ok ? applied.table : markLoadoutFailed(session.table);
+  writeHostSession({ roomCode: session.roomCode, table: session.table });
   publish(session);
   void broadcastSnapshot(session);
 }
@@ -778,6 +843,8 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     phase: source?.phase ?? table?.phase ?? "waiting",
     characters: source?.characters ?? (table ? table.characters.map(toPublicCharacter) : []),
     transcript: source?.transcript ?? table?.transcript ?? [],
+    availableActions: source?.availableActions ?? table?.availableActions ?? [],
+    loadoutReady: source?.loadoutReady ?? table?.loadoutReady ?? false,
     scene: source?.scene ?? table?.scene ?? null,
     seat: session.seat,
     joiningCount:

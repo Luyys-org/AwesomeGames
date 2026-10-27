@@ -8,19 +8,14 @@ import {
   type CampaignSettings,
 } from "@/rpg/lib/campaign-settings";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
+import { renderTemplate } from "@/rpg/lib/prompt-template";
+import openingSituationRetryTemplate from "@/rpg/prompts/opening-situation-retry";
+import openingSituationTemplate from "@/rpg/prompts/opening-situation";
+import startingLoadoutRetryTemplate from "@/rpg/prompts/starting-loadout-retry";
+import startingLoadoutTemplate from "@/rpg/prompts/starting-loadout";
+import systemTemplate from "@/rpg/prompts/system";
 
-export const GM_SYSTEM_PROMPT = [
-  "You are the game master and you have no player character.",
-  "Use the stats, skills, classes, races, and modifiers from the user message. Do not invent different ones.",
-  "Difficulties, wounds, and the death penalty stay as the user message states.",
-  "Reply with JSON only, matching the schema in the user message.",
-  "Do not write a die result, a total, or a success word.",
-  "Do not change the objective, the death penalty, enemy difficulty, loot rarity, player freedom, stats, abilities, or wounds.",
-  "Follow the enemy difficulty, loot rarity, and player freedom in the user message. They add no die, item, or wound.",
-  "Follow campaignConfiguration and characterConfiguration in the user message for fiction tone, pacing, loot, travel, PvP, NPC rules, and progression.",
-  "Player characters are allies. Harm applies only where the user message allows it.",
-  "Keep setup and narration inside the character limits in the user message.",
-].join(" ");
+export const GM_SYSTEM_PROMPT = renderTemplate(systemTemplate, {});
 
 function choiceLabel<T extends string>(
   id: T,
@@ -79,34 +74,74 @@ export function serializeCampaignForGm(settings: CampaignSettings): Record<strin
   };
 }
 
+function campaignVars(settings: CampaignSettings): Record<string, unknown> {
+  const campaign = serializeCampaignForGm(settings);
+  return { ...campaign, campaign };
+}
+
 export function buildOpeningSituationUserMessage(settings: CampaignSettings): string {
-  return JSON.stringify({
-    schema: {
-      situation: "string",
-      place: "string",
-      weather: "string",
-      reputation: "string",
-    },
-    limits: { situation: 800, place: 80, weather: 80, reputation: 80 },
-    campaign: serializeCampaignForGm(settings),
-    task: "Write the opening situation for scene 1. Put the party in the fiction ready to act toward the objective. Also name the place, the weather, and the party's reputation there.",
-  });
+  return renderTemplate(openingSituationTemplate, campaignVars(settings));
 }
 
 export function buildOpeningSituationRetryMessage(
   settings: CampaignSettings,
   validationError: string,
 ): string {
-  return JSON.stringify({
-    schema: {
-      situation: "string",
-      place: "string",
-      weather: "string",
-      reputation: "string",
-    },
-    limits: { situation: 800, place: 80, weather: 80, reputation: 80 },
+  return renderTemplate(openingSituationRetryTemplate, {
+    ...campaignVars(settings),
     validationError,
-    campaign: serializeCampaignForGm(settings),
-    task: "Fix the JSON and return only { \"situation\", \"place\", \"weather\", \"reputation\" }.",
+  });
+}
+
+export interface StartingLoadoutCharacterPrompt {
+  characterId: string;
+  name: string;
+  classLabel: string;
+  raceLabel: string;
+  currencyMin: number;
+  currencyMax: number;
+  itemMin: number;
+  itemMax: number;
+}
+
+function loadoutVars(input: {
+  settings: CampaignSettings;
+  situation: string;
+  place: string;
+  currencyName: string;
+  characters: StartingLoadoutCharacterPrompt[];
+}): Record<string, unknown> {
+  return {
+    ...campaignVars(input.settings),
+    situation: input.situation,
+    place: input.place,
+    currencyName: input.currencyName,
+    characters: input.characters,
+  };
+}
+
+export function buildStartingLoadoutUserMessage(input: {
+  settings: CampaignSettings;
+  situation: string;
+  place: string;
+  currencyName: string;
+  characters: StartingLoadoutCharacterPrompt[];
+}): string {
+  return renderTemplate(startingLoadoutTemplate, loadoutVars(input));
+}
+
+export function buildStartingLoadoutRetryMessage(
+  input: {
+    settings: CampaignSettings;
+    situation: string;
+    place: string;
+    currencyName: string;
+    characters: StartingLoadoutCharacterPrompt[];
+  },
+  validationError: string,
+): string {
+  return renderTemplate(startingLoadoutRetryTemplate, {
+    ...loadoutVars(input),
+    validationError,
   });
 }

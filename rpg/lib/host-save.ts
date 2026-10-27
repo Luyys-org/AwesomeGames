@@ -314,6 +314,8 @@ export function startLobbyFromSave(
         inventory: character.inventory ?? [],
       })),
       transcript: [],
+      availableActions: [],
+      loadoutReady: false,
     };
     writeHostSession({ roomCode, table });
     return { ok: true, roomCode };
