@@ -22,6 +22,8 @@ import {
   type UniverseId,
   type UniverseTypeId,
 } from "@/rpg/lib/campaign-settings";
+import { parseStoredCampaignConfiguration } from "@/rpg/lib/campaign-tab-config";
+import { parseStoredCharacterConfiguration } from "@/rpg/lib/character-tab-config";
 import { createRoomCode, isClaimCode } from "@/rpg/lib/room-code";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import type { TableState } from "@/rpg/lib/table";
@@ -66,6 +68,13 @@ function readInteger(value: unknown, min: number): number | null {
 
 function readLine(value: unknown, max: number): string | null {
   if (typeof value !== "string" || value.includes("\n") || value.includes("\r")) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > max) return null;
+  return trimmed;
+}
+
+function readMultiline(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > max) return null;
   return trimmed;
@@ -131,6 +140,11 @@ function readCharacter(
     owner: value.owner,
     archived: false,
     inScene: value.inScene,
+    ready: value.ready === true,
+    currency: typeof value.currency === "number" && Number.isFinite(value.currency) && value.currency >= 0
+      ? Math.floor(value.currency)
+      : 0,
+    inventory: [],
   };
 }
 
@@ -156,7 +170,7 @@ function parseLobbySave(value: unknown): ParsedSave {
   }
 
   const campaignName = readLine(value.campaignName, 60);
-  const objective = readLine(value.objective, 280);
+  const objective = readMultiline(value.objective, 2000) ?? readLine(value.objective, 280);
   const situation = typeof value.situation === "string" ? value.situation.trim() : "";
   if (!campaignName || !objective || situation.length === 0 || situation.length > 800) {
     return { ok: false, error: INVALID_SAVE };
@@ -213,6 +227,20 @@ function parseLobbySave(value: unknown): ParsedSave {
     return { ok: false, error: INVALID_SAVE };
   }
 
+  let campaignConfiguration: CampaignSettings["campaignConfiguration"];
+  if (value.campaignConfiguration !== undefined) {
+    const parsed = parseStoredCampaignConfiguration(value.campaignConfiguration);
+    if (!parsed) return { ok: false, error: INVALID_SAVE };
+    campaignConfiguration = parsed;
+  }
+
+  let characterConfiguration: CampaignSettings["characterConfiguration"];
+  if (value.characterConfiguration !== undefined) {
+    const parsed = parseStoredCharacterConfiguration(value.characterConfiguration);
+    if (!parsed) return { ok: false, error: INVALID_SAVE };
+    characterConfiguration = parsed;
+  }
+
   return {
     ok: true,
     value: {
@@ -228,6 +256,8 @@ function parseLobbySave(value: unknown): ParsedSave {
         enemyDifficulty: value.enemyDifficulty,
         lootRarity: value.lootRarity,
         playerFreedom: value.playerFreedom,
+        campaignConfiguration,
+        characterConfiguration,
       },
       objectiveStatus: value.objectiveStatus,
       scene,
@@ -275,8 +305,15 @@ export function startLobbyFromSave(
       objectiveStatus: save.value.objectiveStatus,
       scene: save.value.scene,
       situation: save.value.situation,
+      location: { place: "", weather: "", reputation: "" },
       revision: save.value.revision,
-      characters: save.value.characters,
+      characters: save.value.characters.map((character) => ({
+        ...character,
+        ready: false,
+        currency: character.currency ?? 0,
+        inventory: character.inventory ?? [],
+      })),
+      transcript: [],
     };
     writeHostSession({ roomCode, table });
     return { ok: true, roomCode };

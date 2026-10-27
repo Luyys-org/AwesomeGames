@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type ChangeEvent, type ReactNode } from "react";
 
 import { TeamOptions } from "@/rpg/features/campaign/team-options";
 import { useNewCampaign } from "@/rpg/features/campaign/use-new-campaign";
@@ -14,6 +14,7 @@ import {
   CAMPAIGN_TAGS,
   MISSION_FAILURE_IMPACTS,
   REPUTATION_TRACKING_OPTIONS,
+  GLOBAL_DIFFICULTY_OPTIONS,
   SETTING_LEVELS,
   type CampaignConfigurationInput,
 } from "@/rpg/lib/campaign-tab-config";
@@ -28,11 +29,13 @@ const STEP_LEADS = [
   "Party size, creation rules, statistics, equipment, and morality settings for player characters.",
 ];
 
+const fieldSpanClass = (fullWidth: boolean) => (fullWidth ? "lg:col-span-2" : "");
+
 function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-4 border-t border-zinc-800 pt-6 first:border-t-0 first:pt-0">
+    <section className="border-t border-zinc-800 pt-6 first:border-t-0 first:pt-0">
       <h3 className="text-sm font-medium text-zinc-200">{title}</h3>
-      <div className="space-y-4">{children}</div>
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -49,6 +52,7 @@ function TextField({
   onChange,
   required,
   maxLength,
+  fullWidth = false,
 }: {
   id: string;
   label: string;
@@ -57,9 +61,10 @@ function TextField({
   onChange: (value: string) => void;
   required?: boolean;
   maxLength?: number;
+  fullWidth?: boolean;
 }) {
   return (
-    <div>
+    <div className={fieldSpanClass(fullWidth)}>
       <label className="block text-sm text-zinc-300" htmlFor={id}>
         {label}
       </label>
@@ -86,6 +91,7 @@ function TextAreaField({
   required,
   maxLength,
   rows = 4,
+  fullWidth = true,
 }: {
   id: string;
   label: string;
@@ -95,9 +101,10 @@ function TextAreaField({
   required?: boolean;
   maxLength?: number;
   rows?: number;
+  fullWidth?: boolean;
 }) {
   return (
-    <div>
+    <div className={fieldSpanClass(fullWidth)}>
       <label className="block text-sm text-zinc-300" htmlFor={id}>
         {label}
       </label>
@@ -124,6 +131,7 @@ function SelectField<K extends string>({
   required,
   placeholder,
   options,
+  fullWidth = false,
 }: {
   id: string;
   label: string;
@@ -133,9 +141,10 @@ function SelectField<K extends string>({
   required?: boolean;
   placeholder: string;
   options: { id: K; label: string }[];
+  fullWidth?: boolean;
 }) {
   return (
-    <div>
+    <div className={fieldSpanClass(fullWidth)}>
       <label className="block text-sm text-zinc-300" htmlFor={id}>
         {label}
       </label>
@@ -164,15 +173,17 @@ function CheckboxField({
   description,
   checked,
   onChange,
+  fullWidth = false,
 }: {
   id: string;
   label: string;
   description: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  fullWidth?: boolean;
 }) {
   return (
-    <div className="flex gap-3">
+    <div className={`flex gap-3 ${fieldSpanClass(fullWidth)}`.trim()}>
       <input
         id={id}
         type="checkbox"
@@ -200,6 +211,7 @@ function NumberField({
   min = 1,
   max,
   disabled,
+  fullWidth = false,
 }: {
   id: string;
   label: string;
@@ -210,9 +222,10 @@ function NumberField({
   min?: number;
   max?: number;
   disabled?: boolean;
+  fullWidth?: boolean;
 }) {
   return (
-    <div>
+    <div className={fieldSpanClass(fullWidth)}>
       <label className="block text-sm text-zinc-300" htmlFor={id}>
         {label}
       </label>
@@ -241,9 +254,58 @@ function CampaignTabPanel({
 }) {
   const config = campaign.campaignConfiguration;
   const patch = (fields: Partial<CampaignConfigurationInput>) => campaign.patchConfiguration(fields);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  async function onImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      campaign.importCampaignSettings(parsed);
+    } catch {
+      campaign.importCampaignSettings(undefined);
+    }
+  }
 
   return (
     <div className="space-y-2">
+      <div className="lg:col-span-2 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <SelectField
+          id="global-difficulty"
+          label="Global difficulty"
+          description="Prefills dropdown settings below. Text fields, tags, checkboxes, and level inputs stay as they are."
+          value={campaign.globalDifficulty}
+          onChange={(value) => campaign.selectGlobalDifficulty(value)}
+          placeholder="Choose global difficulty"
+          options={GLOBAL_DIFFICULTY_OPTIONS}
+        />
+        <div className="flex flex-wrap gap-2 pb-0.5">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => campaign.exportCampaignSettings()}
+          >
+            Export settings
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => importInputRef.current?.click()}
+          >
+            Import settings
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            onChange={(event) => void onImportFile(event)}
+          />
+        </div>
+      </div>
+
       <FormSection title="Basic Information">
         <TextField
           id="campaign-name"
@@ -256,13 +318,13 @@ function CampaignTabPanel({
         />
 
         {campaign.presetsStatus === "loading" ? (
-          <p className="text-sm text-zinc-400">Loading universes.</p>
+          <p className="text-sm text-zinc-400 lg:col-span-2">Loading universes.</p>
         ) : null}
         {campaign.presetsStatus === "failed" ? (
-          <p className="text-sm text-zinc-400">Preset universes could not be loaded.</p>
+          <p className="text-sm text-zinc-400 lg:col-span-2">Preset universes could not be loaded.</p>
         ) : null}
 
-        <div>
+        <div className="min-w-0">
           <label className="block text-sm text-zinc-300" htmlFor="universe">
             Universe
           </label>
@@ -338,7 +400,7 @@ function CampaignTabPanel({
           maxLength={2000}
         />
 
-        <fieldset>
+        <fieldset className="min-w-0 lg:col-span-2">
           <legend className="block text-sm text-zinc-300">Campaign tags</legend>
           <FieldDescription>
             For agent context when generating events and to focus specific syntax on text generation.
@@ -716,7 +778,7 @@ function CharacterTabPanel({
           disabled={poolLocked}
         />
         {poolLocked ? (
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-400 lg:col-span-2">
             Point pool and cap come from the chosen universe and stay fixed for preset universes.
           </p>
         ) : null}
@@ -767,18 +829,20 @@ function CharacterTabPanel({
       </FormSection>
 
       <FormSection title="Statistics">
-        <TeamOptions
-          universe={campaign.universe}
-          draft={campaign.optionsDraft}
-          onChange={campaign.setOptionsDraft}
-          nextId={campaign.nextOptionId}
-          hidePoolFields
-          hideHeader
-          abilitiesTitle="Available abilities"
-          statsTitle="Available stats"
-          classesTitle="Available classes"
-          racesTitle="Available races"
-        />
+        <div className="min-w-0 lg:col-span-2">
+          <TeamOptions
+            universe={campaign.universe}
+            draft={campaign.optionsDraft}
+            onChange={campaign.setOptionsDraft}
+            nextId={campaign.nextOptionId}
+            hidePoolFields
+            hideHeader
+            abilitiesTitle="Available abilities"
+            statsTitle="Available stats"
+            classesTitle="Available classes"
+            racesTitle="Available races"
+          />
+        </div>
 
         <CheckboxField
           id="equipment-rules"
@@ -789,7 +853,7 @@ function CharacterTabPanel({
         />
 
         {config.equipmentRules ? (
-          <fieldset>
+          <fieldset className="min-w-0 lg:col-span-2">
             <legend className="block text-sm text-zinc-300">Equipment validation rules</legend>
             <FieldDescription>
               Requirements checked before a character can equip an item.
@@ -854,7 +918,7 @@ export function NewCampaignForm() {
 
   return (
     <form
-      className="panel mt-8 p-6"
+      className="panel mt-8 w-full p-6 lg:p-8"
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -926,7 +990,7 @@ export function NewCampaignForm() {
           }
           className="btn btn-primary ml-auto"
         >
-          {isLast ? "Create game" : "Continue"}
+          {isLast ? (campaign.submitting ? "Generating opening…" : "Create game") : "Continue"}
         </button>
       </div>
     </form>

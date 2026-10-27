@@ -344,6 +344,17 @@ export function checkAdjustments(
   return { stat, roll };
 }
 
+export function characterIdentity(
+  character: { name: string; classId: string; raceId: string },
+  options: CharacterOptions,
+): { name: string; race: string; className: string } {
+  return {
+    name: character.name,
+    race: findTrait(options.races, character.raceId)?.label ?? "",
+    className: findTrait(options.classes, character.classId)?.label ?? "",
+  };
+}
+
 export function characterSummary(
   character: {
     abilityId: string;

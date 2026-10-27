@@ -6,18 +6,21 @@ import { useRouter } from "next/navigation";
 import { useHostAi } from "@/rpg/features/landing/use-host-ai";
 import {
   CAMPAIGN_STEPS,
+  type CampaignSettings,
   type CampaignSettingsInput,
   universePreset,
   validateCampaignSettings,
   validateCampaignStep,
 } from "@/rpg/lib/campaign-settings";
 import {
+  applyGlobalDifficultyPrefill,
   configEnemyDifficultyFromLegacy,
   configLootRarityFromLegacy,
   configPlayerFreedomFromLegacy,
   emptyCampaignConfigurationInput,
   type CampaignConfigurationInput,
   type CampaignTagId,
+  type GlobalDifficultyId,
 } from "@/rpg/lib/campaign-tab-config";
 import {
   deathRecoveryFromLegacy,
@@ -30,6 +33,13 @@ import {
   emptyCharacterOptionsDraft,
   type CharacterOptionsDraft,
 } from "@/rpg/lib/character-options";
+import {
+  buildNewCampaignSettingsExport,
+  campaignSettingsExportFilename,
+  parseNewCampaignSettingsImport,
+} from "@/rpg/lib/campaign-settings-import-export";
+import { readHostAi } from "@/rpg/lib/host-ai";
+import { generateOpeningSituation } from "@/rpg/lib/host-situation";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import { createRoomCode } from "@/rpg/lib/room-code";
 import { createTable } from "@/rpg/lib/table";
@@ -65,6 +75,7 @@ export function useNewCampaign() {
   const [universeLabel, setUniverseLabel] = useState("");
   const [universeType, setUniverseType] = useState("");
   const [objective, setObjective] = useState("");
+  const [globalDifficulty, setGlobalDifficulty] = useState<GlobalDifficultyId | "">("");
   const [campaignConfiguration, setCampaignConfiguration] = useState<CampaignConfigurationInput>(
     emptyCampaignConfigurationInput,
   );
@@ -141,6 +152,7 @@ export function useNewCampaign() {
     if (!preset) {
       setUniverseLabel(EMPTY_PREFILL.universeLabel);
       setUniverseType(EMPTY_PREFILL.universeType);
+      setGlobalDifficulty("");
       setCampaignConfiguration(emptyCampaignConfigurationInput());
       setCharacterConfiguration(emptyCharacterConfigurationInput());
       return;
@@ -156,6 +168,62 @@ export function useNewCampaign() {
 
   function patchConfiguration(patch: Partial<CampaignConfigurationInput>) {
     setCampaignConfiguration((current) => ({ ...current, ...patch }));
+  }
+
+  function selectGlobalDifficulty(difficulty: GlobalDifficultyId | "") {
+    setGlobalDifficulty(difficulty);
+    if (!difficulty) return;
+    setCampaignConfiguration((current) => applyGlobalDifficultyPrefill(current, difficulty));
+  }
+
+  function exportCampaignSettings() {
+    const payload = buildNewCampaignSettingsExport({
+      globalDifficulty,
+      campaignName,
+      universe,
+      universeLabel,
+      universeType,
+      objective,
+      campaignConfiguration,
+      characterConfiguration,
+      characterOptionsDraft: optionsDraft,
+    });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = campaignSettingsExportFilename(campaignName);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    clearResult();
+  }
+
+  function importCampaignSettings(raw: unknown): string | null {
+    if (raw === null || raw === undefined) {
+      const message = "Import file is not valid JSON.";
+      setError(message);
+      return message;
+    }
+    const parsed = parseNewCampaignSettingsImport(raw);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return parsed.error;
+    }
+
+    const data = parsed.value;
+    setGlobalDifficulty(data.globalDifficulty);
+    setCampaignName(data.campaignName);
+    setUniverse(data.universe);
+    setUniverseLabel(data.universeLabel);
+    setUniverseType(data.universeType);
+    setObjective(data.objective);
+    setCampaignConfiguration(data.campaignConfiguration);
+    if (data.characterConfiguration) {
+      setCharacterConfiguration(data.characterConfiguration);
+      setOptionsDraft(data.characterOptionsDraft ?? emptyCharacterOptionsDraft());
+    }
+    clearResult();
+    return null;
   }
 
   function patchCharacterConfiguration(patch: Partial<CharacterConfigurationInput>) {
@@ -231,13 +299,31 @@ export function useNewCampaign() {
 
     setSubmitting(true);
     setError(null);
+    void finishCreate(result.value);
+  }
+
+  async function finishCreate(settings: CampaignSettings) {
+    const hostAi = readHostAi();
+    if (!hostAi) {
+      setError("Link an AI provider before you create a game.");
+      setSubmitting(false);
+      return;
+    }
+
+    const situationResult = await generateOpeningSituation(settings, hostAi);
+    if (!situationResult.ok) {
+      setError(situationResult.error);
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const roomCode = createRoomCode();
-      writeHostSession({
-        roomCode,
-        table: createTable(roomCode, result.value),
-      });
+      const table = createTable(roomCode, settings);
+      table.situation = situationResult.situation;
+      table.location = situationResult.location;
+      table.revision = 1;
+      writeHostSession({ roomCode, table });
       router.push(paths.room(roomCode));
     } catch {
       setSubmitting(false);
@@ -258,6 +344,7 @@ export function useNewCampaign() {
     universeLabel,
     universeType,
     objective,
+    globalDifficulty,
     campaignConfiguration,
     characterConfiguration,
     optionsDraft,
@@ -270,6 +357,14 @@ export function useNewCampaign() {
     setUniverseLabel: (value: string) => edit(() => setUniverseLabel(value)),
     setUniverseType: (value: string) => edit(() => setUniverseType(value)),
     setObjective: (value: string) => edit(() => setObjective(value)),
+    selectGlobalDifficulty: (difficulty: GlobalDifficultyId | "") =>
+      edit(() => selectGlobalDifficulty(difficulty)),
+    exportCampaignSettings: () => edit(() => exportCampaignSettings()),
+    importCampaignSettings: (raw: unknown) => {
+      const message = importCampaignSettings(raw);
+      if (message) setError(message);
+      return message;
+    },
     patchConfiguration: (patch: Partial<CampaignConfigurationInput>) =>
       edit(() => patchConfiguration(patch)),
     patchCharacterConfiguration: (patch: Partial<CharacterConfigurationInput>) =>

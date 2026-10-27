@@ -123,9 +123,6 @@ export function validateCharacterConfiguration(
     "point pool",
   );
   if (!pointPool.ok) return pointPool;
-  if (pointPool.value > 12) {
-    return { ok: false, error: "Point pool must be 12 or fewer." };
-  }
 
   const pointCapPerAbility = readPositiveInt(
     input.pointCapPerAbility,
@@ -192,4 +189,75 @@ export function legacyDeathPenaltyFromRecovery(recovery: DeathRecoveryId): Death
 export function deathRecoveryFromLegacy(penalty: DeathPenaltyId): DeathRecoveryId {
   if (penalty === "new-character") return "dead";
   return "out-of-scene";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readStoredString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readStoredBool(value: unknown): boolean {
+  return value === true;
+}
+
+function readEquipmentRules(value: unknown): EquipmentValidationRules {
+  if (!isRecord(value)) {
+    return { level: false, stats: false, race: false, class: false };
+  }
+  return {
+    level: readStoredBool(value.level),
+    stats: readStoredBool(value.stats),
+    race: readStoredBool(value.race),
+    class: readStoredBool(value.class),
+  };
+}
+
+export function characterConfigurationToInput(
+  config: CharacterConfiguration,
+): CharacterConfigurationInput {
+  return {
+    playerCount: String(config.playerCount),
+    pointPool: String(config.pointPool),
+    pointCapPerAbility: String(config.pointCapPerAbility),
+    startingEquipment: config.startingEquipment,
+    startingWealth: config.startingWealth,
+    deathRecovery: config.deathRecovery,
+    injurySystem: config.injurySystem,
+    permanentWounds: config.permanentWounds,
+    equipmentRules: config.equipmentRules,
+    equipmentValidationRules: { ...config.equipmentValidationRules },
+    weightSystem: config.weightSystem,
+    ammunitionTracking: config.ammunitionTracking,
+    moralityTracking: config.moralityTracking,
+    sanitySystem: config.sanitySystem,
+  };
+}
+
+export function parseStoredCharacterConfiguration(value: unknown): CharacterConfiguration | null {
+  if (!isRecord(value)) return null;
+  const input: CharacterConfigurationInput = {
+    playerCount:
+      typeof value.playerCount === "number" ? String(value.playerCount) : readStoredString(value.playerCount),
+    pointPool: typeof value.pointPool === "number" ? String(value.pointPool) : readStoredString(value.pointPool),
+    pointCapPerAbility:
+      typeof value.pointCapPerAbility === "number"
+        ? String(value.pointCapPerAbility)
+        : readStoredString(value.pointCapPerAbility),
+    startingEquipment: readStoredString(value.startingEquipment) as CharacterConfigurationInput["startingEquipment"],
+    startingWealth: readStoredString(value.startingWealth) as CharacterConfigurationInput["startingWealth"],
+    deathRecovery: readStoredString(value.deathRecovery) as CharacterConfigurationInput["deathRecovery"],
+    injurySystem: readStoredBool(value.injurySystem),
+    permanentWounds: readStoredBool(value.permanentWounds),
+    equipmentRules: readStoredBool(value.equipmentRules),
+    equipmentValidationRules: readEquipmentRules(value.equipmentValidationRules),
+    weightSystem: readStoredBool(value.weightSystem),
+    ammunitionTracking: readStoredBool(value.ammunitionTracking),
+    moralityTracking: readStoredBool(value.moralityTracking),
+    sanitySystem: readStoredBool(value.sanitySystem),
+  };
+  const result = validateCharacterConfiguration(input);
+  return result.ok ? result.value : null;
 }

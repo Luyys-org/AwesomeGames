@@ -666,21 +666,21 @@
     "semantic_hash": "1ff86d8189c64bbc578197cb5fd367ce"
   },
   "rpg/features/campaign/new-campaign-form.tsx": {
-    "mtime": 1793106665.2436967,
-    "seen": 1793106698.304127,
-    "ast_hash": "f788cc41452d4bfbaaebc8f0432743c7",
+    "mtime": 1793108898.9275634,
+    "seen": 1793108945.4341054,
+    "ast_hash": "eca043cbde51966fe82d96d53a2328a8",
     "semantic_hash": ""
   },
   "rpg/features/campaign/team-options.tsx": {
-    "mtime": 1793095894.521886,
-    "seen": 1793100722.8439643,
-    "ast_hash": "1879c035e82264b9522bd9eda582a5a0",
-    "semantic_hash": "1879c035e82264b9522bd9eda582a5a0"
+    "mtime": 1793108925.1175468,
+    "seen": 1793108945.4341073,
+    "ast_hash": "8e0fd0670d1859e044e2c061c8be21b5",
+    "semantic_hash": ""
   },
   "rpg/features/campaign/use-new-campaign.ts": {
-    "mtime": 1793106640.0488665,
-    "seen": 1793106698.3041346,
-    "ast_hash": "83afb4c326a6e0af98e7bd59f6889645",
+    "mtime": 1793108863.8525863,
+    "seen": 1793108945.434109,
+    "ast_hash": "6eb464690298673231ff0413086a43a5",
     "semantic_hash": ""
   },
   "rpg/features/landing/landing-screen.tsx": {
@@ -732,9 +732,9 @@
     "semantic_hash": "105a46f7893466a2e82d618801851f7c"
   },
   "rpg/lib/campaign-settings.ts": {
-    "mtime": 1793106627.0106876,
-    "seen": 1793106698.3041785,
-    "ast_hash": "7b564ac3e73f8ab7b5021774ad077c06",
+    "mtime": 1793108851.952786,
+    "seen": 1793108945.434123,
+    "ast_hash": "4423e0a561157c77e188a395e439f3e8",
     "semantic_hash": ""
   },
   "rpg/lib/character-options.ts": {
@@ -1035,6 +1035,12 @@
     "mtime": 1793106609.2562513,
     "seen": 1793106698.3041813,
     "ast_hash": "e05648b1fdc79e0293c4f91bf00657ab",
+    "semantic_hash": ""
+  },
+  "rpg/lib/character-tab-config.ts": {
+    "mtime": 1793108832.4768808,
+    "seen": 1793108945.4341285,
+    "ast_hash": "a02ee5cdba443f5596b9dadfa3b6a4f2",
     "semantic_hash": ""
   },
   "package-lock.json": {

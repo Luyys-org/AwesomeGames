@@ -1,12 +1,12 @@
 # Graph Report - AwesomeGames  (2026-10-27)
 
 ## Corpus Check
-- 149 files · ~76,399 words
+- 150 files · ~77,663 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 9 file(s) not represented in the graph (top: .mdc 5, (none) 2, .ico 1)
 
 ## Summary
-- 1804 nodes · 4452 edges · 88 communities (84 shown, 4 thin omitted)
+- 1824 nodes · 4509 edges · 88 communities (84 shown, 4 thin omitted)
 - Extraction: 96% EXTRACTED · 3% INFERRED · 1% AMBIGUOUS · INFERRED: 123 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
@@ -24,12 +24,12 @@
 - Host AI Providers
 - Release PR Workflow
 - Win Condition Tracking
-- room-connection-seat.ts
+- RoomMemberView
 - Hex Board Rendering
 - host-save.ts
 - Mesh Welcome Flow
 - Axial Board Model
-- CharacterOptions
+- table.ts
 - Release Workflow
 - Vizier Portrait
 - Turn and Recruitment
@@ -39,12 +39,12 @@
 - Hermit Portrait
 - Banned UI Patterns
 - P2P Room Lifecycle
-- Domain Errors RNG
+- rules.test.ts
 - Room Member Updates
 - campaign-settings.ts
 - Sniper Portrait
 - Game Navigation Paths
-- capture.ts
+- game-state.ts
 - Leader Portrait
 - Game End Actions
 - Bruiser Portrait
@@ -54,7 +54,7 @@
 - Wanderer Portrait
 - new-campaign-form.tsx
 - TypeScript Config
-- RoomMembershipView
+- use-game-page.ts
 - Archer Portrait
 - Rider Portrait
 - package.json
@@ -62,7 +62,7 @@
 - Royal Guard Portrait
 - room-chat-panel.tsx
 - Legal Move Candidates
-- room.types.ts
+- leaders/app/page.tsx
 - Brew Master Portrait
 - Protector Portrait
 - Root Layout
@@ -84,7 +84,7 @@
 - Game Manifest
 - Action Phase Rules
 - Capture Timing Docs
-- player-hand-row.tsx
+- game-view-model.ts
 - Claw Launcher Portrait
 - Cub Portrait
 - Frog Portrait
@@ -94,10 +94,10 @@
 - Lobby Panel Rows
 - Leaders Card Art
 - Project Readme
+- character-tab-config.ts
 - Game State Views
-- Command Rejection Parse
+- turn.ts
 - Rules Engine Contract
-- Runtime Dependencies
 - Leader Move Tests
 - Client Port Contract
 - Entering Game Overlay
@@ -108,12 +108,12 @@
 ## God Nodes (most connected - your core abstractions)
 1. `IllegalGameMoveException` - 40 edges
 2. `react` - 35 edges
-3. `isOccupied()` - 29 edges
-4. `GameActiveView()` - 29 edges
-5. `useGamePage()` - 27 edges
-6. `PieceType` - 27 edges
-7. `GameStateView` - 27 edges
-8. `useNewCampaign()` - 27 edges
+3. `useNewCampaign()` - 31 edges
+4. `isOccupied()` - 29 edges
+5. `GameActiveView()` - 29 edges
+6. `useGamePage()` - 27 edges
+7. `PieceType` - 27 edges
+8. `GameStateView` - 27 edges
 9. `RoomConnectionError` - 25 edges
 10. `Port Test Checklist` - 25 edges
 
@@ -131,6 +131,8 @@
 
 ## Import Cycles
 - 2-file cycle: `rpg/lib/campaign-settings.ts -> rpg/lib/campaign-tab-config.ts -> rpg/lib/campaign-settings.ts`
+- 2-file cycle: `rpg/lib/campaign-settings.ts -> rpg/lib/character-tab-config.ts -> rpg/lib/campaign-settings.ts`
+- 3-file cycle: `rpg/lib/campaign-settings.ts -> rpg/lib/character-tab-config.ts -> rpg/lib/campaign-tab-config.ts -> rpg/lib/campaign-settings.ts`
 
 ## Hyperedges (group relationships)
 - **Uncertain motif readings** — public_leaders_characters_frog_pink_head_tuft, public_leaders_characters_frog_tuft_identity, public_leaders_characters_frog_blue_base, public_leaders_characters_frog_base_identity [AMBIGUOUS 0.20]
@@ -208,23 +210,23 @@
 
 ### Community 0 - "Character Team Options"
 Cohesion: 0.05
-Nodes (87): LockedList(), LockedOptions(), LockedTraits(), OptionList(), TeamOptions(), TeamOptionsProps, TraitEditor(), Alert() (+79 more)
+Nodes (85): LockedList(), LockedOptions(), LockedTraits(), OptionList(), TeamOptions(), TeamOptionsProps, TraitEditor(), Alert() (+77 more)
 
 ### Community 1 - "Room Character Commit"
-Cohesion: 0.06
-Nodes (89): useRoom(), addCharacter(), characterError(), findClaim(), coreCharacterOptions(), matchesClassStats(), parseStatBlock(), pointCap() (+81 more)
+Cohesion: 0.09
+Nodes (58): useRoom(), findClaim(), writeHostSession(), commitCharacter(), toPublicCharacter(), toSnapshot(), applyActionResponse(), applySnapshot() (+50 more)
 
 ### Community 2 - "Legal Action Overlay"
-Cohesion: 0.11
-Nodes (54): ActionChoiceOverlay(), ActionChoiceOverlayProps, GameActiveView(), GameActiveViewProps, useGamePage(), hydrateMembership(), recruitmentZoneCellIdsForColor(), abilityActionSelectsHexTarget() (+46 more)
+Cohesion: 0.15
+Nodes (35): ActionChoiceOverlay(), ActionChoiceOverlayProps, GameActiveView(), GameActiveViewProps, RecruitmentOfferOverlay(), recruitmentZoneCellIdsForColor(), abilityActionSelectsHexTarget(), abilityActionSelectsPieceTarget() (+27 more)
 
 ### Community 3 - "Ability Hover Tooltip"
-Cohesion: 0.09
-Nodes (33): AbilityTooltipAnchor, CharacterAbilityHoverTooltip(), CharacterAbilityHoverTooltipProps, clampTooltipToViewport(), computeAbilityTooltipAnchor(), CharacterAbilityText(), CharacterAbilityTextProps, CharacterCard() (+25 more)
+Cohesion: 0.10
+Nodes (35): AbilityTooltipAnchor, CharacterAbilityHoverTooltip(), CharacterAbilityHoverTooltipProps, clampTooltipToViewport(), computeAbilityTooltipAnchor(), CharacterAbilityText(), CharacterAbilityTextProps, CharacterCard() (+27 more)
 
 ### Community 4 - "Character Abilities"
-Cohesion: 0.22
-Nodes (39): Brewmaster, acrobat(), acrobatJumpTargets(), acrobatLanding(), adjacentToEnemy(), applyCharacterAbility(), brewmaster(), bruiser() (+31 more)
+Cohesion: 0.23
+Nodes (38): Brewmaster, acrobat(), acrobatJumpTargets(), acrobatLanding(), adjacentToEnemy(), applyCharacterAbility(), brewmaster(), bruiser() (+30 more)
 
 ### Community 5 - "Host AI Providers"
 Cohesion: 0.11
@@ -235,32 +237,32 @@ Cohesion: 0.05
 Nodes (38): default, description, options, required, type, concurrency, cancel-in-progress, group (+30 more)
 
 ### Community 7 - "Win Condition Tracking"
-Cohesion: 0.08
-Nodes (43): GameTurnStatus(), GameTurnStatusProps, GameWinOverlay(), GameWinOverlayProps, PlayerStatsCard(), StatRow(), HexGameBoardProps, PlayerHandRowProps (+35 more)
+Cohesion: 0.07
+Nodes (42): GameTurnStatus(), GameTurnStatusProps, GameWinOverlay(), GameWinOverlayProps, PlayerStatsCard(), StatRow(), HexGameBoardProps, PlayerHandRowProps (+34 more)
 
-### Community 8 - "room-connection-seat.ts"
-Cohesion: 0.17
-Nodes (10): GUEST_TAKEN, HOST_TAKEN, MAX_REMOTE_PEERS, MAX_SPECTATORS, ROOM_FULL, SEAT_REASONS, SeatDecision, SeatIntro (+2 more)
+### Community 8 - "RoomMemberView"
+Cohesion: 0.12
+Nodes (21): PresenceEvent, RoomRecord, Seat, ActionResult, RoomConnectionSnapshot, GUEST_TAKEN, HOST_TAKEN, MAX_REMOTE_PEERS (+13 more)
 
 ### Community 9 - "Hex Board Rendering"
 Cohesion: 0.17
 Nodes (24): HexGameBoard(), boardNeighborCellIds(), BLACK_CROWN_CELL_ID, BLACK_RECRUITMENT_ZONE_CELL_IDS, BOARD_CELL_COUNT, BOARD_CELLS, BOARD_ROW_SIZES, BoardCellLayout (+16 more)
 
 ### Community 10 - "host-save.ts"
-Cohesion: 0.12
-Nodes (26): DEATH_PENALTIES, ENEMY_DIFFICULTIES, LOOT_RARITIES, PLAYER_COUNTS, PLAYER_FREEDOMS, UNIVERSE_TYPES, UniverseId, UNIVERSES (+18 more)
+Cohesion: 0.13
+Nodes (27): CampaignSettings, UniverseId, CampaignConfiguration, characterOptionsFor(), cloneCharacterOptions(), coreCharacterOptions(), resolveCharacterOptions(), TableCharacter (+19 more)
 
 ### Community 11 - "Mesh Welcome Flow"
-Cohesion: 0.10
-Nodes (47): openMesh(), usePlay(), adoptHostRecord(), agentLog(), closeMesh(), createRoom(), createRoomCode(), CreateRoomConnectionRequest (+39 more)
+Cohesion: 0.09
+Nodes (49): openMesh(), GameCommandRejectionCode, adoptHostRecord(), agentLog(), closeMesh(), commandError(), createRoom(), createRoomCode() (+41 more)
 
 ### Community 12 - "Axial Board Model"
-Cohesion: 0.17
-Nodes (14): AXIAL_DIRECTIONS, AxialCell, axialKey(), BLACK_CROWN_CELL_ID, BLACK_RECRUITMENT_ZONE, blackZone, byId, byKey (+6 more)
+Cohesion: 0.14
+Nodes (21): AXIAL_DIRECTIONS, AxialCell, axialKey(), BLACK_CROWN_CELL_ID, BLACK_RECRUITMENT_ZONE, blackZone, byId, byKey (+13 more)
 
-### Community 13 - "CharacterOptions"
-Cohesion: 0.33
-Nodes (9): CampaignSettings, CampaignConfiguration, CharacterOptions, TableCharacter, LobbySave, HostSession, TableSnapshot, TableState (+1 more)
+### Community 13 - "table.ts"
+Cohesion: 0.14
+Nodes (26): CharacterFormProps, addCharacter(), CharacterDraft, characterError(), readAssignedStats(), Owner, readName(), readRacePicks() (+18 more)
 
 ### Community 14 - "Release Workflow"
 Cohesion: 0.07
@@ -271,20 +273,20 @@ Cohesion: 0.08
 Nodes (28): Vizier character art, Bald head, Ceremonial official, Orange peaked chest emblem, Closed eyes, Wide cream sleeves, Green eye emblem, Marks flanking the eye (+20 more)
 
 ### Community 16 - "Turn and Recruitment"
-Cohesion: 0.22
-Nodes (19): nemesisLandingCells(), axialDistance(), isRecruitmentCell(), recruitmentZone(), consumeVizierPassive(), handOf(), applyDefault(), applyEndAction() (+11 more)
+Cohesion: 0.19
+Nodes (21): nemesisLandingCells(), isRecruitmentCell(), recruitmentZone(), cloneState(), consumeVizierPassive(), handOf(), apply(), applyActive() (+13 more)
 
 ### Community 17 - "Lobby Validation"
 Cohesion: 0.21
 Nodes (22): assertCanSubmitCommand(), assertRoomName(), assertUsername(), canReadChat(), chooseSeatRole(), CODE_ALPHABET, connectionPresence(), createRoom() (+14 more)
 
 ### Community 18 - "New Campaign State"
-Cohesion: 0.16
-Nodes (21): EMPTY_PREFILL, useNewCampaign(), applyPresetToConfiguration(), back(), clearResult(), edit(), goToStep(), resetOptions() (+13 more)
+Cohesion: 0.12
+Nodes (25): EMPTY_PREFILL, presetCharacterConfiguration(), useNewCampaign(), applyPresetToConfiguration(), back(), clearResult(), edit(), goToStep() (+17 more)
 
 ### Community 19 - "Room Page Chrome"
 Cohesion: 0.14
-Nodes (20): RoomPage(), useGameEndActions(), PlayMode, RoomActiveView(), RoomCodeCopy(), RoomCodeCopyProps, useRoomLeave(), useRoomSeat() (+12 more)
+Nodes (21): RoomPage(), RoomActiveView(), RoomActiveViewProps, RoomCodeCopy(), RoomCodeCopyProps, useRoomLeave(), useRoomLobby(), UseRoomLobbyOptions (+13 more)
 
 ### Community 20 - "Hermit Portrait"
 Cohesion: 0.08
@@ -298,37 +300,37 @@ Nodes (17): Banned UI Patterns, Linear Benchmark, True Dark Colours, Alabaster P
 Cohesion: 0.15
 Nodes (24): Chat, CreateRoomUseCaseTests, Disconnect, Game Traffic Permissions, Invite Code, JoinRoom, JoinRoomUseCaseTests, LeaveRoomUseCaseTests (+16 more)
 
-### Community 23 - "Domain Errors RNG"
-Cohesion: 0.12
-Nodes (24): leaders/domain, cellAt(), board(), StaleVersionException, ValidationException, at(), command(), emptyState() (+16 more)
+### Community 23 - "rules.test.ts"
+Cohesion: 0.20
+Nodes (11): leaders/domain, StaleVersionException, ValidationException, defaultRng(), Rng, shuffle(), createInitial(), DECK_TYPES (+3 more)
 
 ### Community 24 - "Room Member Updates"
 Cohesion: 0.18
-Nodes (23): memberViews(), tryCommit(), actionMessage(), adoptPromotedHost(), appendChat(), applyMemberRoles(), bindPeer(), broadcast() (+15 more)
+Nodes (23): memberViews(), withGame(), actionMessage(), adoptPromotedHost(), appendChat(), applyMemberRoles(), bindPeer(), broadcast() (+15 more)
 
 ### Community 25 - "campaign-settings.ts"
-Cohesion: 0.16
-Nodes (22): CampaignSettingsInput, CampaignStepId, Check, Choice, DeathPenaltyId, EnemyDifficultyId, hasLineBreak(), LootRarityId (+14 more)
+Cohesion: 0.10
+Nodes (38): CampaignStepId, Check, Choice, DEATH_PENALTIES, DeathPenaltyId, ENEMY_DIFFICULTIES, EnemyDifficultyId, hasLineBreak() (+30 more)
 
 ### Community 26 - "Sniper Portrait"
 Cohesion: 0.09
 Nodes (24): Anthropomorphic long-beaked figure, Black boots, Black lower rifle section, Character illustration, Crouching stance, Dark round goggles, Gold rifle body, Green T-shaped muzzle fitting (+16 more)
 
 ### Community 27 - "Game Navigation Paths"
-Cohesion: 0.15
-Nodes (19): metadata, RpgRoomPage(), SessionPanels(), loadExistingSave(), openSave(), SessionPanelsProps, readBrowserSave(), startLobbyFromSave() (+11 more)
+Cohesion: 0.17
+Nodes (17): metadata, RpgRoomPage(), SessionPanels(), loadExistingSave(), openSave(), SessionPanelsProps, readBrowserSave(), startLobbyFromSave() (+9 more)
 
-### Community 28 - "capture.ts"
-Cohesion: 0.22
-Nodes (22): isStraightLine(), countsAsCaptor(), isLeaderCaptured(), isLeaderDown(), isLeaderSurrounded(), opponentLeader(), sniperWins(), colorOfPlayer() (+14 more)
+### Community 28 - "game-state.ts"
+Cohesion: 0.26
+Nodes (17): axialDistance(), isStraightLine(), countsAsCaptor(), isLeaderCaptured(), isLeaderSurrounded(), opponentLeader(), sniperWins(), colorOfPlayer() (+9 more)
 
 ### Community 29 - "Leader Portrait"
 Cohesion: 0.11
 Nodes (22): Solid black background, Full brown beard covering jaw, chin, and upper chest, Brown belt with a large round gold buckle, Brown hair at the temples and sideburns, continuous with the beard, Unread embossed mark on the gold buckle, Pale shoulder trim, fur or light cloth, Open cream cape hanging from the shoulders, Thick black mustache with upward curls (+14 more)
 
 ### Community 30 - "Game End Actions"
-Cohesion: 0.14
-Nodes (15): metadata, PlayPage(), GameLoadingSpinner(), GamePage(), GameEndActions(), GameEndActionsProps, HexBackdrop(), LandingCredits() (+7 more)
+Cohesion: 0.20
+Nodes (11): GameLoadingSpinner(), GamePage(), GameEndActions(), GameEndActionsProps, useGameEndActions(), PlayHeader(), PlayerStatsHeader(), StatsChevron() (+3 more)
 
 ### Community 31 - "Bruiser Portrait"
 Cohesion: 0.10
@@ -343,24 +345,24 @@ Cohesion: 0.17
 Nodes (20): Shaman character art, Beige coat, Black backdrop, Hand raised to brow, Ceremonial mask, Large orange-maned creature, Feathered headdress, Green foliage (+12 more)
 
 ### Community 34 - "campaign-tab-config.ts"
-Cohesion: 0.15
-Nodes (15): BOSS_DIFFICULTIES, BossDifficulty, CAMPAIGN_TAGS, CampaignTagId, Check, MISSION_FAILURE_IMPACTS, MissionFailureImpact, readChoice() (+7 more)
+Cohesion: 0.18
+Nodes (13): BOSS_DIFFICULTIES, BossDifficulty, CAMPAIGN_TAGS, CampaignTagId, Check, MISSION_FAILURE_IMPACTS, MissionFailureImpact, readChoice() (+5 more)
 
 ### Community 35 - "Wanderer Portrait"
 Cohesion: 0.12
 Nodes (19): Airborne forward lean, Pink bat wings, Blue hair topknot, Clawed hands, Crescent buckle mark, Dark pointed boots, Purple forearm wraps, Hoop earrings (+11 more)
 
 ### Community 36 - "new-campaign-form.tsx"
-Cohesion: 0.29
-Nodes (12): metadata, NewCampaignPage(), CampaignTabPanel(), CheckboxField(), FieldDescription(), FormSection(), NewCampaignForm(), NumberField() (+4 more)
+Cohesion: 0.28
+Nodes (14): metadata, NewCampaignPage(), CampaignTabPanel(), CharacterTabPanel(), CheckboxField(), FieldDescription(), FormSection(), NewCampaignForm() (+6 more)
 
 ### Community 37 - "TypeScript Config"
 Cohesion: 0.11
 Nodes (18): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+10 more)
 
-### Community 38 - "RoomMembershipView"
-Cohesion: 0.33
-Nodes (4): RoomActiveViewProps, useRoomLobby(), UseRoomLobbyOptions, RoomMembershipView
+### Community 38 - "use-game-page.ts"
+Cohesion: 0.26
+Nodes (11): useGameDataTracker(), useGamePage(), hydrateMembership(), findUniqueAbilityChoiceForCell(), findUniqueLegalDefaultMoveAction(), isLegalDefaultMove(), matchingLegalActionsForCell(), matchingLegalDefaultMoveActions() (+3 more)
 
 ### Community 39 - "Archer Portrait"
 Cohesion: 0.12
@@ -383,16 +385,16 @@ Cohesion: 0.12
 Nodes (16): Solid black surrounding field, Cel-shaded cartoon rendering, Face fully concealed, Crouched ready stance, Gold crown emblem, Heavy-set humanoid build, Isolated single figure, Golden long-hafted axe (+8 more)
 
 ### Community 44 - "room-chat-panel.tsx"
-Cohesion: 0.29
-Nodes (7): formatSentAt(), RoomChatPanel(), RoomChatPanelProps, RoomChatConnectionStatus, formatRoomRole(), PlayerLobbyLabelParts, PlayerLobbyLabelSuffixKind
+Cohesion: 0.28
+Nodes (8): formatSentAt(), RoomChatPanel(), RoomChatPanelProps, RoomChatConnectionStatus, formatRoomRole(), PlayerLobbyLabelParts, PlayerLobbyLabelSuffixKind, ChatMessageView
 
 ### Community 45 - "Legal Move Candidates"
 Cohesion: 0.30
 Nodes (15): activeCandidateParams(), allCellParams(), clawCandidates(), neighborIds(), enemyJailorAdjacent(), piecesOf(), playerIdFor(), accept() (+7 more)
 
-### Community 46 - "room.types.ts"
-Cohesion: 0.19
-Nodes (19): PresenceEvent, RoomRecord, Seat, formatLinkStatus(), ROLE_ORDER, RoomConnectionPanel(), RoomConnectionPanelProps, RoomLobbyPanelProps (+11 more)
+### Community 46 - "leaders/app/page.tsx"
+Cohesion: 0.20
+Nodes (11): metadata, PlayPage(), HexBackdrop(), LandingCredits(), LandingGameRules(), PlayPanel(), PlayMode, usePlay() (+3 more)
 
 ### Community 47 - "Brew Master Portrait"
 Cohesion: 0.14
@@ -407,12 +409,12 @@ Cohesion: 0.13
 Nodes (8): geistMono, geistSans, metadata, AppPageConfig, __Check, __IsExpected, LayoutConfig, __Unused
 
 ### Community 50 - "Remote Game Apply"
-Cohesion: 0.54
-Nodes (8): asRecord(), handleFeed(), parseChatMessage(), parseGameState(), parseMembers(), parseRole(), parseRoomRecord(), parseStatus()
+Cohesion: 0.36
+Nodes (12): applyRemoteGame(), asRecord(), handleFeed(), parseActionResult(), parseChatMessage(), parseGameState(), parseMembers(), parseRejectionCode() (+4 more)
 
 ### Community 51 - "Game Realtime Status"
-Cohesion: 0.32
-Nodes (11): toGameStateView(), deriveConnectionError(), deriveConnectionStatus(), GameRealtimeConnectionStatus, useGameRealtime(), UseGameRealtimeOptions, useRoomChat(), useRoomConnection() (+3 more)
+Cohesion: 0.24
+Nodes (17): toGameStateView(), deriveConnectionError(), deriveConnectionStatus(), GameRealtimeConnectionStatus, useGameRealtime(), useRoomConnection(), presenceFromMembership(), RoomPresenceState (+9 more)
 
 ### Community 52 - "Illusionist Portrait"
 Cohesion: 0.14
@@ -435,8 +437,8 @@ Cohesion: 0.15
 Nodes (14): Acrobat, AcrobatLegalActionsTest, Bruiser, BruiserPushLegalActionsTest, Claw Launcher, Illusionist, LegalActionsResolverEdgeCasesTest, Manipulator (+6 more)
 
 ### Community 57 - "Participant Presence"
-Cohesion: 0.25
-Nodes (11): presenceFromMembership(), RoomPresenceState, useRoomPresence(), applyRoleUsername(), guestJoinedFromMembers(), membersFromUnknownPayload(), participantUsernamesFromMembers(), participantUsernamesFromMembership() (+3 more)
+Cohesion: 0.31
+Nodes (7): applyRoleUsername(), membersFromUnknownPayload(), participantUsernamesFromMembers(), participantUsernamesFromMembership(), participantUsernamesFromPresencePayload(), RoomParticipantNameSource, RoomParticipantUsernames
 
 ### Community 58 - "Dashboard Game List"
 Cohesion: 0.25
@@ -447,12 +449,12 @@ Cohesion: 0.23
 Nodes (13): common/p2p, leaders/app, Leaders P2P Client, openMesh, room-connection.ts, common/, Leaders Game, Leaders Routes (+5 more)
 
 ### Community 60 - "Action Key Codec"
-Cohesion: 0.23
-Nodes (12): AbilityParamValue, base64UrlDecode(), base64UrlEncode(), coerceParam(), COMMAND_TYPES, decodeActionKey(), encodeActionKey(), normalizeParams() (+4 more)
+Cohesion: 0.26
+Nodes (11): AbilityParamValue, base64UrlDecode(), base64UrlEncode(), coerceParam(), COMMAND_TYPES, decodeActionKey(), encodeActionKey(), normalizeParams() (+3 more)
 
 ### Community 61 - "RoomConnectionError"
-Cohesion: 0.24
-Nodes (16): withGame(), applyRemoteGame(), applyWelcome(), hostPeerId(), leaveRoom(), parseActionResult(), parseRejectionCode(), requestGameSnapshot() (+8 more)
+Cohesion: 0.50
+Nodes (8): applyWelcome(), requestRoomReplay(), requireHostPeer(), requireSession(), RoomConnectionError, sendRoomChat(), setRoomReady(), setRoomSeat()
 
 ### Community 62 - "Assassin Portrait"
 Cohesion: 0.19
@@ -478,9 +480,9 @@ Nodes (12): Global Ability Gates, Action Phase, CharacterLegalActionsTest, End A
 Cohesion: 0.23
 Nodes (12): After Nemesis, Archer, Assassin, Capture, CaptureEvaluatorTest, End of Full Turn, GameRulesEngineWinTest, Second-Player Compensation (+4 more)
 
-### Community 68 - "player-hand-row.tsx"
-Cohesion: 0.67
-Nodes (5): PlayerHandRow(), activeCardSlotsForColor(), handForColor(), characterHandRowWidthPx(), pieceOwnerTokenBackground()
+### Community 68 - "game-view-model.ts"
+Cohesion: 0.22
+Nodes (17): PlayerHandRow(), activeCardSlotsForColor(), ActiveCardSlotSource, boardPiecesForOwner(), findLeaderPiece(), handForColor(), hasPieceActedThisPhase(), isActiveCardSlotFlippedForAction() (+9 more)
 
 ### Community 69 - "Claw Launcher Portrait"
 Cohesion: 0.18
@@ -499,16 +501,16 @@ Cohesion: 0.17
 Nodes (11): AppRoutes, LayoutProps, LayoutRoutes, LayoutSlotMap, PageProps, PageRoutes, ParamMap, ParamsOf (+3 more)
 
 ### Community 73 - "dashboard-page.tsx"
-Cohesion: 0.48
-Nodes (4): gameHomePath(), listGames(), dashboardArtSrc(), DashboardPage()
+Cohesion: 0.36
+Nodes (5): gameHomePath(), listGames(), dashboardArtSrc(), DashboardPage(), home
 
 ### Community 74 - "Board Topology Docs"
 Cohesion: 0.24
 Nodes (10): Board Topology, BoardPiece, BoardTopologyTests, Cub, Fixed Host and Guest Colors, Hermit, Recruit, Recruitment Zones (+2 more)
 
 ### Community 75 - "Lobby Panel Rows"
-Cohesion: 0.40
-Nodes (9): ConnectionDot(), LobbyLoadingSpinner(), memberConnectionConnected(), MemberName(), PlayerRow(), ReadyCheckIcon(), ReadyCrossIcon(), ReadyToggle() (+1 more)
+Cohesion: 0.20
+Nodes (17): formatLinkStatus(), ROLE_ORDER, RoomConnectionPanel(), RoomConnectionPanelProps, ConnectionDot(), LobbyLoadingSpinner(), memberConnectionConnected(), MemberName() (+9 more)
 
 ### Community 76 - "Leaders Card Art"
 Cohesion: 0.24
@@ -518,21 +520,21 @@ Nodes (10): Leaders portrait, Right-weighted cartoon bust, Stern crowned man, Go
 Cohesion: 0.28
 Nodes (9): Next.js Dist Docs, Next.js Agent Rules, App URL Shell, Awesome Games, create-game, Dashboard, Game Manifest, public/ (+1 more)
 
+### Community 78 - "character-tab-config.ts"
+Cohesion: 0.19
+Nodes (13): SETTING_LEVELS, SettingLevel, CharacterConfiguration, CharacterConfigurationInput, Check, DEATH_RECOVERY_OPTIONS, DeathRecoveryId, EQUIPMENT_VALIDATION_RULES (+5 more)
+
 ### Community 79 - "Game State Views"
 Cohesion: 0.25
 Nodes (9): actionKey, GameActionKeyTest, Game Command, GameLegalAction, GameStateView, GameStateViewJsonSerializationTest, GameWsExceptionHandlerTest, IllegalGameMoveException (+1 more)
 
-### Community 80 - "Command Rejection Parse"
-Cohesion: 0.22
-Nodes (6): GAME_COMMAND_REJECTION_CODES, GameCommandRejectionCode, GameCommandRejectionView, ActionResult, commandError(), GameCommandError
+### Community 80 - "turn.ts"
+Cohesion: 0.42
+Nodes (11): isLeaderDown(), opponent(), consumeRecruitment(), endFullTurn(), newlyUnsafe(), resolveAfterNemesis(), advanceTurn(), beginTurnIfNeeded() (+3 more)
 
 ### Community 81 - "Rules Engine Contract"
 Cohesion: 0.36
 Nodes (8): Peer Consensus, GameRulesEngine, GameStateFactory, LegalActionsResolver, Move Log, Opening State, Peer-Owned Concerns, SubmitGameCommandUseCase
-
-### Community 82 - "Runtime Dependencies"
-Cohesion: 0.50
-Nodes (4): dependencies, next@16.2.1, react@19.2.4, react-dom@19.2.4
 
 ### Community 83 - "Leader Move Tests"
 Cohesion: 0.40
@@ -662,22 +664,22 @@ Nodes (4): P2P Client Port Contract, Project Design Note, Infrastructure Kept Of
 
 ## Knowledge Gaps
 - **253 isolated node(s):** `unstable_cacheTag`, `unstable_cacheLife`, `Possible transparent background`, `Poleaxe or halberd`, `Cel-shaded cartoon rendering` (+248 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 519 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 523 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `Room Page Chrome` to `Character Team Options`, `Room Character Commit`, `Legal Action Overlay`, `Ability Hover Tooltip`, `player-hand-row.tsx`, `new-campaign-form.tsx`, `RoomMembershipView`, `Win Condition Tracking`, `Host AI Providers`, `Hex Board Rendering`, `package.json`, `room-chat-panel.tsx`, `Runtime Dependencies`, `Game Realtime Status`, `New Campaign State`, `Participant Presence`, `Game Navigation Paths`, `Game End Actions`?**
-  _High betweenness centrality (0.121) - this node is a cross-community bridge._
-- **Are the 3 inferred relationships involving `useGamePage()` (e.g. with `getServerSnapshot()` and `getSnapshot()`) actually correct?**
-  _`useGamePage()` has 3 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `react` connect `Room Page Chrome` to `Character Team Options`, `Room Character Commit`, `Legal Action Overlay`, `Ability Hover Tooltip`, `game-view-model.ts`, `new-campaign-form.tsx`, `use-game-page.ts`, `Host AI Providers`, `Hex Board Rendering`, `package.json`, `room-chat-panel.tsx`, `leaders/app/page.tsx`, `New Campaign State`, `Game Realtime Status`, `Game Navigation Paths`, `Game End Actions`?**
+  _High betweenness centrality (0.123) - this node is a cross-community bridge._
+- **Are the 5 inferred relationships involving `useNewCampaign()` (e.g. with `back()` and `goToStep()`) actually correct?**
+  _`useNewCampaign()` has 5 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `unstable_cacheTag`, `unstable_cacheLife`, `Possible transparent background` to the rest of the system?**
   _253 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Character Team Options` be split into smaller, more focused modules?**
-  _Cohesion score 0.05299145299145299 - nodes in this community are weakly interconnected._
-- **Why does `next` connect `Room Page Chrome` to `Legal Action Overlay`, `Ability Hover Tooltip`, `new-campaign-form.tsx`, `Host AI Providers`, `dashboard-page.tsx`, `package.json`, `Root Layout`, `Runtime Dependencies`, `New Campaign State`, `Game Navigation Paths`, `Game End Actions`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
+  _Cohesion score 0.05388151174668029 - nodes in this community are weakly interconnected._
+- **Why does `next` connect `Room Page Chrome` to `Ability Hover Tooltip`, `new-campaign-form.tsx`, `Host AI Providers`, `use-game-page.ts`, `dashboard-page.tsx`, `package.json`, `leaders/app/page.tsx`, `Root Layout`, `New Campaign State`, `Game Navigation Paths`, `Game End Actions`?**
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._

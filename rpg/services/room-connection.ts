@@ -6,13 +6,20 @@ import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
+  canStartCampaign,
+  commitAct,
   commitCharacter,
+  emptyLocation,
   parseSnapshot,
+  setCharacterReady,
+  startCampaign,
   toPublicCharacter,
   toSnapshot,
   type PublicCharacter,
+  type SceneLocation,
   type TableSnapshot,
   type TableState,
+  type TranscriptEntry,
 } from "@/rpg/lib/table";
 
 const APP_ID = "app.awesomegames.rpg";
@@ -40,11 +47,16 @@ export interface RoomView {
   roomCode: string;
   campaignName: string | null;
   universeName: string | null;
+  universe: TableSnapshot["universe"] | null;
   objective: string | null;
+  situation: string | null;
+  location: SceneLocation;
   playerCount: number | null;
   characterOptions: CharacterOptions | null;
-  phase: "waiting" | "lobby";
+  phase: "waiting" | "lobby" | "play";
   characters: PublicCharacter[];
+  transcript: TranscriptEntry[];
+  scene: number | null;
   seat: RoomSeat | null;
   joiningCount: number;
 }
@@ -206,6 +218,67 @@ export async function submitCharacter(draft: CharacterDraft): Promise<string | n
   }
 }
 
+export async function submitReady(ready: boolean): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result = setCharacterReady(session.table, session.seat.characterId, ready);
+    if (!result.ok) return result.error;
+    session.table = result.table;
+    writeHostSession({ roomCode: session.roomCode, table: result.table });
+    maybeStartCampaign(session);
+    publish(session);
+    void broadcastSnapshot(session);
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "ready", ready },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
+export async function submitAct(text: string): Promise<string | null> {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.seat?.status !== "active") return "Create a character first.";
+
+  if (session.role === "host") {
+    if (!session.table) return "This browser does not have the host game.";
+    const result = commitAct(session.table, session.seat.characterId, text);
+    if (!result.ok) return result.error;
+    session.table = result.table;
+    writeHostSession({ roomCode: session.roomCode, table: result.table });
+    publish(session);
+    void broadcastSnapshot(session);
+    return null;
+  }
+
+  if (!session.hostPeerId) return "Waiting for the host.";
+  try {
+    const response = await session.mesh.request(
+      { type: "intent", kind: "act", text, targetCharacterId: null },
+      { target: session.hostPeerId, timeoutMs: INTENT_TIMEOUT_MS },
+    );
+    return applyActionResponse(session, response, "");
+  } catch {
+    return "The host did not answer.";
+  }
+}
+
 export async function submitClaim(name: string, claimCode: string): Promise<string | null> {
   const session = current;
   if (!session || session.role !== "peer" || !session.hostPeerId) {
@@ -349,6 +422,7 @@ function handlePeerLeave(session: Session, peerId: string): void {
   }
 
   publish(session);
+  if (session.role === "host") maybeStartCampaign(session);
 }
 
 async function sendJoin(session: Session, hostId: string): Promise<void> {
@@ -449,7 +523,46 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     };
   }
 
+  if (data.type === "ready") {
+    if (typeof data.ready !== "boolean") return { ok: false };
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const result = setCharacterReady(session.table, characterId, data.ready);
+    if (!result.ok) return { ok: false, error: result.error };
+    session.table = result.table;
+    writeHostSession({ roomCode: session.roomCode, table: result.table });
+    maybeStartCampaign(session);
+    publish(session);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+  }
+
+  if (data.type === "intent") {
+    if (data.kind !== "act" || typeof data.text !== "string") return { ok: false };
+    const characterId = session.peers.get(peerId)?.characterId;
+    if (!characterId) return { ok: false, error: "Create a character first." };
+    const result = commitAct(session.table, characterId, data.text);
+    if (!result.ok) return { ok: false, error: result.error };
+    session.table = result.table;
+    writeHostSession({ roomCode: session.roomCode, table: result.table });
+    publish(session);
+    void broadcastSnapshot(session);
+    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
+  }
+
   return { ok: false };
+}
+
+function maybeStartCampaign(session: Session): void {
+  if (session.role !== "host" || !session.table || session.table.phase !== "lobby") return;
+  const joiningCount = [...session.peers.values()].filter((peer) => peer.characterId === null).length;
+  if (!canStartCampaign(session.table, joiningCount)) return;
+  const started = startCampaign(session.table);
+  if (!started.ok) return;
+  session.table = started.table;
+  writeHostSession({ roomCode: session.roomCode, table: started.table });
+  publish(session);
+  void broadcastSnapshot(session);
 }
 
 function handleFeed(session: Session, data: JsonValue): void {
@@ -656,11 +769,16 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
       : table
         ? universeName(table.settings.universe, table.settings.universeLabel)
         : null,
+    universe: source?.universe ?? table?.settings.universe ?? null,
     objective: source?.objective ?? table?.settings.objective ?? null,
+    situation: source?.situation ?? table?.situation ?? null,
+    location: source?.location ?? table?.location ?? emptyLocation(),
     playerCount: source?.playerCount ?? table?.settings.playerCount ?? null,
     characterOptions: source?.characterOptions ?? table?.settings.characterOptions ?? null,
     phase: source?.phase ?? table?.phase ?? "waiting",
     characters: source?.characters ?? (table ? table.characters.map(toPublicCharacter) : []),
+    transcript: source?.transcript ?? table?.transcript ?? [],
+    scene: source?.scene ?? table?.scene ?? null,
     seat: session.seat,
     joiningCount:
       session.role === "host"

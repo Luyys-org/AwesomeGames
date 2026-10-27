@@ -1,0 +1,83 @@
+import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
+import type { HostAi } from "@/rpg/lib/host-ai";
+import {
+  buildOpeningSituationRetryMessage,
+  buildOpeningSituationUserMessage,
+  GM_SYSTEM_PROMPT,
+} from "@/rpg/lib/host-gm-prompt";
+import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
+import type { SceneLocation } from "@/rpg/lib/table";
+
+const SITUATION_MAX = 800;
+const LOCATION_MAX = 80;
+
+export interface OpeningScene {
+  situation: string;
+  location: SceneLocation;
+}
+
+export async function generateOpeningSituation(
+  settings: CampaignSettings,
+  hostAi: HostAi,
+): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
+  const first = await requestSituation(hostAi, buildOpeningSituationUserMessage(settings));
+  if (first.ok) return first;
+
+  const second = await requestSituation(
+    hostAi,
+    buildOpeningSituationRetryMessage(settings, first.error),
+  );
+  if (second.ok) return second;
+
+  return { ok: false, error: "The opening situation could not be generated." };
+}
+
+async function requestSituation(
+  hostAi: HostAi,
+  user: string,
+): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
+  const response = await callHostChat(hostAi, {
+    temperature: 0,
+    system: GM_SYSTEM_PROMPT,
+    user,
+  });
+  if (!response.ok) return response;
+
+  const parsed = parseJsonContent(response.content);
+  const situation = readSituation(parsed);
+  if (!situation) {
+    return { ok: false, error: "Response JSON must include a non-empty situation string." };
+  }
+  return {
+    ok: true,
+    situation: truncateText(situation, SITUATION_MAX),
+    location: readLocation(parsed),
+  };
+}
+
+function readSituation(value: unknown): string | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const situation = (value as Record<string, unknown>).situation;
+  if (typeof situation !== "string") return null;
+  const trimmed = situation.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readLocation(value: unknown): SceneLocation {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { place: "", weather: "", reputation: "" };
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    place: readLocationLine(record.place),
+    weather: readLocationLine(record.weather),
+    reputation: readLocationLine(record.reputation),
+  };
+}
+
+function readLocationLine(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return "";
+  return truncateText(trimmed, LOCATION_MAX);
+}

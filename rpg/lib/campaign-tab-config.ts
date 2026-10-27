@@ -130,6 +130,136 @@ export const REPUTATION_TRACKING_OPTIONS: { id: ReputationTracking; label: strin
   { id: "party", label: "Party based" },
 ];
 
+export type GlobalDifficultyId = "easy" | "default" | "hard";
+
+export const GLOBAL_DIFFICULTY_OPTIONS: { id: GlobalDifficultyId; label: string }[] = [
+  { id: "easy", label: "Easy" },
+  { id: "default", label: "Default" },
+  { id: "hard", label: "Hard" },
+];
+
+type CampaignDropdownPrefill = Pick<
+  CampaignConfigurationInput,
+  | "enemyDifficulty"
+  | "bossDifficulty"
+  | "encounterFrequency"
+  | "healingAvailability"
+  | "resurrectionAvailability"
+  | "investigationDifficulty"
+  | "lootRarity"
+  | "lootQuantity"
+  | "currencyAbundance"
+  | "uniqueArtifactFrequency"
+  | "resourceScarcity"
+  | "reputationRewardMultiplier"
+  | "playerFreedom"
+  | "discoveryImportance"
+  | "randomEncounterFrequency"
+  | "sideQuestDensity"
+  | "moralChoiceImpact"
+  | "missionFailureImpact"
+  | "reputationTracking"
+  | "experienceGainMultiplier"
+>;
+
+const GLOBAL_DIFFICULTY_PREFILLS: Record<GlobalDifficultyId, CampaignDropdownPrefill> = {
+  easy: {
+    enemyDifficulty: "easy",
+    bossDifficulty: "easy",
+    encounterFrequency: "low",
+    healingAvailability: "high",
+    resurrectionAvailability: "high",
+    investigationDifficulty: "low",
+    lootRarity: "high",
+    lootQuantity: "high",
+    currencyAbundance: "high",
+    uniqueArtifactFrequency: "standard",
+    resourceScarcity: "low",
+    reputationRewardMultiplier: "standard",
+    playerFreedom: "high",
+    discoveryImportance: "high",
+    randomEncounterFrequency: "low",
+    sideQuestDensity: "standard",
+    moralChoiceImpact: "standard",
+    missionFailureImpact: "low",
+    reputationTracking: "party",
+    experienceGainMultiplier: "high",
+  },
+  default: {
+    enemyDifficulty: "standard",
+    bossDifficulty: "standard",
+    encounterFrequency: "standard",
+    healingAvailability: "standard",
+    resurrectionAvailability: "standard",
+    investigationDifficulty: "standard",
+    lootRarity: "standard",
+    lootQuantity: "standard",
+    currencyAbundance: "standard",
+    uniqueArtifactFrequency: "standard",
+    resourceScarcity: "standard",
+    reputationRewardMultiplier: "standard",
+    playerFreedom: "standard",
+    discoveryImportance: "standard",
+    randomEncounterFrequency: "standard",
+    sideQuestDensity: "standard",
+    moralChoiceImpact: "standard",
+    missionFailureImpact: "standard",
+    reputationTracking: "party",
+    experienceGainMultiplier: "standard",
+  },
+  hard: {
+    enemyDifficulty: "hard",
+    bossDifficulty: "hard",
+    encounterFrequency: "high",
+    healingAvailability: "low",
+    resurrectionAvailability: "low",
+    investigationDifficulty: "high",
+    lootRarity: "low",
+    lootQuantity: "low",
+    currencyAbundance: "low",
+    uniqueArtifactFrequency: "low",
+    resourceScarcity: "high",
+    reputationRewardMultiplier: "high",
+    playerFreedom: "low",
+    discoveryImportance: "standard",
+    randomEncounterFrequency: "high",
+    sideQuestDensity: "low",
+    moralChoiceImpact: "high",
+    missionFailureImpact: "high",
+    reputationTracking: "character",
+    experienceGainMultiplier: "low",
+  },
+};
+
+export function campaignDropdownPrefillFromGlobalDifficulty(
+  difficulty: GlobalDifficultyId,
+): CampaignDropdownPrefill {
+  return GLOBAL_DIFFICULTY_PREFILLS[difficulty];
+}
+
+/** Applies global difficulty dropdown values; leaves text, tags, checkboxes, and numeric text fields unchanged. */
+export function applyGlobalDifficultyPrefill(
+  current: CampaignConfigurationInput,
+  difficulty: GlobalDifficultyId,
+): CampaignConfigurationInput {
+  return {
+    ...current,
+    ...campaignDropdownPrefillFromGlobalDifficulty(difficulty),
+    shortDescription: current.shortDescription,
+    campaignTags: current.campaignTags,
+    gmNotes: current.gmNotes,
+    fastTravelAvailable: current.fastTravelAvailable,
+    factionInfluence: current.factionInfluence,
+    pvpAllowed: current.pvpAllowed,
+    theftBetweenPlayers: current.theftBetweenPlayers,
+    secretObjectives: current.secretObjectives,
+    campaignCanFail: current.campaignCanFail,
+    npcMortality: current.npcMortality,
+    levelCap: current.levelCap,
+    milestoneProgression: current.milestoneProgression,
+  };
+}
+
 export function emptyCampaignConfigurationInput(): CampaignConfigurationInput {
   return {
     shortDescription: "",
@@ -424,4 +554,66 @@ export function configPlayerFreedomFromLegacy(id: PlayerFreedomId): SettingLevel
   if (id === "narrow") return "low";
   if (id === "open") return "high";
   return "standard";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readStoredString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readStoredBool(value: unknown): boolean {
+  return value === true;
+}
+
+function readStoredTags(value: unknown): CampaignTagId[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is CampaignTagId =>
+    CAMPAIGN_TAGS.some((tag) => tag.id === entry),
+  );
+}
+
+export function parseStoredCampaignConfiguration(value: unknown): CampaignConfiguration | null {
+  if (!isRecord(value)) return null;
+  const input: CampaignConfigurationInput = {
+    shortDescription: readStoredString(value.shortDescription),
+    campaignTags: readStoredTags(value.campaignTags),
+    gmNotes: readStoredString(value.gmNotes),
+    enemyDifficulty: readStoredString(value.enemyDifficulty) as CampaignConfigurationInput["enemyDifficulty"],
+    bossDifficulty: readStoredString(value.bossDifficulty) as CampaignConfigurationInput["bossDifficulty"],
+    encounterFrequency: readStoredString(value.encounterFrequency) as CampaignConfigurationInput["encounterFrequency"],
+    healingAvailability: readStoredString(value.healingAvailability) as CampaignConfigurationInput["healingAvailability"],
+    resurrectionAvailability: readStoredString(value.resurrectionAvailability) as CampaignConfigurationInput["resurrectionAvailability"],
+    investigationDifficulty: readStoredString(value.investigationDifficulty) as CampaignConfigurationInput["investigationDifficulty"],
+    lootRarity: readStoredString(value.lootRarity) as CampaignConfigurationInput["lootRarity"],
+    lootQuantity: readStoredString(value.lootQuantity) as CampaignConfigurationInput["lootQuantity"],
+    currencyAbundance: readStoredString(value.currencyAbundance) as CampaignConfigurationInput["currencyAbundance"],
+    uniqueArtifactFrequency: readStoredString(value.uniqueArtifactFrequency) as CampaignConfigurationInput["uniqueArtifactFrequency"],
+    resourceScarcity: readStoredString(value.resourceScarcity) as CampaignConfigurationInput["resourceScarcity"],
+    reputationRewardMultiplier: readStoredString(value.reputationRewardMultiplier) as CampaignConfigurationInput["reputationRewardMultiplier"],
+    playerFreedom: readStoredString(value.playerFreedom) as CampaignConfigurationInput["playerFreedom"],
+    fastTravelAvailable: readStoredBool(value.fastTravelAvailable),
+    discoveryImportance: readStoredString(value.discoveryImportance) as CampaignConfigurationInput["discoveryImportance"],
+    randomEncounterFrequency: readStoredString(value.randomEncounterFrequency) as CampaignConfigurationInput["randomEncounterFrequency"],
+    sideQuestDensity: readStoredString(value.sideQuestDensity) as CampaignConfigurationInput["sideQuestDensity"],
+    moralChoiceImpact: readStoredString(value.moralChoiceImpact) as CampaignConfigurationInput["moralChoiceImpact"],
+    factionInfluence: readStoredBool(value.factionInfluence),
+    pvpAllowed: readStoredBool(value.pvpAllowed),
+    theftBetweenPlayers: readStoredBool(value.theftBetweenPlayers),
+    secretObjectives: readStoredBool(value.secretObjectives),
+    campaignCanFail: readStoredBool(value.campaignCanFail),
+    missionFailureImpact: readStoredString(value.missionFailureImpact) as CampaignConfigurationInput["missionFailureImpact"],
+    npcMortality: readStoredBool(value.npcMortality),
+    reputationTracking: readStoredString(value.reputationTracking) as CampaignConfigurationInput["reputationTracking"],
+    levelCap: typeof value.levelCap === "number" ? String(value.levelCap) : readStoredString(value.levelCap),
+    milestoneProgression:
+      typeof value.milestoneProgression === "number"
+        ? String(value.milestoneProgression)
+        : readStoredString(value.milestoneProgression),
+    experienceGainMultiplier: readStoredString(value.experienceGainMultiplier) as CampaignConfigurationInput["experienceGainMultiplier"],
+  };
+  const result = validateCampaignConfiguration(input);
+  return result.ok ? result.value : null;
 }

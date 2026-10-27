@@ -8,6 +8,12 @@ export type Owner = "host" | "peer";
 
 export type Wound = "hurt" | "impaired" | "down";
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  equipped: boolean;
+}
+
 export interface CharacterDraft {
   name: string;
   abilityId: string;
@@ -32,6 +38,9 @@ export interface TableCharacter {
   owner: Owner;
   archived: boolean;
   inScene: boolean;
+  ready: boolean;
+  currency: number;
+  inventory: InventoryItem[];
 }
 
 const NAME_PATTERN = /^[A-Za-z0-9 '\-]+$/;
@@ -105,6 +114,9 @@ export function addCharacter(
       owner,
       archived: false,
       inScene: true,
+      ready: false,
+      currency: 0,
+      inventory: [],
     },
   };
 }
