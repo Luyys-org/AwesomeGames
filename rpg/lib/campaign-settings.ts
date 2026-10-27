@@ -106,7 +106,7 @@ export const UNIVERSE_TYPES: { id: UniverseTypeId; label: string }[] = [
   { id: "post-apocalyptic", label: "Post-apocalyptic" },
 ];
 
-export const PLAYER_COUNTS = [2, 3, 4, 5, 6] as const;
+export const PLAYER_COUNTS = [1, 2, 3, 4, 5, 6] as const;
 
 export const DEATH_PENALTIES: Choice<DeathPenaltyId>[] = [
   {

@@ -758,11 +758,11 @@ function CharacterTabPanel({
         <NumberField
           id="player-count"
           label="Number of players"
-          description="Number of expected players, including you (2–6)."
+          description="Number of expected players, including you (1–6)."
           value={config.playerCount}
           onChange={(value) => patch({ playerCount: value })}
           required
-          min={2}
+          min={1}
           max={6}
         />
       </FormSection>

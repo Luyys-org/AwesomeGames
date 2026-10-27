@@ -654,10 +654,10 @@
     "semantic_hash": ""
   },
   "rpg/app/page.tsx": {
-    "mtime": 1792844517.658594,
-    "seen": 1793100722.8439608,
-    "ast_hash": "ea1cbfa0adbc31f63ab2ff365c4459a6",
-    "semantic_hash": "ea1cbfa0adbc31f63ab2ff365c4459a6"
+    "mtime": 1793127076.939764,
+    "seen": 1793127095.2001846,
+    "ast_hash": "0bf0d41a142b1bda922d7b93700ead65",
+    "semantic_hash": ""
   },
   "rpg/app/room/[code]/page.tsx": {
     "mtime": 1792844517.658594,
@@ -666,9 +666,9 @@
     "semantic_hash": "1ff86d8189c64bbc578197cb5fd367ce"
   },
   "rpg/features/campaign/new-campaign-form.tsx": {
-    "mtime": 1793121843.3032823,
-    "seen": 1793122241.7045643,
-    "ast_hash": "fd5e01e016cd976a6a9354ceb19d791b",
+    "mtime": 1793127077.072724,
+    "seen": 1793127095.2001889,
+    "ast_hash": "3edf0ea5dc18a6e85730ad94b526adef",
     "semantic_hash": ""
   },
   "rpg/features/campaign/team-options.tsx": {
@@ -732,9 +732,9 @@
     "semantic_hash": ""
   },
   "rpg/lib/campaign-settings.ts": {
-    "mtime": 1793108851.952786,
-    "seen": 1793108945.434123,
-    "ast_hash": "4423e0a561157c77e188a395e439f3e8",
+    "mtime": 1793127075.1013045,
+    "seen": 1793127095.2002149,
+    "ast_hash": "45a7f7cd6c797881ed73a91a7cfd1d80",
     "semantic_hash": ""
   },
   "rpg/lib/character-options.ts": {
@@ -786,9 +786,9 @@
     "semantic_hash": "4ffb9218858b3eb7b05c290b95dfba1c"
   },
   "rpg/lib/table.ts": {
-    "mtime": 1793126358.7875748,
-    "seen": 1793126385.1164472,
-    "ast_hash": "11845272afe696525b3ae9446c9e0cf6",
+    "mtime": 1793127081.3549142,
+    "seen": 1793127095.2002513,
+    "ast_hash": "46bef1d6da8f4591080d440d2f9dd03f",
     "semantic_hash": ""
   },
   "rpg/lib/universe-preset-cache.ts": {
@@ -1038,9 +1038,9 @@
     "semantic_hash": ""
   },
   "rpg/lib/character-tab-config.ts": {
-    "mtime": 1793118235.8870473,
-    "seen": 1793118574.95702,
-    "ast_hash": "fd38a78fe1f5751d30e93826f57103f3",
+    "mtime": 1793127074.4659672,
+    "seen": 1793127095.2002199,
+    "ast_hash": "47640f45240e9937a33c271ebc364f24",
     "semantic_hash": ""
   },
   "app/game/rpg/campaign/[code]/page.tsx": {

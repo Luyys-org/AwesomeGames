@@ -269,7 +269,7 @@ export function canStartCampaign(table: TableState, joiningCount: number): boole
   if (table.phase !== "lobby") return false;
   if (joiningCount > 0) return false;
   const living = table.characters.filter((character) => !character.archived);
-  return living.length >= 2 && living.every((character) => character.ready);
+  return living.length >= 1 && living.every((character) => character.ready);
 }
 
 export function startCampaign(
@@ -277,7 +277,7 @@ export function startCampaign(
 ): { ok: true; table: TableState } | { ok: false; error: string } {
   const living = table.characters.filter((character) => !character.archived);
   if (table.phase !== "lobby") return { ok: false, error: "The lobby is not open." };
-  if (living.length < 2) return { ok: false, error: "At least two characters are needed to start." };
+  if (living.length < 1) return { ok: false, error: "At least one character is needed to start." };
   if (!living.every((character) => character.ready)) {
     return { ok: false, error: "Every character must be ready." };
   }

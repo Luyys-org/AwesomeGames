@@ -61,7 +61,7 @@ export const EQUIPMENT_VALIDATION_RULES: { id: EquipmentValidationRuleId; label:
   { id: "class", label: "Class" },
 ];
 
-const MIN_PLAYERS = 2;
+const MIN_PLAYERS = 1;
 const MAX_PLAYERS = 6;
 
 export function emptyCharacterConfigurationInput(): CharacterConfigurationInput {
