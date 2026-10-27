@@ -40,6 +40,7 @@ import {
 } from "@/rpg/lib/campaign-settings-import-export";
 import { readHostAi } from "@/rpg/lib/host-ai";
 import { generateOpeningSituation } from "@/rpg/lib/host-situation";
+import { rememberJourney } from "@/rpg/lib/journey";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import { createRoomCode } from "@/rpg/lib/room-code";
 import { createTable } from "@/rpg/lib/table";
@@ -322,6 +323,12 @@ export function useNewCampaign() {
       const table = createTable(roomCode, settings);
       table.situation = situationResult.situation;
       table.location = situationResult.location;
+      table.journey = rememberJourney(table.journey, {
+        scene: 1,
+        place: situationResult.location.place,
+        encounter: null,
+        events: [],
+      });
       table.revision = 1;
       writeHostSession({ roomCode, table });
       router.push(paths.room(roomCode));

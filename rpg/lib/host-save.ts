@@ -24,6 +24,7 @@ import {
 } from "@/rpg/lib/campaign-settings";
 import { parseStoredCampaignConfiguration } from "@/rpg/lib/campaign-tab-config";
 import { parseStoredCharacterConfiguration } from "@/rpg/lib/character-tab-config";
+import { emptyJourney } from "@/rpg/lib/journey";
 import { createRoomCode, isClaimCode } from "@/rpg/lib/room-code";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import type { TableState } from "@/rpg/lib/table";
@@ -323,6 +324,7 @@ export function startLobbyFromSave(
       availableActions: [],
       loadoutReady: false,
       gmBusy: false,
+      journey: emptyJourney(),
     };
     writeHostSession({ roomCode, table });
     return { ok: true, roomCode };
