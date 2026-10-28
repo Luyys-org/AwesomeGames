@@ -72,5 +72,5 @@ Resolved check:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and narrate the resolved check. The latest narration in memory is atmosphere from before the roll. The resolution object is the result. Do not repeat it, and do not contradict success, woundsApplied, or deathPenalty. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty, failure, and ids using hyphens only, no underscores. progress uses minor, notable, or major, or []. Do not write an XP number. Stay consistent with the journey.
+Task: Fix the JSON and narrate the resolved check. The latest narration in memory is atmosphere from before the roll. The resolution object is the result. Do not repeat it, and do not contradict success, woundsApplied, or deathPenalty. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty (8, 10, 12, or 15), failure, and ids using hyphens only, no underscores, at most 32 characters each. progress uses minor, notable, or major, or []. Do not write an XP number. Stay consistent with the journey.
 `.trim();

@@ -2,11 +2,18 @@ import { MeshError, openMesh, type JsonValue, type Mesh } from "@/common/p2p";
 
 import { characterError, findClaim, type CharacterDraft } from "@/rpg/lib/character";
 import type { CharacterOptions } from "@/rpg/lib/character-options";
-import { markGmUnreadable, removeGmError, type GmIntent } from "@/rpg/lib/gm-turn";
+import { markGmUnreadable, removeGmError, type GmBeat, type GmIntent } from "@/rpg/lib/gm-turn";
 import { progressionRules } from "@/rpg/lib/progression";
 import { readHostAi } from "@/rpg/lib/host-ai";
 import { runGmTurn } from "@/rpg/lib/host-gm-turn";
+import {
+  hydrateSceneImageUrl,
+  prepareSceneImageRequest,
+  queueSceneImageGeneration,
+  registerSceneImageReadyListener,
+} from "@/rpg/lib/host-scene-image";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
+import { downloadCampaignSave } from "@/rpg/lib/host-save";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
@@ -72,6 +79,8 @@ export interface RoomView {
   gmBusy: boolean;
   statCeiling: number;
   scene: number | null;
+  sceneImageUrl: string | null;
+  imageBusy: boolean;
   seat: RoomSeat | null;
   joiningCount: number;
 }
@@ -121,10 +130,24 @@ interface Session {
   loadoutRequested: boolean;
   gmPending: number;
   gmQueue: Promise<void>;
+  sceneImageUrls: Map<string, string>;
 }
 
 let current: Session | null = null;
 let view: RoomView | null = null;
+
+registerSceneImageReadyListener((payload) => {
+  if (!current || current.roomCode !== payload.roomCode || current.role !== "host") return;
+  current.table = payload.table;
+  if (payload.dataUrl.length > 0 && payload.imageId.length > 0) {
+    current.sceneImageUrls.set(payload.imageId, payload.dataUrl);
+  }
+  publish(current);
+  if (payload.dataUrl.length > 0 && payload.imageId.length > 0) {
+    void broadcastSceneImage(current, payload.imageId, payload.revision, payload.dataUrl);
+    void broadcastSnapshot(current);
+  }
+});
 let opening: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
@@ -177,6 +200,7 @@ async function hostRoomNow(roomCode: string): Promise<void> {
     seat: hostSeat(saved.table),
   });
   await finishOpen(session);
+  void hydrateSceneImageForSession(session);
   requestStartingLoadout(session);
 }
 
@@ -407,6 +431,17 @@ async function submitHostOrPeerIntent(kind: "speak" | "act", value: string): Pro
   }
 }
 
+export function exportHostCampaignSave(): string | null {
+  const session = current;
+  if (!session || session.hidden || session.link === "failed") {
+    return session?.error ?? "Connecting to the room.";
+  }
+  if (session.role !== "host") return "Only the host can export the save.";
+  if (!session.table) return "This browser does not have the host game.";
+  if (session.table.phase !== "play") return "Start the campaign before exporting.";
+  return downloadCampaignSave(session.table);
+}
+
 export async function submitClaim(name: string, claimCode: string): Promise<string | null> {
   const session = current;
   if (!session || session.role !== "peer" || !session.hostPeerId) {
@@ -457,6 +492,7 @@ async function openSession(input: {
     loadoutRequested: false,
     gmPending: 0,
     gmQueue: Promise.resolve(),
+    sceneImageUrls: new Map(),
   };
 
   current = session;
@@ -770,15 +806,23 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
       }
       return;
     }
-    const next = await runGmTurn(session.table, hostAi, intent, async (mid) => {
+    const locationBefore = session.table.location;
+    const turn = await runGmTurn(session.table, hostAi, intent, async (mid) => {
       if (current !== session || session.hidden) return false;
       rememberTable(session, mid);
       await broadcastSnapshot(session);
       return current === session && !session.hidden;
     });
     if (current !== session || session.hidden) return;
-    rememberTable(session, next);
+    const nextTable: TableState = {
+      ...turn.table,
+      gmTurnCount: (turn.table.gmTurnCount ?? 0) + 1,
+    };
+    rememberTable(session, nextTable);
     await broadcastSnapshot(session);
+    if (turn.beat) {
+      scheduleBeatSceneImage(session, hostAi, turn.beat, locationBefore, nextTable);
+    }
   } catch (error) {
     if (current === session && session.table && !session.hidden) {
       const content = error instanceof Error && error.message ? error.message : "The game master returned an unreadable result.";
@@ -863,6 +907,14 @@ function handleFeed(session: Session, data: JsonValue): void {
     session.seat = seat;
     if (seat.status === "replaced") clearStoredSeat(session.roomCode);
     publish(session);
+    return;
+  }
+
+  if (data.type === "sceneImage") {
+    if (typeof data.id !== "string" || typeof data.dataUrl !== "string") return;
+    if (data.dataUrl.length === 0) return;
+    session.sceneImageUrls.set(data.id, data.dataUrl);
+    publish(session);
   }
 }
 
@@ -916,6 +968,44 @@ async function broadcastSnapshot(session: Session): Promise<void> {
   if (!snapshot) return;
   const targets = [...session.peers.keys()];
   await session.mesh.broadcast({ type: "snapshot", snapshot: toJson(snapshot) }, targets);
+}
+
+async function broadcastSceneImage(
+  session: Session,
+  id: string,
+  revision: number,
+  dataUrl: string,
+): Promise<void> {
+  const targets = [...session.peers.keys()];
+  if (targets.length === 0) return;
+  await session.mesh.broadcast({ type: "sceneImage", id, revision, dataUrl }, targets);
+}
+
+function scheduleBeatSceneImage(
+  session: Session,
+  hostAi: ReturnType<typeof readHostAi>,
+  beat: GmBeat,
+  locationBefore: SceneLocation,
+  table: TableState,
+): void {
+  if (!hostAi) return;
+  const prepared = prepareSceneImageRequest(table, "beat", hostAi, beat, locationBefore);
+  if (!prepared) return;
+  rememberTable(session, prepared);
+  void broadcastSnapshot(session);
+  queueSceneImageGeneration(session.roomCode, prepared, hostAi, beat);
+}
+
+async function hydrateSceneImageForSession(session: Session): Promise<void> {
+  if (session.role !== "host" || !session.table) return;
+  if (session.table.imageBusy) {
+    session.table = { ...session.table, imageBusy: false };
+    writeHostSession({ roomCode: session.roomCode, table: session.table });
+  }
+  const loaded = await hydrateSceneImageUrl(session.table);
+  if (!loaded) return;
+  session.sceneImageUrls.set(loaded.id, loaded.dataUrl);
+  publish(session);
 }
 
 async function runHandshake(
@@ -1035,6 +1125,16 @@ async function forceClose(session: Session): Promise<void> {
   }
 }
 
+function resolveSceneImageUrl(
+  session: Session,
+  source: TableSnapshot | null | undefined,
+  table: TableState | null,
+): string | null {
+  const id = source?.sceneImageId ?? table?.sceneImageId ?? null;
+  if (!id) return null;
+  return session.sceneImageUrls.get(id) ?? null;
+}
+
 function publish(session: Session, snapshot?: TableSnapshot): void {
   if (current !== session) return;
   if (snapshot) session.lastSnapshot = snapshot;
@@ -1066,6 +1166,8 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     gmBusy: source?.gmBusy ?? table?.gmBusy ?? false,
     statCeiling: source?.statCeiling ?? (table ? progressionRules(table.settings).statCeiling : 10),
     scene: source?.scene ?? table?.scene ?? null,
+    sceneImageUrl: resolveSceneImageUrl(session, source, table),
+    imageBusy: source?.imageBusy ?? table?.imageBusy === true,
     seat: session.seat,
     joiningCount:
       session.role === "host"

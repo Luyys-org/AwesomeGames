@@ -2,10 +2,13 @@ import {
   characterOptionsFor,
   coreCharacterOptions,
   parseCharacterOptions,
+  parseItemModifiers,
+  parseItemSlot,
   parseStatBlock,
   type CharacterOptions,
+  type StatDefinition,
 } from "@/rpg/lib/character-options";
-import { storedRacePicks, type TableCharacter, type Wound } from "@/rpg/lib/character";
+import { storedRacePicks, type InventoryItem, type TableCharacter, type Wound } from "@/rpg/lib/character";
 import {
   DEATH_PENALTIES,
   ENEMY_DIFFICULTIES,
@@ -24,18 +27,26 @@ import {
 } from "@/rpg/lib/campaign-settings";
 import { parseStoredCampaignConfiguration } from "@/rpg/lib/campaign-tab-config";
 import { parseStoredCharacterConfiguration } from "@/rpg/lib/character-tab-config";
-import { emptyJourney } from "@/rpg/lib/journey";
+import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { createRoomCode, isClaimCode } from "@/rpg/lib/room-code";
+import { parseSceneActions } from "@/rpg/lib/scene-action";
 import { writeHostSession } from "@/rpg/lib/host-session";
-import type { TableState } from "@/rpg/lib/table";
+import {
+  defaultSceneImageState,
+  emptyLocation,
+  type SceneAction,
+  type SceneLocation,
+  type TableState,
+  type TranscriptEntry,
+} from "@/rpg/lib/table";
 
 export const HOST_SAVE_STORAGE_KEY = "rpg.host.save";
 
 const SAVE_TEXT_MAX = 256_000;
 const INVALID_SAVE = "This save is not valid.";
-const LOBBY_ONLY = "Only a lobby save can be loaded.";
 const NAME_PATTERN = /^[A-Za-z0-9 '\-]+$/;
 const CHARACTER_ID_PATTERN = /^pc_[0-9a-f]{8}$/;
+const ITEM_ID_PATTERN = /^itm_[0-9a-f]{8}$/;
 const WOUND_PREFIXES: readonly Wound[][] = [
   [],
   ["hurt"],
@@ -43,16 +54,27 @@ const WOUND_PREFIXES: readonly Wound[][] = [
   ["hurt", "impaired", "down"],
 ];
 
-interface LobbySave {
+interface CampaignSavePayload {
+  phase: "lobby" | "play";
   settings: CampaignSettings;
   objectiveStatus: TableState["objectiveStatus"];
   scene: number;
   situation: string;
   revision: number;
   characters: TableCharacter[];
+  location: SceneLocation;
+  transcript: TranscriptEntry[];
+  availableActions: SceneAction[];
+  loadoutReady: boolean;
+  journey: JourneyGraph;
+  gmTurnCount: number;
+  lastImageGmTurn: number;
+  sceneImageId: string | null;
+  sceneImageRevision: number;
 }
 
-type ParsedSave = { ok: true; value: LobbySave } | { ok: false; error: string };
+type ParsedSave = { ok: true; value: CampaignSavePayload } | { ok: false; error: string };
+type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -79,6 +101,41 @@ function readMultiline(value: unknown, max: number): string | null {
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > max) return null;
   return trimmed;
+}
+
+function readOptionalNonNegativeInt(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return fallback;
+  return value;
+}
+
+function readOptionalImageGmTurn(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < -1) return fallback;
+  return value;
+}
+
+function readOptionalSceneImageId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^img_[0-9a-f]{8}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+function sceneImageFieldsFromSave(value: Record<string, unknown>): {
+  gmTurnCount: number;
+  lastImageGmTurn: number;
+  sceneImageId: string | null;
+  sceneImageRevision: number;
+} {
+  const defaults = defaultSceneImageState();
+  return {
+    gmTurnCount: readOptionalNonNegativeInt(value.gmTurnCount, defaults.gmTurnCount ?? 0),
+    lastImageGmTurn: readOptionalImageGmTurn(value.lastImageGmTurn, defaults.lastImageGmTurn ?? -1),
+    sceneImageId: readOptionalSceneImageId(value.sceneImageId) ?? defaults.sceneImageId ?? null,
+    sceneImageRevision: readOptionalNonNegativeInt(
+      value.sceneImageRevision,
+      defaults.sceneImageRevision ?? 0,
+    ),
+  };
 }
 
 function isWoundPrefix(value: unknown): value is Wound[] {
@@ -161,21 +218,122 @@ function readTraitId(value: unknown, traits: { id: string }[], required: boolean
   return value;
 }
 
+function readInventory(value: unknown, stats: StatDefinition[]): InventoryItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: InventoryItem[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.id !== "string" || !ITEM_ID_PATTERN.test(entry.id)) continue;
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    if (name.length === 0 || name.length > 80) continue;
+    items.push({
+      id: entry.id,
+      name,
+      slot: parseItemSlot(entry.slot),
+      equipped: entry.equipped === true,
+      modifiers: parseItemModifiers(entry.modifiers, stats),
+    });
+  }
+  return items;
+}
+
+function readPlayCharacter(
+  value: unknown,
+  names: Set<string>,
+  ids: Set<string>,
+  claimCodes: Set<string>,
+  options: CharacterOptions,
+  requireTraits: boolean,
+): TableCharacter | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== "string" || !CHARACTER_ID_PATTERN.test(value.id) || ids.has(value.id)) {
+    return null;
+  }
+  const name = readLine(value.name, 24);
+  if (!name || !NAME_PATTERN.test(name) || names.has(name.toLowerCase())) return null;
+  if (typeof value.abilityId !== "string" || !options.skills.some((entry) => entry.id === value.abilityId)) {
+    return null;
+  }
+  if (!isWoundPrefix(value.wounds)) return null;
+  if (typeof value.claimCode !== "string" || !isClaimCode(value.claimCode) || claimCodes.has(value.claimCode)) {
+    return null;
+  }
+  if (value.owner !== "host" && value.owner !== "peer") return null;
+  if (value.archived !== true && value.archived !== false) return null;
+  if (typeof value.inScene !== "boolean") return null;
+
+  const classId = readTraitId(value.classId, options.classes, requireTraits);
+  const stats = parseStatBlock(value.stats, options, classId ?? "");
+  if (!stats || classId === null) return null;
+  const raceId = readTraitId(value.raceId, options.races, requireTraits);
+  if (raceId === null) return null;
+  const picks = storedRacePicks(options, raceId, value.abilityId, value.extraAbilityId, value.raceStatIds);
+  if (!picks.ok) return null;
+
+  const down = value.wounds[value.wounds.length - 1] === "down";
+  if (!value.archived && !value.inScene && value.wounds.length > 0 && !down) return null;
+
+  ids.add(value.id);
+  names.add(name.toLowerCase());
+  claimCodes.add(value.claimCode);
+
+  return {
+    id: value.id,
+    name,
+    abilityId: value.abilityId,
+    extraAbilityId: picks.extraAbilityId,
+    classId,
+    raceId,
+    raceStatIds: picks.raceStatIds,
+    stats,
+    wounds: value.wounds,
+    claimCode: value.claimCode,
+    owner: value.owner,
+    archived: value.archived,
+    inScene: value.inScene,
+    ready: value.ready === true,
+    currency:
+      typeof value.currency === "number" && Number.isFinite(value.currency) && value.currency >= 0
+        ? Math.floor(value.currency)
+        : 0,
+    inventory: readInventory(value.inventory, options.stats),
+    level: typeof value.level === "number" && Number.isInteger(value.level) && value.level > 0 ? value.level : 1,
+    xp: typeof value.xp === "number" && Number.isFinite(value.xp) && value.xp >= 0 ? Math.min(1000, Math.floor(value.xp)) : 0,
+    pendingRewards:
+      typeof value.pendingRewards === "number" &&
+      Number.isInteger(value.pendingRewards) &&
+      value.pendingRewards > 0
+        ? value.pendingRewards
+        : 0,
+  };
+}
+
+function readLocation(value: unknown): SceneLocation {
+  if (!isRecord(value)) return emptyLocation();
+  const readLine80 = (entry: unknown) => {
+    if (typeof entry !== "string") return "";
+    const trimmed = entry.trim();
+    return trimmed.length <= 80 ? trimmed : trimmed.slice(0, 80);
+  };
+  return {
+    place: readLine80(value.place),
+    weather: readLine80(value.weather),
+    reputation: readLine80(value.reputation),
+  };
+}
+
 function emptyList(value: unknown): boolean {
   return Array.isArray(value) && value.length === 0;
 }
 
-function parseLobbySave(value: unknown): ParsedSave {
-  if (!isRecord(value) || value.schemaVersion !== 1) return { ok: false, error: INVALID_SAVE };
-  if (value.phase === "play" || value.phase === "ended") return { ok: false, error: LOBBY_ONLY };
-  if (value.phase !== "lobby") return { ok: false, error: INVALID_SAVE };
-  if (!emptyList(value.forcedCheckCharacterIds) || value.openCheck !== null) {
-    return { ok: false, error: INVALID_SAVE };
-  }
-  if (!emptyList(value.intentQueue) || !emptyList(value.transcript)) {
-    return { ok: false, error: INVALID_SAVE };
-  }
-
+function readCampaignHeader(value: Record<string, unknown>): Parsed<{
+  settings: CampaignSettings;
+  objectiveStatus: TableState["objectiveStatus"];
+  scene: number;
+  situation: string;
+  revision: number;
+  characterOptions: CharacterOptions;
+  requireTraits: boolean;
+}> {
   const campaignName = readLine(value.campaignName, 60);
   const objective = readMultiline(value.objective, 2000) ?? readLine(value.objective, 280);
   const situation = typeof value.situation === "string" ? value.situation.trim() : "";
@@ -211,28 +369,12 @@ function parseLobbySave(value: unknown): ParsedSave {
   const scene = readInteger(value.scene, 1);
   const revision = readInteger(value.revision, 1);
   if (scene === null || revision === null) return { ok: false, error: INVALID_SAVE };
-  if (!Array.isArray(value.characters) || value.characters.length < 1 || value.characters.length > 6) {
-    return { ok: false, error: INVALID_SAVE };
-  }
 
   const storedOptions =
     value.characterOptions === undefined ? null : parseCharacterOptions(value.characterOptions);
   if (value.characterOptions !== undefined && !storedOptions) return { ok: false, error: INVALID_SAVE };
   const characterOptions =
     storedOptions ?? characterOptionsFor(value.universe) ?? coreCharacterOptions();
-
-  const names = new Set<string>();
-  const ids = new Set<string>();
-  const claimCodes = new Set<string>();
-  const characters: TableCharacter[] = [];
-  for (const entry of value.characters) {
-    const character = readCharacter(entry, names, ids, claimCodes, characterOptions, storedOptions !== null);
-    if (!character) return { ok: false, error: INVALID_SAVE };
-    characters.push(character);
-  }
-  if (characters.filter((character) => character.owner === "host").length !== 1) {
-    return { ok: false, error: INVALID_SAVE };
-  }
 
   let campaignConfiguration: CampaignSettings["campaignConfiguration"];
   if (value.campaignConfiguration !== undefined) {
@@ -270,9 +412,173 @@ function parseLobbySave(value: unknown): ParsedSave {
       scene,
       situation,
       revision,
-      characters,
+      characterOptions,
+      requireTraits: storedOptions !== null,
     },
   };
+}
+
+function parseCampaignSave(value: unknown): ParsedSave {
+  if (!isRecord(value) || value.schemaVersion !== 1) return { ok: false, error: INVALID_SAVE };
+  const phase = value.phase === "play" ? "play" : value.phase === "lobby" ? "lobby" : null;
+  if (!phase) return { ok: false, error: INVALID_SAVE };
+  if (!emptyList(value.forcedCheckCharacterIds) || value.openCheck !== null) {
+    return { ok: false, error: INVALID_SAVE };
+  }
+  if (!emptyList(value.intentQueue)) return { ok: false, error: INVALID_SAVE };
+  if (phase === "lobby" && !emptyList(value.transcript)) {
+    return { ok: false, error: INVALID_SAVE };
+  }
+  if (phase === "play" && !Array.isArray(value.transcript)) {
+    return { ok: false, error: INVALID_SAVE };
+  }
+  if (!Array.isArray(value.characters) || value.characters.length < 1 || value.characters.length > 6) {
+    return { ok: false, error: INVALID_SAVE };
+  }
+
+  const header = readCampaignHeader(value);
+  if (!header.ok) return header;
+
+  const names = new Set<string>();
+  const ids = new Set<string>();
+  const claimCodes = new Set<string>();
+  const characters: TableCharacter[] = [];
+  for (const entry of value.characters) {
+    const character =
+      phase === "play"
+        ? readPlayCharacter(
+            entry,
+            names,
+            ids,
+            claimCodes,
+            header.value.characterOptions,
+            header.value.requireTraits,
+          )
+        : readCharacter(
+            entry,
+            names,
+            ids,
+            claimCodes,
+            header.value.characterOptions,
+            header.value.requireTraits,
+          );
+    if (!character) return { ok: false, error: INVALID_SAVE };
+    characters.push(character);
+  }
+  if (characters.filter((character) => character.owner === "host").length !== 1) {
+    return { ok: false, error: INVALID_SAVE };
+  }
+
+  const location = phase === "play" ? readLocation(value.location) : emptyLocation();
+  const transcript =
+    phase === "play" ? (value.transcript as TranscriptEntry[]) : ([] as TranscriptEntry[]);
+  const availableActions =
+    phase === "play" ? parseSceneActions(value.availableActions) : ([] as SceneAction[]);
+  const loadoutReady = phase === "play" ? value.loadoutReady === true : false;
+  if (phase === "play" && value.loadoutReady !== true && value.loadoutReady !== false) {
+    return { ok: false, error: INVALID_SAVE };
+  }
+  const journey =
+    phase === "play" ? parseJourney(value.journey, location.place) : emptyJourney();
+
+  return {
+    ok: true,
+    value: {
+      phase,
+      settings: header.value.settings,
+      objectiveStatus: header.value.objectiveStatus,
+      scene: header.value.scene,
+      situation: header.value.situation,
+      revision: header.value.revision,
+      characters,
+      location,
+      transcript,
+      availableActions,
+      loadoutReady,
+      journey,
+      ...sceneImageFieldsFromSave(value),
+    },
+  };
+}
+
+export function campaignSaveFilename(campaignName: string): string {
+  const slug = campaignName
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${slug || "campaign"}.rpg.json`;
+}
+
+export function buildCampaignSaveDocument(table: TableState): Record<string, unknown> {
+  const { settings } = table;
+  const phase = table.phase === "play" ? "play" : "lobby";
+  const document: Record<string, unknown> = {
+    schemaVersion: 1,
+    phase,
+    campaignName: settings.campaignName,
+    universe: settings.universe,
+    universeLabel: settings.universeLabel,
+    universeType: settings.universeType,
+    playerCount: settings.playerCount,
+    objective: settings.objective,
+    deathPenalty: settings.deathPenalty,
+    enemyDifficulty: settings.enemyDifficulty,
+    lootRarity: settings.lootRarity,
+    playerFreedom: settings.playerFreedom,
+    objectiveStatus: table.objectiveStatus,
+    scene: table.scene,
+    situation: table.situation,
+    revision: table.revision,
+    characters: table.characters,
+    forcedCheckCharacterIds: [],
+    openCheck: null,
+    intentQueue: [],
+    transcript: phase === "play" ? table.transcript : [],
+  };
+  if (settings.campaignConfiguration !== undefined) {
+    document.campaignConfiguration = settings.campaignConfiguration;
+  }
+  if (settings.characterConfiguration !== undefined) {
+    document.characterConfiguration = settings.characterConfiguration;
+  }
+  if (settings.characterOptions) {
+    document.characterOptions = settings.characterOptions;
+  }
+  if (phase === "play") {
+    document.location = table.location;
+    document.availableActions = table.availableActions;
+    document.loadoutReady = table.loadoutReady;
+    document.journey = table.journey;
+  }
+  if ((table.gmTurnCount ?? 0) > 0 || table.sceneImageId) {
+    document.gmTurnCount = table.gmTurnCount ?? 0;
+    document.lastImageGmTurn = table.lastImageGmTurn ?? -1;
+    document.sceneImageRevision = table.sceneImageRevision ?? 0;
+    if (table.sceneImageId) document.sceneImageId = table.sceneImageId;
+  }
+  return document;
+}
+
+export function downloadCampaignSave(table: TableState): string | null {
+  if (typeof window === "undefined") return "Export is not available here.";
+  const raw = JSON.stringify(buildCampaignSaveDocument(table), null, 2);
+  if (raw.length > SAVE_TEXT_MAX) return "This save is too large to export.";
+  try {
+    window.localStorage.setItem(HOST_SAVE_STORAGE_KEY, raw);
+  } catch {
+    // Download still works when local storage is full.
+  }
+  const blob = new Blob([raw], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = campaignSaveFilename(table.settings.campaignName);
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return null;
 }
 
 export function readBrowserSave(): string | null {
@@ -287,9 +593,9 @@ export function readBrowserSave(): string | null {
   }
 }
 
-export function startLobbyFromSave(
+export function startFromCampaignSave(
   raw: string,
-): { ok: true; roomCode: string } | { ok: false; error: string } {
+): { ok: true; roomCode: string; phase: "lobby" | "play" } | { ok: false; error: string } {
   if (raw.length > SAVE_TEXT_MAX) return { ok: false, error: INVALID_SAVE };
 
   let parsed: unknown;
@@ -299,36 +605,77 @@ export function startLobbyFromSave(
     return { ok: false, error: INVALID_SAVE };
   }
 
-  const save = parseLobbySave(parsed);
+  const save = parseCampaignSave(parsed);
   if (!save.ok) return save;
 
   try {
     const roomCode = createRoomCode();
-    const table: TableState = {
-      roomCode,
-      roomStatus: "open",
-      phase: "lobby",
-      settings: save.value.settings,
-      objectiveStatus: save.value.objectiveStatus,
-      scene: save.value.scene,
-      situation: save.value.situation,
-      location: { place: "", weather: "", reputation: "" },
-      revision: save.value.revision,
-      characters: save.value.characters.map((character) => ({
-        ...character,
-        ready: false,
-        currency: character.currency ?? 0,
-        inventory: character.inventory ?? [],
-      })),
-      transcript: [],
-      availableActions: [],
-      loadoutReady: false,
-      gmBusy: false,
-      journey: emptyJourney(),
-    };
+    const table: TableState =
+      save.value.phase === "play"
+        ? {
+            roomCode,
+            roomStatus: "open",
+            phase: "play",
+            settings: save.value.settings,
+            objectiveStatus: save.value.objectiveStatus,
+            scene: save.value.scene,
+            situation: save.value.situation,
+            location: save.value.location,
+            revision: save.value.revision,
+            characters: save.value.characters,
+            transcript: save.value.transcript,
+            availableActions: save.value.availableActions,
+            loadoutReady: save.value.loadoutReady,
+            gmBusy: false,
+            journey: save.value.journey,
+            gmTurnCount: save.value.gmTurnCount,
+            lastImageGmTurn: save.value.lastImageGmTurn,
+            sceneImageId: save.value.sceneImageId,
+            sceneImageRevision: save.value.sceneImageRevision,
+            imageBusy: false,
+          }
+        : {
+            roomCode,
+            roomStatus: "open",
+            phase: "lobby",
+            settings: save.value.settings,
+            objectiveStatus: save.value.objectiveStatus,
+            scene: save.value.scene,
+            situation: save.value.situation,
+            location: emptyLocation(),
+            revision: save.value.revision,
+            characters: save.value.characters.map((character) => ({
+              ...character,
+              ready: false,
+              currency: character.currency ?? 0,
+              inventory: character.inventory ?? [],
+            })),
+            transcript: [],
+            availableActions: [],
+            loadoutReady: false,
+            gmBusy: false,
+            journey: emptyJourney(),
+            ...defaultSceneImageState(),
+          };
     writeHostSession({ roomCode, table });
-    return { ok: true, roomCode };
+    try {
+      window.localStorage.setItem(HOST_SAVE_STORAGE_KEY, raw);
+    } catch {
+      // Session restore still works from session storage.
+    }
+    return { ok: true, roomCode, phase: save.value.phase };
   } catch {
     return { ok: false, error: "The game could not be stored in this browser." };
   }
+}
+
+export function startLobbyFromSave(
+  raw: string,
+): { ok: true; roomCode: string } | { ok: false; error: string } {
+  const result = startFromCampaignSave(raw);
+  if (!result.ok) return result;
+  if (result.phase !== "lobby") {
+    return { ok: false, error: "Only a lobby save can be loaded here." };
+  }
+  return { ok: true, roomCode: result.roomCode };
 }

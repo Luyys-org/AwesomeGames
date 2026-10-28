@@ -11,6 +11,7 @@ import {
   submitCharacter,
   submitChosenAction,
   dismissGmError,
+  exportHostCampaignSave,
   submitLevelReward,
   submitSetItemEquipped,
   submitClaim,
@@ -44,5 +45,6 @@ export function useRoom(roomCode: string) {
     chooseLevelReward: (
       choice: { kind: "stat"; statId: string } | { kind: "skill"; skillId: string },
     ) => submitLevelReward(choice),
+    exportCampaignSave: () => exportHostCampaignSave(),
   };
 }

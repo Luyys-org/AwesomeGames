@@ -15,10 +15,12 @@ import { applyProgress, readProgress, rewardLine, type ProgressGrant } from "@/r
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import {
   actionAbilityApplies,
+  repairSceneActionEntries,
   snapDifficulty,
   validateSceneActions,
 } from "@/rpg/lib/scene-action";
 import {
+  availableActionsForTable,
   isGmErrorEntry,
   UNREADABLE_GM_RESULT,
   type SceneAction,
@@ -144,6 +146,72 @@ export function gmLootLimits(settings: CampaignSettings): { currencyMax: number;
   const currency = config?.currencyAbundance ?? fallback;
   const items = config?.lootQuantity ?? fallback;
   return { currencyMax: CURRENCY_MAX[currency], itemMax: ITEM_MAX[items] };
+}
+
+const CHECK_SETUP_FALLBACK = "The attempt hangs in the balance.";
+
+export function formatGmFailureBody(validationError: string, modelBody: string): string {
+  const error = validationError.trim();
+  const body = modelBody.trim();
+  if (body.length === 0 || body === error) return error;
+  return `${error}\n\n${body}`;
+}
+
+/** Fill host-known check fields and normalize LLM action rows before strict validation. */
+export function repairGmReactionPayload(
+  value: unknown,
+  table: TableState,
+  intent: GmIntent,
+): unknown {
+  if (!isRecord(value)) return value;
+  const check = value.check;
+  if (check !== null && check !== undefined && isRecord(check)) {
+    const character = table.characters.find((entry) => entry.id === intent.characterId);
+    const options = table.settings.characterOptions;
+    const checkRepair: Record<string, unknown> = { ...check, characterId: intent.characterId };
+
+    if (intent.kind === "act" && intent.actionId && character) {
+      const action = availableActionsForTable(table).find((entry) => entry.id === intent.actionId);
+      if (action) {
+        checkRepair.stat = action.stat;
+        checkRepair.difficulty = action.difficulty;
+        checkRepair.failure = action.failure;
+        checkRepair.abilityApplies = actionAbilityApplies(character, options, action);
+      }
+    } else if (typeof checkRepair.abilityApplies !== "boolean") {
+      checkRepair.abilityApplies = false;
+    } else if (
+      checkRepair.abilityApplies === true &&
+      character &&
+      typeof checkRepair.stat === "string" &&
+      !skillMatches(character, options, checkRepair.stat)
+    ) {
+      checkRepair.abilityApplies = false;
+    }
+
+    checkRepair.setup = setupFallbackForCheck(value.narration, intent, checkRepair.setup);
+
+    return {
+      ...value,
+      check: checkRepair,
+      actions: [],
+      progress: [],
+    };
+  }
+
+  return {
+    ...value,
+    actions: repairSceneActionEntries(value.actions),
+  };
+}
+
+/** Normalize action rows on outcome beats (same LLM id/difficulty drift as reactions). */
+export function repairGmOutcomePayload(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  return {
+    ...value,
+    actions: repairSceneActionEntries(value.actions),
+  };
 }
 
 export function readGmReaction(
@@ -497,7 +565,7 @@ function matchChosenActionCheck(
   intent: GmIntent,
   check: GmCheckProposal,
 ): Parsed<null> {
-  const action = table.availableActions.find((entry) => entry.id === intent.actionId);
+  const action = availableActionsForTable(table).find((entry) => entry.id === intent.actionId);
   if (!action) return { ok: true, value: null };
   if (check.stat !== action.stat) {
     return { ok: false, error: "Check stat must match the chosen action." };
@@ -778,6 +846,28 @@ function signed(value: number): string {
 function truncate(value: string, max: number): string {
   const trimmed = value.trim();
   return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
+}
+
+function setupFallbackForCheck(narration: unknown, intent: GmIntent, existing: unknown): string {
+  if (typeof existing === "string") {
+    const trimmed = truncate(existing, SETUP_MAX);
+    if (trimmed.length > 0) return trimmed;
+  }
+  const intentText = intent.text.trim();
+  if (intentText.length > 0) return truncate(intentText, SETUP_MAX);
+  if (typeof narration === "string") {
+    const fromNarration = truncate(lastSentence(narration), SETUP_MAX);
+    if (fromNarration.length > 0) return fromNarration;
+  }
+  return CHECK_SETUP_FALLBACK;
+}
+
+function lastSentence(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return "";
+  const parts = trimmed.split(/(?<=[.!?…])\s+/u);
+  const last = parts[parts.length - 1]?.trim() ?? trimmed;
+  return last.length > 0 ? last : trimmed;
 }
 
 function isDifficulty(value: unknown): value is CheckDifficulty {

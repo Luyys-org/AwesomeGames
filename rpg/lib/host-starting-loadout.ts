@@ -19,7 +19,7 @@ import {
   type DraftInventoryItem,
   type DraftStartingKit,
 } from "@/rpg/lib/starting-kit";
-import { validateSceneActions } from "@/rpg/lib/scene-action";
+import { repairSceneActionEntries, validateSceneActions } from "@/rpg/lib/scene-action";
 import { applyStartingLoadout, type SceneAction, type TableState } from "@/rpg/lib/table";
 
 export async function generateStartingLoadout(
@@ -127,7 +127,7 @@ function readLoadout(
     return { ok: false, error: "Return one kit for each living character." };
   }
 
-  const actions = validateSceneActions(record.actions, table);
+  const actions = validateSceneActions(repairSceneActionEntries(record.actions), table);
   if (!actions.ok) return actions;
   if (actions.value.length < 3 || actions.value.length > 8) {
     return { ok: false, error: "Return 3 to 8 actions." };

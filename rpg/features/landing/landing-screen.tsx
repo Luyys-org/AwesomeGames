@@ -15,6 +15,7 @@ export function LandingScreen() {
         linked={hostAi.linked}
         provider={hostAi.provider}
         model={hostAi.model}
+        imageModel={hostAi.imageModel}
         save={hostAi.save}
         remove={hostAi.remove}
       />

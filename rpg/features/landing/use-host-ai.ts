@@ -16,6 +16,7 @@ export interface HostAiInput {
   provider: AiProvider;
   model: string;
   apiKey: string;
+  imageModel?: string;
 }
 
 export function useHostAi() {
@@ -46,7 +47,13 @@ export function useHostAi() {
       if (!model) return "Enter a model name.";
       if (!apiKey) return "Enter an API key.";
 
-      const next: HostAi = { provider: input.provider, model, apiKey };
+      const imageModel = input.imageModel?.trim();
+      const next: HostAi = {
+        provider: input.provider,
+        model,
+        apiKey,
+        ...(imageModel ? { imageModel } : {}),
+      };
 
       try {
         writeHostAi(next);
@@ -76,6 +83,7 @@ export function useHostAi() {
     linked: hostAi !== null,
     provider: hostAi?.provider ?? null,
     model: hostAi?.model ?? "",
+    imageModel: hostAi?.imageModel ?? "",
     save,
     remove,
   };

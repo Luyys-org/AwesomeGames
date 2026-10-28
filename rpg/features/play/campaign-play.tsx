@@ -30,7 +30,8 @@ interface CampaignPlayProps {
 }
 
 export function CampaignPlay({ roomCode }: CampaignPlayProps) {
-  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped, chooseLevelReward } = useRoom(roomCode);
+  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped, chooseLevelReward, exportCampaignSave } =
+    useRoom(roomCode);
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -38,6 +39,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   const [actionId, setActionId] = useState("");
   const [actPending, setActPending] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!view || view.link !== "open") return;
@@ -86,6 +88,11 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
       : [];
   const playReady = view?.phase === "play" && view.loadoutReady;
   const gmBusy = view?.gmBusy === true;
+  const imageBusy = view?.imageBusy === true;
+  const sceneImageUrl = view?.sceneImageUrl ?? null;
+  const sceneImageAlt = [view?.location?.place, view?.situation?.slice(0, 120)]
+    .filter((part) => part && part.length > 0)
+    .join(" — ");
   const controlsLocked = !character || away || down || actPending || !playReady || gmBusy;
 
   function sendSpeak() {
@@ -207,6 +214,17 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
             {!view?.loadoutReady && view?.phase === "play" ? (
               <p className="mb-4 text-sm text-zinc-400">The game master is preparing starting gear.</p>
+            ) : null}
+            {sceneImageUrl ? (
+              <figure className="mx-auto mb-6 w-full max-w-2xl border border-[var(--border)]">
+                <img
+                  src={sceneImageUrl}
+                  alt={sceneImageAlt.length > 0 ? sceneImageAlt : "Current scene"}
+                  className="aspect-video w-full object-cover"
+                />
+              </figure>
+            ) : imageBusy ? (
+              <p className="mx-auto mb-6 w-full max-w-2xl text-sm text-zinc-400">Generating scene image…</p>
             ) : null}
             <AgentLog
               transcript={view?.transcript ?? []}
@@ -342,6 +360,27 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           choices={rewardChoices}
           onChoose={chooseLevelReward}
         />
+      ) : null}
+
+      {view?.role === "host" ? (
+        <div className="pointer-events-none fixed bottom-4 left-4 z-40 flex flex-col gap-2">
+          {exportError ? (
+            <p role="alert" className="pointer-events-auto max-w-xs text-sm text-red-200">
+              {exportError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-secondary pointer-events-auto"
+            onClick={() => {
+              setExportError(null);
+              const message = exportCampaignSave();
+              if (message) setExportError(message);
+            }}
+          >
+            Export save
+          </button>
+        </div>
       ) : null}
     </div>
   );

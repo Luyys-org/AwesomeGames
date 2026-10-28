@@ -21,3 +21,7 @@ export function createCharacterId(): string {
 export function createItemId(): string {
   return randomHexId("itm_");
 }
+
+export function createSceneImageId(): string {
+  return randomHexId("img_");
+}

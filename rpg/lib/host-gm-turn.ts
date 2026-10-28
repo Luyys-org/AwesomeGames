@@ -1,9 +1,12 @@
 import {
   applyResolvedBeat,
   commitCheckBeat,
+  formatGmFailureBody,
   markGmUnreadable,
   readGmOutcome,
   readGmReaction,
+  repairGmOutcomePayload,
+  repairGmReactionPayload,
   type GmBeat,
   type GmIntent,
   type GmReaction,
@@ -19,28 +22,58 @@ import {
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
 import type { TableState } from "@/rpg/lib/table";
 
+export interface GmTurnResult {
+  table: TableState;
+  beat: GmBeat | null;
+}
+
 export async function runGmTurn(
   table: TableState,
   hostAi: HostAi,
   intent: GmIntent,
   publishCheck: (table: TableState) => Promise<boolean>,
-): Promise<TableState> {
+): Promise<GmTurnResult> {
   const reaction = await generateGmReaction(table, hostAi, intent);
-  if (!reaction.ok) return markGmUnreadable(table, false, reaction.content);
+  if (!reaction.ok) {
+    return { table: markGmUnreadable(table, false, reaction.content), beat: null };
+  }
 
   if (reaction.value.check) {
     const checked = commitCheckBeat(table, reaction.value, reaction.value.check, true);
-    if (!checked.ok) return markGmUnreadable(table, false, reaction.content);
+    if (!checked.ok) {
+      return {
+        table: markGmUnreadable(table, false, formatGmFailureBody(checked.error, reaction.content)),
+        beat: null,
+      };
+    }
     const proceed = await publishCheck(checked.table);
-    if (!proceed) return checked.table;
+    if (!proceed) return { table: checked.table, beat: null };
     const outcome = await generateGmOutcome(checked.table, hostAi, intent, checked.resolution);
-    if (!outcome.ok) return markGmUnreadable(checked.table, false, outcome.content);
+    if (!outcome.ok) {
+      return { table: markGmUnreadable(checked.table, false, outcome.content), beat: null };
+    }
     const applied = applyResolvedBeat(checked.table, outcome.value, false);
-    return applied.ok ? applied.table : markGmUnreadable(checked.table, false, outcome.content);
+    if (!applied.ok) {
+      return {
+        table: markGmUnreadable(
+          checked.table,
+          false,
+          formatGmFailureBody(applied.error, outcome.content),
+        ),
+        beat: null,
+      };
+    }
+    return { table: applied.table, beat: outcome.value };
   }
 
   const applied = applyResolvedBeat(table, reaction.value, false);
-  return applied.ok ? applied.table : markGmUnreadable(table, false, reaction.content);
+  if (!applied.ok) {
+    return {
+      table: markGmUnreadable(table, false, formatGmFailureBody(applied.error, reaction.content)),
+      beat: null,
+    };
+  }
+  return { table: applied.table, beat: reaction.value };
 }
 
 async function generateGmReaction(
@@ -57,7 +90,11 @@ async function generateGmReaction(
     intent,
   );
   if (second.ok) return second;
-  return { ok: false, error: second.error, content: preferModelContent(second, first) };
+  return {
+    ok: false,
+    error: second.error,
+    content: formatGmFailureBody(second.error, preferModelContent(second, first)),
+  };
 }
 
 async function generateGmOutcome(
@@ -78,7 +115,11 @@ async function generateGmOutcome(
     table,
   );
   if (second.ok) return second;
-  return { ok: false, error: second.error, content: preferModelContent(second, first) };
+  return {
+    ok: false,
+    error: second.error,
+    content: formatGmFailureBody(second.error, preferModelContent(second, first)),
+  };
 }
 
 async function requestReaction(
@@ -95,7 +136,7 @@ async function requestReaction(
   if (!response.ok) return { ok: false, error: response.error, content: response.error };
   const parsed = parseJsonContent(response.content);
   if (parsed === null) return { ok: false, error: "Response JSON must be an object.", content: response.content };
-  const read = readGmReaction(parsed, table, intent);
+  const read = readGmReaction(repairGmReactionPayload(parsed, table, intent), table, intent);
   if (!read.ok) return { ok: false, error: read.error, content: response.content };
   return { ok: true, value: read.value, content: response.content };
 }
@@ -113,7 +154,7 @@ async function requestOutcome(
   if (!response.ok) return { ok: false, error: response.error, content: response.error };
   const parsed = parseJsonContent(response.content);
   if (parsed === null) return { ok: false, error: "Response JSON must be an object.", content: response.content };
-  const read = readGmOutcome(parsed, table);
+  const read = readGmOutcome(repairGmOutcomePayload(parsed), table);
   if (!read.ok) return { ok: false, error: read.error, content: response.content };
   return { ok: true, value: read.value, content: response.content };
 }

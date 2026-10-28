@@ -19,6 +19,7 @@ interface ProviderFormProps {
   linked: boolean;
   provider: AiProvider | null;
   model: string;
+  imageModel: string;
   save: (input: HostAiInput) => string | null;
   remove: () => string | null;
 }
@@ -28,11 +29,13 @@ export function ProviderForm({
   linked,
   provider,
   model,
+  imageModel,
   save,
   remove,
 }: ProviderFormProps) {
   const [selectedProvider, setSelectedProvider] = useState<AiProvider | "">("");
   const [modelName, setModelName] = useState("");
+  const [imageModelName, setImageModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -46,6 +49,7 @@ export function ProviderForm({
     setHydrated(true);
     if (provider) setSelectedProvider(provider);
     if (model) setModelName(model);
+    if (imageModel) setImageModelName(imageModel);
   }
 
   useEffect(() => {
@@ -56,6 +60,7 @@ export function ProviderForm({
   function beginEdit() {
     if (provider) setSelectedProvider(provider);
     if (model) setModelName(model);
+    if (imageModel) setImageModelName(imageModel);
     setApiKey("");
     setError(null);
     setEditing(true);
@@ -72,6 +77,7 @@ export function ProviderForm({
     setEditing(false);
     setSelectedProvider("");
     setModelName("");
+    setImageModelName("");
     setApiKey("");
     setError(null);
   }
@@ -82,7 +88,8 @@ export function ProviderForm({
         AI provider
       </h2>
       <p className="mt-1 text-sm text-zinc-400">
-        Stored in this browser only. It is not written into the campaign save.
+        Stored in this browser only. It is not written into the campaign save. Scene images use OpenAI
+        or Grok image models; Anthropic does not generate images.
       </p>
 
       <form
@@ -101,6 +108,7 @@ export function ProviderForm({
             provider: selectedProvider,
             model: modelName,
             apiKey,
+            imageModel: imageModelName,
           });
           if (message) {
             setError(message);
@@ -174,6 +182,29 @@ export function ProviderForm({
             />
           </label>
         </div>
+
+        <label className="block text-sm text-zinc-300">
+          Image model
+          <input
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            disabled={fieldsDisabled || selectedProvider === "anthropic"}
+            placeholder={
+              AI_PROVIDERS.find((entry) => entry.id === selectedProvider)?.imageModelPlaceholder ??
+              "Optional — provider default"
+            }
+            value={imageModelName}
+            onChange={(event) => {
+              setImageModelName(event.target.value);
+              setError(null);
+            }}
+            className="field mt-1 w-full"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            Used for campaign scene art during play. Leave blank to use the provider default.
+          </span>
+        </label>
 
         {error ? (
           <p

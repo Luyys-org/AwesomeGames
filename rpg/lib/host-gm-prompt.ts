@@ -23,6 +23,7 @@ import {
   type GmIntent,
 } from "@/rpg/lib/gm-turn";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
+import { availableActionsForTable } from "@/rpg/lib/table";
 import gmOutcomeRetryTemplate from "@/rpg/prompts/gm-outcome-retry";
 import gmOutcomeTemplate from "@/rpg/prompts/gm-outcome";
 import gmReactionRetryTemplate from "@/rpg/prompts/gm-reaction-retry";
@@ -176,7 +177,7 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
   const loot = gmLootLimits(table.settings);
   const selectedAction =
     intent.kind === "act" && intent.actionId
-      ? (table.availableActions.find((entry) => entry.id === intent.actionId) ?? null)
+      ? (availableActionsForTable(table).find((entry) => entry.id === intent.actionId) ?? null)
       : null;
   return {
     ...campaignVars(table.settings),

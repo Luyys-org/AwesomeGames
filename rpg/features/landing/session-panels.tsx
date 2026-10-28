@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-import { readBrowserSave, startLobbyFromSave } from "@/rpg/lib/host-save";
+import { readBrowserSave, startFromCampaignSave } from "@/rpg/lib/host-save";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { isRoomCode } from "@/rpg/lib/room-code";
 import { paths } from "@/rpg/paths";
@@ -32,13 +32,15 @@ export function SessionPanels({ ready, linked }: SessionPanelsProps) {
     } catch {
       // A save that already stores its character options can still load.
     }
-    const result = startLobbyFromSave(raw);
+    const result = startFromCampaignSave(raw);
     setLoadingSave(false);
     if (!result.ok) {
       setCreateError(result.error);
       return;
     }
-    router.push(paths.room(result.roomCode));
+    router.push(
+      result.phase === "play" ? paths.campaign(result.roomCode) : paths.room(result.roomCode),
+    );
   }
 
   function loadExistingSave() {

@@ -42,6 +42,7 @@ import { readHostAi } from "@/rpg/lib/host-ai";
 import { generateOpeningSituation } from "@/rpg/lib/host-situation";
 import { rememberJourney } from "@/rpg/lib/journey";
 import { writeHostSession } from "@/rpg/lib/host-session";
+import { startOpeningSceneImage } from "@/rpg/lib/host-scene-image";
 import { createRoomCode } from "@/rpg/lib/room-code";
 import { createTable } from "@/rpg/lib/table";
 import { paths } from "@/rpg/paths";
@@ -320,7 +321,7 @@ export function useNewCampaign() {
 
     try {
       const roomCode = createRoomCode();
-      const table = createTable(roomCode, settings);
+      let table = createTable(roomCode, settings);
       table.situation = situationResult.situation;
       table.location = situationResult.location;
       table.journey = rememberJourney(table.journey, {
@@ -330,6 +331,7 @@ export function useNewCampaign() {
         events: [],
       });
       table.revision = 1;
+      table = startOpeningSceneImage(roomCode, table, hostAi);
       writeHostSession({ roomCode, table });
       router.push(paths.room(roomCode));
     } catch {
