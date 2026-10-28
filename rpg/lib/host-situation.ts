@@ -1,3 +1,4 @@
+import type { PlanStartRoom } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
@@ -19,14 +20,21 @@ export interface OpeningScene {
 export async function generateOpeningSituation(
   settings: CampaignSettings,
   hostAi: HostAi,
+  startRoom: PlanStartRoom,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
-  const first = await requestSituation(hostAi, buildOpeningSituationUserMessage(settings), settings);
+  const first = await requestSituation(
+    hostAi,
+    buildOpeningSituationUserMessage(settings, startRoom),
+    settings,
+    startRoom,
+  );
   if (first.ok) return first;
 
   const second = await requestSituation(
     hostAi,
-    buildOpeningSituationRetryMessage(settings, first.error),
+    buildOpeningSituationRetryMessage(settings, startRoom, first.error),
     settings,
+    startRoom,
   );
   if (second.ok) return second;
 
@@ -37,6 +45,7 @@ async function requestSituation(
   hostAi: HostAi,
   user: string,
   settings: CampaignSettings,
+  startRoom: PlanStartRoom,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
     temperature: 0,
@@ -50,10 +59,14 @@ async function requestSituation(
   if (!situation) {
     return { ok: false, error: "Response JSON must include a non-empty situation string." };
   }
+  const location = readLocation(parsed);
+  if (location.place.trim().toLowerCase() !== startRoom.name.trim().toLowerCase()) {
+    return { ok: false, error: `Place must be the start room name: ${startRoom.name}.` };
+  }
   return {
     ok: true,
     situation: truncateText(situation, SITUATION_MAX),
-    location: readLocation(parsed),
+    location: { ...location, place: startRoom.name },
   };
 }
 

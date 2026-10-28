@@ -5,13 +5,21 @@ import type { TableCharacter } from "@/rpg/lib/character";
 
 export const XP_PER_LEVEL = 1000;
 
-const TIERS = ["minor", "notable", "major"] as const;
+/** Base award the game master writes. The host scales it; the model does not. */
+export const XP_AWARD_MIN = 10;
+export const XP_AWARD_MAX = 100;
 
-export type ProgressTier = (typeof TIERS)[number];
+/** Low 100%, standard 200%, high 300% of the base award. */
+const XP_PACE_FACTOR: Record<SettingLevel, number> = {
+  low: 1,
+  standard: 2,
+  high: 3,
+};
 
 export interface ProgressGrant {
   characterId: string;
-  tier: ProgressTier;
+  /** Unscaled award, always inside XP_AWARD_MIN..XP_AWARD_MAX. */
+  xp: number;
 }
 
 export interface ProgressGain {
@@ -25,13 +33,28 @@ export type LevelRewardChoice =
   | { kind: "stat"; statId: string; label: string }
   | { kind: "skill"; skillId: string; label: string };
 
-const XP_BY_MULTIPLIER: Record<SettingLevel, Record<ProgressTier, number>> = {
-  low: { minor: 50, notable: 100, major: 180 },
-  standard: { minor: 100, notable: 200, major: 350 },
-  high: { minor: 180, notable: 350, major: 600 },
-};
-
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+
+/**
+ * Level 1 keeps 100% of the paced award. The campaign level cap keeps 10%.
+ * Levels in between step down in a straight line.
+ */
+export function levelXpFactor(level: number, levelCap: number): number {
+  const cap = levelCap > 1 ? levelCap : 1;
+  const current = Math.min(Math.max(level, 1), cap);
+  if (cap <= 1) return 1;
+  return 1 - ((current - 1) / (cap - 1)) * 0.9;
+}
+
+export function scaleAwardedXp(
+  base: number,
+  pace: SettingLevel,
+  level: number,
+  levelCap: number,
+): number {
+  const scaled = base * XP_PACE_FACTOR[pace] * levelXpFactor(level, levelCap);
+  return Math.max(1, Math.round(scaled));
+}
 
 export function progressionRules(settings: CampaignSettings): {
   levelCap: number;
@@ -50,10 +73,6 @@ export function progressionRules(settings: CampaignSettings): {
   };
 }
 
-export function xpForTier(multiplier: SettingLevel, tier: ProgressTier): number {
-  return XP_BY_MULTIPLIER[multiplier][tier];
-}
-
 export function readProgress(value: unknown, characters: TableCharacter[]): Parsed<ProgressGrant[]> {
   if (value === undefined || value === null) return { ok: true, value: [] };
   if (!Array.isArray(value)) return { ok: false, error: "Progress must be an array." };
@@ -61,14 +80,17 @@ export function readProgress(value: unknown, characters: TableCharacter[]): Pars
   const seen = new Set<string>();
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      return { ok: false, error: "Each progress entry needs characterId and tier." };
+      return { ok: false, error: "Each progress entry needs characterId and xp." };
     }
     const record = entry as Record<string, unknown>;
-    if (typeof record.characterId !== "string" || typeof record.tier !== "string") {
-      return { ok: false, error: "Each progress entry needs characterId and tier." };
+    if (typeof record.characterId !== "string" || typeof record.xp !== "number") {
+      return { ok: false, error: "Each progress entry needs characterId and xp." };
     }
-    if (!TIERS.includes(record.tier as ProgressTier)) {
-      return { ok: false, error: "Progress tier must be minor, notable, or major." };
+    if (!Number.isInteger(record.xp) || record.xp < XP_AWARD_MIN || record.xp > XP_AWARD_MAX) {
+      return {
+        ok: false,
+        error: `Progress xp must be a whole number from ${XP_AWARD_MIN} to ${XP_AWARD_MAX}.`,
+      };
     }
     const character = characters.find((candidate) => candidate.id === record.characterId);
     if (!character || character.archived) {
@@ -76,7 +98,7 @@ export function readProgress(value: unknown, characters: TableCharacter[]): Pars
     }
     if (seen.has(character.id)) return { ok: false, error: "Each character can gain experience only once." };
     seen.add(character.id);
-    grants.push({ characterId: character.id, tier: record.tier as ProgressTier });
+    grants.push({ characterId: character.id, xp: record.xp });
   }
   return { ok: true, value: grants };
 }
@@ -92,7 +114,7 @@ export function applyProgress(
   const next = characters.map((character) => {
     const grant = grants.find((entry) => entry.characterId === character.id);
     if (!grant) return character;
-    const amount = xpForTier(rules.multiplier, grant.tier);
+    const amount = scaleAwardedXp(grant.xp, rules.multiplier, character.level, rules.levelCap);
     const applied = addExperience(character, amount, rules, settings);
     if (applied.levelsGained > 0 || applied.xpGained > 0) {
       gains.push({

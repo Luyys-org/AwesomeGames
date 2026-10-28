@@ -19,7 +19,7 @@ import {
   type DraftInventoryItem,
   type DraftStartingKit,
 } from "@/rpg/lib/starting-kit";
-import { validateSceneActions } from "@/rpg/lib/scene-action";
+import { repairSceneActionEntries, validateSceneActions } from "@/rpg/lib/scene-action";
 import { applyStartingLoadout, type SceneAction, type TableState } from "@/rpg/lib/table";
 
 export async function generateStartingLoadout(
@@ -47,6 +47,7 @@ function loadoutPrompt(table: TableState): {
   situation: string;
   place: string;
   currencyName: string;
+  plan: TableState["campaignPlan"];
   characters: StartingLoadoutCharacterPrompt[];
 } {
   const wealth = table.settings.characterConfiguration?.startingWealth;
@@ -61,6 +62,7 @@ function loadoutPrompt(table: TableState): {
     situation: table.situation,
     place: table.location.place,
     currencyName: currencyLabel(table.settings.universe),
+    plan: table.campaignPlan ?? null,
     characters: table.characters
       .filter((character) => !character.archived)
       .map((character) => {
@@ -127,7 +129,7 @@ function readLoadout(
     return { ok: false, error: "Return one kit for each living character." };
   }
 
-  const actions = validateSceneActions(record.actions, table);
+  const actions = validateSceneActions(repairSceneActionEntries(record.actions), table);
   if (!actions.ok) return actions;
   if (actions.value.length < 3 || actions.value.length > 8) {
     return { ok: false, error: "Return 3 to 8 actions." };

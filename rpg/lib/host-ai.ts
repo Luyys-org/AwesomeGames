@@ -6,12 +6,18 @@ export interface HostAi {
   provider: AiProvider;
   model: string;
   apiKey: string;
+  imageModel?: string;
 }
 
-export const AI_PROVIDERS: { id: AiProvider; label: string; modelPlaceholder: string }[] = [
-  { id: "openai", label: "OpenAI", modelPlaceholder: "gpt-4o" },
+export const AI_PROVIDERS: {
+  id: AiProvider;
+  label: string;
+  modelPlaceholder: string;
+  imageModelPlaceholder?: string;
+}[] = [
+  { id: "openai", label: "OpenAI", modelPlaceholder: "gpt-4o", imageModelPlaceholder: "gpt-image-1" },
   { id: "anthropic", label: "Anthropic", modelPlaceholder: "claude-sonnet-4-5" },
-  { id: "grok", label: "Grok", modelPlaceholder: "grok-4.7" },
+  { id: "grok", label: "Grok", modelPlaceholder: "grok-4.7", imageModelPlaceholder: "grok-imagine-image-2.0" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -27,10 +33,16 @@ export function parseHostAi(value: unknown): HostAi | null {
   if (typeof value.model !== "string" || value.model.trim() === "") return null;
   if (typeof value.apiKey !== "string" || value.apiKey.trim() === "") return null;
 
+  const imageModel =
+    typeof value.imageModel === "string" && value.imageModel.trim().length > 0
+      ? value.imageModel.trim()
+      : undefined;
+
   return {
     provider: value.provider,
     model: value.model.trim(),
     apiKey: value.apiKey.trim(),
+    ...(imageModel ? { imageModel } : {}),
   };
 }
 
@@ -51,6 +63,7 @@ export function writeHostAi(hostAi: HostAi): void {
     provider: hostAi.provider,
     model: hostAi.model,
     apiKey: hostAi.apiKey,
+    ...(hostAi.imageModel?.trim() ? { imageModel: hostAi.imageModel.trim() } : {}),
   };
   window.localStorage.setItem(HOST_AI_STORAGE_KEY, JSON.stringify(stored));
 }

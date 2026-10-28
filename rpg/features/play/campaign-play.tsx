@@ -7,6 +7,7 @@ import { InventoryDialog } from "@/rpg/features/play/inventory-dialog";
 import { StatsDialog } from "@/rpg/features/play/stats-dialog";
 import { useRoom } from "@/rpg/features/room/use-room";
 import { characterHp } from "@/rpg/lib/character";
+import { characterSituationLabel, readStoredCharacterSituation } from "@/rpg/lib/character-situation";
 import { characterIdentity, type CharacterOptions } from "@/rpg/lib/character-options";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import { levelRewardOptionsForView, XP_PER_LEVEL } from "@/rpg/lib/progression";
@@ -30,7 +31,8 @@ interface CampaignPlayProps {
 }
 
 export function CampaignPlay({ roomCode }: CampaignPlayProps) {
-  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped, chooseLevelReward } = useRoom(roomCode);
+  const { view, submitSpeak, submitAction, dismissGmError, setItemEquipped, chooseLevelReward, exportCampaignSave } =
+    useRoom(roomCode);
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -38,6 +40,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   const [actionId, setActionId] = useState("");
   const [actPending, setActPending] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!view || view.link !== "open") return;
@@ -86,6 +89,11 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
       : [];
   const playReady = view?.phase === "play" && view.loadoutReady;
   const gmBusy = view?.gmBusy === true;
+  const imageBusy = view?.imageBusy === true;
+  const sceneImageUrl = view?.sceneImageUrl ?? null;
+  const sceneImageAlt = [view?.location?.place, view?.situation?.slice(0, 120)]
+    .filter((part) => part && part.length > 0)
+    .join(" — ");
   const controlsLocked = !character || away || down || actPending || !playReady || gmBusy;
 
   function sendSpeak() {
@@ -199,14 +207,28 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
             <MapField label="Place" value={view?.location?.place ?? ""} />
             <MapField label="Weather" value={view?.location?.weather ?? ""} />
             <MapField label="Reputation" value={view?.location?.reputation ?? ""} />
+            <SituationField characters={roster} selfId={character?.id ?? null} />
             {view?.scene ? <MapField label="Scene" value={String(view.scene)} /> : null}
           </dl>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+            {sceneImageUrl ? (
+              <figure className="mx-auto mb-6 w-full max-w-2xl border border-[var(--border)]">
+                <img
+                  src={sceneImageUrl}
+                  alt={sceneImageAlt.length > 0 ? sceneImageAlt : "Current scene"}
+                  className="aspect-video w-full object-cover"
+                />
+              </figure>
+            ) : imageBusy ? (
+              <SceneImageStub />
+            ) : null}
             {!view?.loadoutReady && view?.phase === "play" ? (
-              <p className="mb-4 text-sm text-zinc-400">The game master is preparing starting gear.</p>
+              <div className="mx-auto mb-4 w-full max-w-2xl">
+                <LoadingStatus label="Generating starting gear, please wait..." />
+              </div>
             ) : null}
             <AgentLog
               transcript={view?.transcript ?? []}
@@ -342,6 +364,27 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           choices={rewardChoices}
           onChoose={chooseLevelReward}
         />
+      ) : null}
+
+      {view?.role === "host" ? (
+        <div className="pointer-events-none fixed bottom-4 left-4 z-40 flex flex-col gap-2">
+          {exportError ? (
+            <p role="alert" className="pointer-events-auto max-w-xs text-sm text-red-200">
+              {exportError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-secondary pointer-events-auto"
+            onClick={() => {
+              setExportError(null);
+              const message = exportCampaignSave();
+              if (message) setExportError(message);
+            }}
+          >
+            Export save
+          </button>
+        </div>
       ) : null}
     </div>
   );
@@ -485,18 +528,43 @@ function BinIcon() {
   );
 }
 
-function GmBusyIndicator() {
+function LoadingStatus({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 text-sm text-zinc-400" role="status" aria-live="polite">
-      <div
-        className="relative size-5 shrink-0"
-        aria-hidden="true"
-      >
+      <div className="relative size-5 shrink-0" aria-hidden="true">
         <div className="absolute inset-0 rounded-full border-2 border-zinc-800" />
         <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[var(--primary)]" />
       </div>
-      <span>The game master is answering.</span>
+      <span>{label}</span>
     </div>
+  );
+}
+
+function GmBusyIndicator() {
+  return <LoadingStatus label="The game master is answering." />;
+}
+
+function SceneImageStub() {
+  return (
+    <div
+      className="mx-auto mb-6 flex aspect-video w-full max-w-2xl animate-pulse items-center justify-center border border-[var(--border)] bg-[var(--surface)]"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Generating scene image"
+    >
+      <ImageStubIcon />
+    </div>
+  );
+}
+
+function ImageStubIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="text-zinc-500">
+      <rect x="2.5" y="4" width="15" height="12" stroke="currentColor" strokeWidth="1.25" />
+      <path d="M2.5 13.5 6.5 9.5l2.5 2.5 3-3 5.5 5.5" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+      <circle cx="7" cy="7.5" r="1" fill="currentColor" />
+    </svg>
   );
 }
 
@@ -505,6 +573,35 @@ function MapField({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-zinc-400">{label}</dt>
       <dd className="mt-1 text-zinc-50">{value.length > 0 ? value : "—"}</dd>
+    </div>
+  );
+}
+
+function SituationField({ characters, selfId }: { characters: PublicCharacter[]; selfId: string | null }) {
+  const visible = characters
+    .filter((entry) => !entry.archived && (entry.inScene || entry.id === selfId))
+    .sort((left, right) => {
+      if (left.id === selfId) return -1;
+      if (right.id === selfId) return 1;
+      return left.name.localeCompare(right.name);
+    });
+  const showNames = visible.length > 1 || (visible.length === 1 && visible[0]?.id !== selfId);
+
+  return (
+    <div>
+      <dt className="text-zinc-400">Situation</dt>
+      {visible.length === 0 ? (
+        <dd className="mt-1 text-zinc-50">—</dd>
+      ) : (
+        <dd className="mt-1 space-y-2">
+          {visible.map((entry) => (
+            <p key={entry.id} className="text-zinc-50">
+              {showNames ? <span className="block text-zinc-400">{entry.name}</span> : null}
+              {characterSituationLabel(readStoredCharacterSituation(entry.situation))}
+            </p>
+          ))}
+        </dd>
+      )}
     </div>
   );
 }

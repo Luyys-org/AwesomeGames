@@ -6,6 +6,7 @@ Reply with JSON only, matching this schema:
   "place": "string",
   "weather": "string",
   "reputation": "string",
+  "situations": [{ "characterId": "string", "situation": "standing" }],
   "check": null,
   "loot": [
     {
@@ -33,7 +34,9 @@ Reply with JSON only, matching this schema:
       "itemId": ""
     }
   ],
-  "progress": [{ "characterId": "string", "tier": "minor" }]
+  "progress": [{ "characterId": "string", "xp": 20 }],
+  "roomId": "",
+  "clearedGateIds": []
 }
 
 Limits:
@@ -65,11 +68,16 @@ Journey (places, people, and resolved events already lived):
 Recent memory:
 {{json:memory}}
 
+Campaign plan:
+{{json:plan}}
+
+{{planRules}}
+
 Player intent:
 {{json:intent}}
 
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON. React only to that intent. When the outcome is certain, check is null, loot stays within the limits, progress uses minor, notable, or major with no XP number, and actions has 3 to 8 specific entries. Each action needs stat, difficulty, failure, and precise labels. Use characterIds or itemId when only some characters can attempt it. Action ids use hyphens only, no underscores. When intent.selectedAction is set and the outcome is uncertain, check must match that action's stat, difficulty, and failure, and progress is empty. When the outcome is uncertain without a selectedAction, check is set, loot is empty, actions is empty, and progress is empty. Do not write a die result, a total, or a success word. Stay consistent with the journey. Do not contradict a recorded event.
+Task: Fix the JSON. React only to that intent. When the outcome is certain, check is null, loot stays within the limits, progress xp is a whole number from 10 to 100 chosen for that action, not copied from the schema and not scaled for experience gain or level, and actions has 3 to 8 specific entries. Each action needs stat, difficulty (8, 10, 12, or 15), failure, and precise labels. Action ids use hyphens only, no underscores, and at most 32 characters each. Use characterIds or itemId when only some characters can attempt it. When intent.selectedAction is set and the outcome is uncertain, check must match that action's stat, difficulty, and failure, and progress is empty. When the outcome is uncertain without a selectedAction, check is set with all of characterId, stat, difficulty, failure, abilityApplies, and setup; loot is empty; actions is empty; progress is empty. When check is set, narration states the situation once and stops before the roll. setup is one sentence, not a copy of narration. Do not write the consequence. Do not write a die result, a total, or a success word. Stay consistent with the journey. Do not contradict a recorded event. situations is an array of { characterId, situation }. situation is one of {{situationList}}. Use [] to leave every situation unchanged. Narration must match the situations you keep. A character whose wounds include down stays unconscious. Follow the campaign plan. roomId and clearedGateIds are required.
 `.trim();

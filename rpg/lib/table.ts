@@ -21,7 +21,16 @@ import {
   type Wound,
 } from "@/rpg/lib/character";
 import { createItemId } from "@/rpg/lib/ids";
-import { canPerformSceneAction, parseSceneActions } from "@/rpg/lib/scene-action";
+import {
+  canPerformSceneAction,
+  mergeAvailableActions,
+  parseSceneActions,
+} from "@/rpg/lib/scene-action";
+import {
+  readStoredCharacterSituation,
+  type CharacterSituation,
+} from "@/rpg/lib/character-situation";
+import { readStoredCampaignPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { levelRewardOptions, progressionRules } from "@/rpg/lib/progression";
 
@@ -102,6 +111,12 @@ export interface TableState {
   loadoutReady: boolean;
   gmBusy: boolean;
   journey: JourneyGraph;
+  campaignPlan: CampaignPlan | null;
+  gmTurnCount?: number;
+  lastImageGmTurn?: number;
+  sceneImageId?: string | null;
+  sceneImageRevision?: number;
+  imageBusy?: boolean;
 }
 
 export interface PublicCharacter {
@@ -114,6 +129,7 @@ export interface PublicCharacter {
   raceStatIds: string[];
   stats: Record<string, number>;
   wounds: Wound[];
+  situation: CharacterSituation;
   owner: Owner;
   archived: boolean;
   inScene: boolean;
@@ -153,13 +169,30 @@ export interface TableSnapshot {
   statCeiling: number;
   openCheck: null;
   intentQueue: [];
+  sceneImageId: string | null;
+  sceneImageRevision: number;
+  imageBusy: boolean;
 }
 
 export function emptyLocation(): SceneLocation {
   return { place: "", weather: "", reputation: "" };
 }
 
+export function defaultSceneImageState(): Pick<
+  TableState,
+  "gmTurnCount" | "lastImageGmTurn" | "sceneImageId" | "sceneImageRevision" | "imageBusy"
+> {
+  return {
+    gmTurnCount: 0,
+    lastImageGmTurn: -1,
+    sceneImageId: null,
+    sceneImageRevision: 0,
+    imageBusy: false,
+  };
+}
+
 export function normalizeTable(table: TableState): TableState {
+  const imageDefaults = defaultSceneImageState();
   return {
     ...table,
     location: table.location ?? emptyLocation(),
@@ -168,7 +201,26 @@ export function normalizeTable(table: TableState): TableState {
     loadoutReady: table.loadoutReady === true,
     gmBusy: table.gmBusy === true,
     journey: parseJourney(table.journey, table.location?.place ?? ""),
+    campaignPlan: readStoredCampaignPlan(table.campaignPlan),
     characters: table.characters.map(normalizeTableCharacter),
+    gmTurnCount:
+      typeof table.gmTurnCount === "number" && Number.isInteger(table.gmTurnCount) && table.gmTurnCount >= 0
+        ? table.gmTurnCount
+        : imageDefaults.gmTurnCount,
+    lastImageGmTurn:
+      typeof table.lastImageGmTurn === "number" &&
+      Number.isInteger(table.lastImageGmTurn) &&
+      table.lastImageGmTurn >= -1
+        ? table.lastImageGmTurn
+        : imageDefaults.lastImageGmTurn,
+    sceneImageId: typeof table.sceneImageId === "string" ? table.sceneImageId : imageDefaults.sceneImageId,
+    sceneImageRevision:
+      typeof table.sceneImageRevision === "number" &&
+      Number.isInteger(table.sceneImageRevision) &&
+      table.sceneImageRevision >= 0
+        ? table.sceneImageRevision
+        : imageDefaults.sceneImageRevision,
+    imageBusy: table.imageBusy === true,
   };
 }
 
@@ -176,6 +228,7 @@ function normalizeTableCharacter(character: TableCharacter): TableCharacter {
   return {
     ...character,
     ready: character.ready === true,
+    situation: readStoredCharacterSituation(character.situation),
     currency: Number.isFinite(character.currency) ? character.currency : 0,
     inventory: Array.isArray(character.inventory)
       ? character.inventory.map((item) => ({
@@ -204,6 +257,8 @@ export function createTable(roomCode: string, settings: CampaignSettings): Table
     loadoutReady: false,
     gmBusy: false,
     journey: emptyJourney(),
+    campaignPlan: null,
+    ...defaultSceneImageState(),
   };
 }
 
@@ -446,12 +501,39 @@ export function commitSpeak(
   return commitIntent(table, characterId, "speak", text, "Say something.");
 }
 
+function characterOptionsForTable(table: TableState): CharacterOptions {
+  return (
+    table.settings.characterOptions ??
+    characterOptionsFor(table.settings.universe) ??
+    coreCharacterOptions()
+  );
+}
+
+function useActionDifficulty(settings: CampaignSettings): SceneActionDifficulty {
+  const map: Record<CampaignSettings["enemyDifficulty"], SceneActionDifficulty> = {
+    easy: 8,
+    standard: 10,
+    hard: 12,
+    severe: 15,
+  };
+  return map[settings.enemyDifficulty];
+}
+
+export function availableActionsForTable(table: TableState): SceneAction[] {
+  return mergeAvailableActions(
+    table.availableActions,
+    table.characters,
+    characterOptionsForTable(table),
+    useActionDifficulty(table.settings),
+  );
+}
+
 export function commitSceneAction(
   table: TableState,
   characterId: string,
   actionId: string,
 ): { ok: true; table: TableState } | { ok: false; error: string } {
-  const action = table.availableActions.find((entry) => entry.id === actionId);
+  const action = availableActionsForTable(table).find((entry) => entry.id === actionId);
   if (!action) return { ok: false, error: "Choose an action." };
   const character = table.characters.find((entry) => entry.id === characterId);
   if (!character) return { ok: false, error: "That character is not at the table." };
@@ -527,12 +609,15 @@ export function toSnapshot(table: TableState): TableSnapshot | null {
     location: table.location,
     characters: table.characters.map(toPublicCharacter),
     transcript: table.transcript,
-    availableActions: table.availableActions,
+    availableActions: availableActionsForTable(table),
     loadoutReady: table.loadoutReady,
     gmBusy: table.gmBusy === true,
     statCeiling: progressionRules(table.settings).statCeiling,
     openCheck: null,
     intentQueue: [],
+    sceneImageId: table.sceneImageId ?? null,
+    sceneImageRevision: table.sceneImageRevision ?? 0,
+    imageBusy: table.imageBusy === true,
   };
 }
 
@@ -547,6 +632,7 @@ export function toPublicCharacter(character: TableCharacter): PublicCharacter {
     raceStatIds: character.raceStatIds ?? [],
     stats: character.stats,
     wounds: character.wounds,
+    situation: readStoredCharacterSituation(character.situation),
     owner: character.owner,
     archived: character.archived,
     inScene: character.inScene,
@@ -616,6 +702,12 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
     statCeiling: readStatCeiling(value.statCeiling, characterOptions.statCap),
     openCheck: null,
     intentQueue: [],
+    sceneImageId: typeof value.sceneImageId === "string" ? value.sceneImageId : null,
+    sceneImageRevision:
+      typeof value.sceneImageRevision === "number" && Number.isInteger(value.sceneImageRevision)
+        ? Math.max(0, value.sceneImageRevision)
+        : 0,
+    imageBusy: value.imageBusy === true,
   };
 }
 
@@ -651,6 +743,7 @@ function parsePublicCharacter(value: unknown, options: CharacterOptions): Public
     raceStatIds: picks.raceStatIds,
     stats,
     wounds: readWounds(value.wounds),
+    situation: readStoredCharacterSituation(value.situation),
     owner: value.owner,
     archived: value.archived === true,
     inScene: value.inScene !== false,

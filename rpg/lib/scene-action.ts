@@ -44,6 +44,74 @@ export type SceneActionActor = Pick<
   "id" | "archived" | "inScene" | "wounds" | "inventory"
 >;
 
+const ITEM_USE_STAT_PREFERENCE = [
+  "intellect",
+  "wits",
+  "awareness",
+  "empathy",
+  "might",
+  "finesse",
+] as const;
+
+export function isEquipmentItem(item: { slot: string }): boolean {
+  return item.slot.length > 0;
+}
+
+export function inventoryUseActionId(itemId: string): string {
+  return `use-${itemId.replace(/_/g, "-")}`;
+}
+
+function defaultItemUseStat(options: CharacterOptions): string {
+  for (const id of ITEM_USE_STAT_PREFERENCE) {
+    if (options.stats.some((stat) => stat.id === id)) return id;
+  }
+  return options.stats[0]?.id ?? "might";
+}
+
+/** Synthetic "Use …" actions for carried items that are not wearable equipment (empty slot). */
+export function inventoryUseActions(
+  characters: SceneActionActor[],
+  options: CharacterOptions,
+  difficulty: SceneAction["difficulty"],
+  existing: SceneAction[],
+): SceneAction[] {
+  const existingIds = new Set(existing.map((action) => action.id));
+  const existingItemIds = new Set(
+    existing.flatMap((action) => (action.itemId ? [action.itemId] : [])),
+  );
+  const actions: SceneAction[] = [];
+
+  for (const character of characters) {
+    if (character.archived) continue;
+    for (const item of character.inventory) {
+      if (isEquipmentItem(item)) continue;
+      if (existingItemIds.has(item.id)) continue;
+      const id = inventoryUseActionId(item.id);
+      if (existingIds.has(id)) continue;
+      existingIds.add(id);
+      actions.push({
+        id,
+        label: `Use ${item.name}`.slice(0, 72),
+        stat: defaultItemUseStat(options),
+        difficulty,
+        failure: "setback",
+        itemId: item.id,
+      });
+    }
+  }
+
+  return actions;
+}
+
+export function mergeAvailableActions(
+  gmActions: SceneAction[],
+  characters: SceneActionActor[],
+  options: CharacterOptions,
+  difficulty: SceneAction["difficulty"],
+): SceneAction[] {
+  return [...gmActions, ...inventoryUseActions(characters, options, difficulty, gmActions)];
+}
+
 export function findItemOwnerId(characters: SceneActionActor[], itemId: string): string | null {
   for (const character of characters) {
     if (character.inventory.some((item) => item.id === itemId)) return character.id;
@@ -236,6 +304,67 @@ function readCharacterIds(value: unknown): string[] | null {
     ids.push(entry.trim());
   }
   return ids;
+}
+
+const ACTION_ID_MAX = 32;
+const ACTION_LABEL_MAX = 72;
+
+/** Normalize LLM action rows before strict parse (id length, difficulty snap, label trim). */
+export function repairSceneActionEntries(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const seen = new Set<string>();
+  const repaired: unknown[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      repaired.push(entry);
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const rawId = typeof record.id === "string" ? record.id : "";
+    const rawLabel = typeof record.label === "string" ? record.label : "";
+    const id = uniqueActionId(rawId, rawLabel, seen);
+    seen.add(id);
+    const next: Record<string, unknown> = { ...record, id };
+    if (typeof next.difficulty === "number") {
+      next.difficulty = snapDifficulty(next.difficulty);
+    }
+    if (typeof next.label === "string") {
+      const label = next.label.trim();
+      if (label.length > ACTION_LABEL_MAX) next.label = label.slice(0, ACTION_LABEL_MAX);
+    }
+    repaired.push(next);
+  }
+  return repaired;
+}
+
+function uniqueActionId(rawId: string, label: string, seen: Set<string>): string {
+  let base = fitActionId(slugActionId(rawId) || slugActionId(label) || "action");
+  if (!seen.has(base)) return base;
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const tail = `-${suffix}`;
+    const candidate = fitActionId(`${base.slice(0, Math.max(1, ACTION_ID_MAX - tail.length))}${tail}`);
+    if (!seen.has(candidate)) return candidate;
+  }
+  return fitActionId(`action-${seen.size + 1}`);
+}
+
+function slugActionId(text: string): string {
+  const slug = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+  if (slug.length === 0) return "";
+  if (!/^[a-z]/.test(slug)) return `a-${slug}`;
+  return slug;
+}
+
+function fitActionId(id: string): string {
+  let trimmed = id.slice(0, ACTION_ID_MAX).replace(/-+$/g, "");
+  if (trimmed.length === 0) return "action";
+  if (!/^[a-z]/.test(trimmed)) trimmed = fitActionId(`a-${trimmed}`);
+  return trimmed;
 }
 
 export function parseSceneActions(value: unknown): SceneAction[] {

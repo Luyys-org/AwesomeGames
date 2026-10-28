@@ -6,6 +6,7 @@ Reply with JSON only, matching this schema:
   "place": "string",
   "weather": "string",
   "reputation": "string",
+  "situations": [{ "characterId": "string", "situation": "standing" }],
   "loot": [
     {
       "characterId": "string",
@@ -32,7 +33,9 @@ Reply with JSON only, matching this schema:
       "itemId": ""
     }
   ],
-  "progress": [{ "characterId": "string", "tier": "notable" }]
+  "progress": [{ "characterId": "string", "xp": 55 }],
+  "roomId": "",
+  "clearedGateIds": []
 }
 
 Limits:
@@ -63,6 +66,13 @@ Journey (places, people, and resolved events already lived):
 Recent memory:
 {{json:memory}}
 
+Campaign plan:
+{{json:plan}}
+
+{{planRules}}
+
+latestNarration was already shown before the dice. Narration is the next thing players read. Open with the consequence of the resolved check. Do not retell or paraphrase that passage.
+
 Player intent:
 {{json:intent}}
 
@@ -72,5 +82,5 @@ Resolved check:
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and narrate the resolved check. The latest narration in memory is atmosphere from before the roll. The resolution object is the result. Do not repeat it, and do not contradict success, woundsApplied, or deathPenalty. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty, failure, and ids using hyphens only, no underscores. progress uses minor, notable, or major, or []. Do not write an XP number. Stay consistent with the journey.
+Task: Fix the JSON and narrate only the consequence of the resolved check. Players already read the situation, then the dice line. Do not restate the place, the attempt, or the stake. The first sentence is what changes because the check succeeded or failed. The resolution object is the result. Do not repeat its numbers, and do not contradict success, woundsApplied, or deathPenalty. Do not call another check. Loot stays within the limits. Return 3 to 8 specific actions with stat, difficulty (8, 10, 12, or 15), failure, and ids using hyphens only, no underscores, at most 32 characters each. progress xp is a whole number from 10 to 100 chosen for that result, or []. Do not copy the schema example. Do not scale it for experience gain or level. Stay consistent with the journey. situations is an array of { characterId, situation }. situation is one of {{situationList}}. Use [] to leave every situation unchanged. Narration must match the situations you keep. A character whose wounds include down stays unconscious. Follow the campaign plan. roomId and clearedGateIds are required. A failed check leaves roomId empty and clearedGateIds empty.
 `.trim();
