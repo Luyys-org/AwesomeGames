@@ -47,6 +47,7 @@ function loadoutPrompt(table: TableState): {
   situation: string;
   place: string;
   currencyName: string;
+  plan: TableState["campaignPlan"];
   characters: StartingLoadoutCharacterPrompt[];
 } {
   const wealth = table.settings.characterConfiguration?.startingWealth;
@@ -61,6 +62,7 @@ function loadoutPrompt(table: TableState): {
     situation: table.situation,
     place: table.location.place,
     currencyName: currencyLabel(table.settings.universe),
+    plan: table.campaignPlan ?? null,
     characters: table.characters
       .filter((character) => !character.archived)
       .map((character) => {

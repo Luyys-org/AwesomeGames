@@ -730,7 +730,7 @@ function CampaignTabPanel({
         <SelectField
           id="experience-gain-multiplier"
           label="Experience gain multiplier"
-          description="How fast experience increases."
+          description="Low keeps 100% of each award, Standard 200%, and High 300%. Awards also fall from 100% at level 1 to 10% at the level cap."
           value={config.experienceGainMultiplier}
           onChange={(value) => patch({ experienceGainMultiplier: value })}
           required
@@ -1003,7 +1003,7 @@ export function NewCampaignForm() {
           }
           className="btn btn-primary ml-auto"
         >
-          {isLast ? (campaign.submitting ? "Generating opening…" : "Create game") : "Continue"}
+          {isLast ? (campaign.submitting ? "Creating game…" : "Create game") : "Continue"}
         </button>
       </div>
     </form>

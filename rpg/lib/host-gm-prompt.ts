@@ -1,3 +1,10 @@
+import {
+  planForPrompt,
+  planNoteForLoadout,
+  planRulesForTurn,
+  type CampaignPlan,
+  type PlanStartRoom,
+} from "@/rpg/lib/campaign-plan";
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import {
   DEATH_PENALTIES,
@@ -22,6 +29,7 @@ import {
   type CheckResolution,
   type GmIntent,
 } from "@/rpg/lib/gm-turn";
+import { XP_AWARD_MAX, XP_AWARD_MIN } from "@/rpg/lib/progression";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
 import { availableActionsForTable } from "@/rpg/lib/table";
 import gmOutcomeRetryTemplate from "@/rpg/prompts/gm-outcome-retry";
@@ -34,6 +42,7 @@ import startingLoadoutRetryTemplate from "@/rpg/prompts/starting-loadout-retry";
 import startingLoadoutTemplate from "@/rpg/prompts/starting-loadout";
 import systemTemplate from "@/rpg/prompts/system";
 import { journeyForGm } from "@/rpg/lib/journey";
+import { CHARACTER_SITUATION_LIST, readStoredCharacterSituation } from "@/rpg/lib/character-situation";
 import { currencyLabel } from "@/rpg/lib/starting-kit";
 import { isGmErrorEntry, type TableState, type TranscriptEntry } from "@/rpg/lib/table";
 
@@ -107,16 +116,18 @@ function campaignVars(settings: CampaignSettings): Record<string, unknown> {
   };
 }
 
-export function buildOpeningSituationUserMessage(settings: CampaignSettings): string {
-  return renderTemplate(openingSituationTemplate, campaignVars(settings));
+export function buildOpeningSituationUserMessage(settings: CampaignSettings, startRoom: PlanStartRoom): string {
+  return renderTemplate(openingSituationTemplate, { ...campaignVars(settings), startRoom });
 }
 
 export function buildOpeningSituationRetryMessage(
   settings: CampaignSettings,
+  startRoom: PlanStartRoom,
   validationError: string,
 ): string {
   return renderTemplate(openingSituationRetryTemplate, {
     ...campaignVars(settings),
+    startRoom,
     validationError,
   });
 }
@@ -138,6 +149,7 @@ function loadoutVars(input: {
   place: string;
   currencyName: string;
   characters: StartingLoadoutCharacterPrompt[];
+  plan: CampaignPlan | null;
 }): Record<string, unknown> {
   return {
     ...campaignVars(input.settings),
@@ -145,6 +157,8 @@ function loadoutVars(input: {
     place: input.place,
     currencyName: input.currencyName,
     characters: input.characters,
+    plan: planForPrompt(input.plan),
+    planNote: planNoteForLoadout(input.plan),
   };
 }
 
@@ -154,6 +168,7 @@ export function buildStartingLoadoutUserMessage(input: {
   place: string;
   currencyName: string;
   characters: StartingLoadoutCharacterPrompt[];
+  plan: CampaignPlan | null;
 }): string {
   return renderTemplate(startingLoadoutTemplate, loadoutVars(input));
 }
@@ -171,6 +186,7 @@ const GM_LIMITS = {
   actions: { min: 3, max: 8 },
   itemName: 80,
   carriedMax: CARRIED_MAX,
+  progressXp: { min: XP_AWARD_MIN, max: XP_AWARD_MAX },
 };
 
 function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolution): Record<string, unknown> {
@@ -185,6 +201,7 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
     place: table.location.place,
     weather: table.location.weather,
     reputation: table.location.reputation,
+    situationList: CHARACTER_SITUATION_LIST,
     scene: table.scene,
     currencyName: currencyLabel(table.settings.universe),
     preferredDifficulty: preferredCheckDifficulty(table.settings),
@@ -193,6 +210,8 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
     characters: charactersForGm(table),
     memory: memoryForGm(table),
     journey: journeyForGm(table.journey),
+    plan: planForPrompt(table.campaignPlan ?? null),
+    planRules: planRulesForTurn(table.campaignPlan ?? null),
     intent: { ...intent, selectedAction },
     resolution: resolution ?? null,
   };
@@ -212,6 +231,7 @@ function charactersForGm(table: TableState) {
         raceLabel: identity.race,
         inScene: character.inScene,
         wounds: character.wounds,
+        situation: readStoredCharacterSituation(character.situation),
         currency: character.currency,
         level: character.level > 0 ? character.level : 1,
         xp: character.xp,
@@ -379,6 +399,7 @@ export function buildStartingLoadoutRetryMessage(
     place: string;
     currencyName: string;
     characters: StartingLoadoutCharacterPrompt[];
+    plan: CampaignPlan | null;
   },
   validationError: string,
 ): string {

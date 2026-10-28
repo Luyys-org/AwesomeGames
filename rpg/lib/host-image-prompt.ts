@@ -1,4 +1,5 @@
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
+import { characterSituationLabel, readStoredCharacterSituation } from "@/rpg/lib/character-situation";
 import type { GmBeat } from "@/rpg/lib/gm-turn";
 import { buildGmSystemPrompt, serializeCampaignForGm } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
@@ -32,6 +33,9 @@ export function buildSceneImageUserMessage(
       weather: table.location.weather,
       reputation: table.location.reputation,
       scene: table.scene,
+      postures: table.characters
+        .filter((character) => !character.archived && character.inScene)
+        .map((character) => characterSituationLabel(readStoredCharacterSituation(character.situation))),
       recentNarration: recentNarration(table.transcript),
       encounter: beat?.encounter ?? null,
     },

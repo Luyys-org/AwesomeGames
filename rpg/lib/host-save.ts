@@ -9,6 +9,7 @@ import {
   type StatDefinition,
 } from "@/rpg/lib/character-options";
 import { storedRacePicks, type InventoryItem, type TableCharacter, type Wound } from "@/rpg/lib/character";
+import { readStoredCharacterSituation } from "@/rpg/lib/character-situation";
 import {
   DEATH_PENALTIES,
   ENEMY_DIFFICULTIES,
@@ -27,6 +28,7 @@ import {
 } from "@/rpg/lib/campaign-settings";
 import { parseStoredCampaignConfiguration } from "@/rpg/lib/campaign-tab-config";
 import { parseStoredCharacterConfiguration } from "@/rpg/lib/character-tab-config";
+import { parseStoredPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { createRoomCode, isClaimCode } from "@/rpg/lib/room-code";
 import { parseSceneActions } from "@/rpg/lib/scene-action";
@@ -67,6 +69,7 @@ interface CampaignSavePayload {
   availableActions: SceneAction[];
   loadoutReady: boolean;
   journey: JourneyGraph;
+  campaignPlan: CampaignPlan | null;
   gmTurnCount: number;
   lastImageGmTurn: number;
   sceneImageId: string | null;
@@ -194,6 +197,7 @@ function readCharacter(
     raceStatIds: picks.raceStatIds,
     stats,
     wounds: value.wounds,
+    situation: readStoredCharacterSituation(value.situation),
     claimCode: value.claimCode,
     owner: value.owner,
     archived: false,
@@ -286,6 +290,7 @@ function readPlayCharacter(
     raceStatIds: picks.raceStatIds,
     stats,
     wounds: value.wounds,
+    situation: readStoredCharacterSituation(value.situation),
     claimCode: value.claimCode,
     owner: value.owner,
     archived: value.archived,
@@ -305,6 +310,13 @@ function readPlayCharacter(
         ? value.pendingRewards
         : 0,
   };
+}
+
+function readSavePlan(value: unknown): Parsed<CampaignPlan | null> {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  const parsed = parseStoredPlan(value);
+  if (!parsed.ok) return { ok: false, error: INVALID_SAVE };
+  return { ok: true, value: parsed.value };
 }
 
 function readLocation(value: unknown): SceneLocation {
@@ -480,6 +492,8 @@ function parseCampaignSave(value: unknown): ParsedSave {
   }
   const journey =
     phase === "play" ? parseJourney(value.journey, location.place) : emptyJourney();
+  const campaignPlan = readSavePlan(value.campaignPlan);
+  if (!campaignPlan.ok) return campaignPlan;
 
   return {
     ok: true,
@@ -496,6 +510,7 @@ function parseCampaignSave(value: unknown): ParsedSave {
       availableActions,
       loadoutReady,
       journey,
+      campaignPlan: campaignPlan.value,
       ...sceneImageFieldsFromSave(value),
     },
   };
@@ -547,6 +562,7 @@ export function buildCampaignSaveDocument(table: TableState): Record<string, unk
   if (settings.characterOptions) {
     document.characterOptions = settings.characterOptions;
   }
+  if (table.campaignPlan) document.campaignPlan = table.campaignPlan;
   if (phase === "play") {
     document.location = table.location;
     document.availableActions = table.availableActions;
@@ -628,6 +644,7 @@ export function startFromCampaignSave(
             loadoutReady: save.value.loadoutReady,
             gmBusy: false,
             journey: save.value.journey,
+            campaignPlan: save.value.campaignPlan,
             gmTurnCount: save.value.gmTurnCount,
             lastImageGmTurn: save.value.lastImageGmTurn,
             sceneImageId: save.value.sceneImageId,
@@ -655,6 +672,7 @@ export function startFromCampaignSave(
             loadoutReady: false,
             gmBusy: false,
             journey: emptyJourney(),
+            campaignPlan: save.value.campaignPlan,
             ...defaultSceneImageState(),
           };
     writeHostSession({ roomCode, table });

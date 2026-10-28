@@ -1,3 +1,4 @@
+import { resolvePlanBeat, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { SettingLevel } from "@/rpg/lib/campaign-tab-config";
 import {
@@ -9,6 +10,11 @@ import {
   type ItemModifier,
 } from "@/rpg/lib/character-options";
 import type { TableCharacter, Wound } from "@/rpg/lib/character";
+import {
+  applyCharacterSituations,
+  readCharacterSituations,
+  type CharacterSituationChange,
+} from "@/rpg/lib/character-situation";
 import { createItemId } from "@/rpg/lib/ids";
 import { emptyJourney, rememberJourney } from "@/rpg/lib/journey";
 import { applyProgress, readProgress, rewardLine, type ProgressGrant } from "@/rpg/lib/progression";
@@ -103,9 +109,12 @@ export interface GmBeat {
   place: string;
   weather: string;
   reputation: string;
+  situations: CharacterSituationChange[];
   loot: GmLootGrant[];
   actions: SceneAction[];
   progress: ProgressGrant[];
+  /** Set when this beat updates the stored map. Null leaves the table plan unchanged. */
+  planUpdate: CampaignPlan | null;
 }
 
 export interface GmReaction extends GmBeat {
@@ -243,11 +252,16 @@ export function readGmReaction(
   const narration = narrationWithEncounter(beat.value.narration || check.value?.setup || "", beat.value.encounter);
   if (!narration) return { ok: false, error: "Narration must not be empty." };
 
+  const planned = resolvePlanBeat(value, table.campaignPlan ?? null, beat.value.place, check.value === null);
+  if (!planned.ok) return planned;
+
   return {
     ok: true,
     value: {
       ...beat.value,
       narration,
+      place: planned.value.place,
+      planUpdate: planned.value.planUpdate,
       loot: check.value ? [] : beat.value.loot,
       actions: check.value ? [] : beat.value.actions,
       check: check.value,
@@ -255,12 +269,28 @@ export function readGmReaction(
   };
 }
 
-export function readGmOutcome(value: unknown, table: TableState): Parsed<GmBeat> {
+export function readGmOutcome(value: unknown, table: TableState, checkSucceeded: boolean): Parsed<GmBeat> {
   const beat = readBeat(value, table, true);
   if (!beat.ok) return beat;
-  const narration = narrationWithEncounter(beat.value.narration, beat.value.encounter);
-  if (!narration) return { ok: false, error: "Narration must not be empty." };
-  return { ok: true, value: { ...beat.value, narration } };
+  const prior = latestNarrationText(table);
+  const consequence = withoutRepeatedSituation(prior, beat.value.narration);
+  const narration = narrationWithEncounter(consequence, beat.value.encounter);
+  if (!narration) {
+    if (beat.value.narration.trim().length > 0) {
+      return {
+        ok: false,
+        error:
+          "Narration must state the consequence of the check. Do not repeat the situation from before the roll.",
+      };
+    }
+    return { ok: false, error: "Narration must not be empty." };
+  }
+  const planned = resolvePlanBeat(value, table.campaignPlan ?? null, beat.value.place, checkSucceeded);
+  if (!planned.ok) return planned;
+  return {
+    ok: true,
+    value: { ...beat.value, narration, place: planned.value.place, planUpdate: planned.value.planUpdate },
+  };
 }
 
 export function applyResolvedBeat(
@@ -286,8 +316,9 @@ export function applyResolvedBeat(
       ...table,
       revision: table.revision + 1,
       gmBusy,
-      characters: progressed.characters,
+      characters: applyCharacterSituations(progressed.characters, beat.situations),
       location: nextLocation(table.location, beat),
+      campaignPlan: beat.planUpdate ?? table.campaignPlan ?? null,
       availableActions: beat.actions.length > 0 ? beat.actions : table.availableActions,
       journey: noteJourney(
         table,
@@ -356,7 +387,11 @@ export function commitCheckBeat(
       revision: table.revision + 1,
       gmBusy,
       location: nextLocation(table.location, beat),
-      characters: table.characters.map((entry) => (entry.id === character.id ? injured.character : entry)),
+      campaignPlan: beat.planUpdate ?? table.campaignPlan ?? null,
+      characters: applyCharacterSituations(
+        table.characters.map((entry) => (entry.id === character.id ? injured.character : entry)),
+        beat.situations,
+      ),
       journey: noteJourney(table, beat, checkNotes(character.name, rolled.line, injured.death)),
       transcript,
     },
@@ -429,6 +464,8 @@ function readBeat(value: unknown, table: TableState, actionsRequired: boolean): 
   if (!weather.ok) return weather;
   const reputation = readLine(value.reputation, "Reputation");
   if (!reputation.ok) return reputation;
+  const situations = readCharacterSituations(value.situations, table.characters);
+  if (!situations.ok) return situations;
   const loot = readLoot(value.loot, table);
   if (!loot.ok) return loot;
   const actions = readActions(value.actions, table, actionsRequired);
@@ -444,9 +481,11 @@ function readBeat(value: unknown, table: TableState, actionsRequired: boolean): 
       place: place.value,
       weather: weather.value,
       reputation: reputation.value,
+      situations: situations.value,
       loot: loot.value,
       actions: actions.value,
       progress: progress.value,
+      planUpdate: null,
     },
   };
 }
@@ -613,6 +652,47 @@ function noteJourney(
   });
 }
 
+function latestNarrationText(table: TableState): string {
+  for (let index = table.transcript.length - 1; index >= 0; index -= 1) {
+    const entry = table.transcript[index];
+    if (entry?.type === "narration") return entry.text;
+  }
+  return "";
+}
+
+/** Drop sentences the player already read before the dice. */
+function withoutRepeatedSituation(previous: string, next: string): string {
+  const priorNorm = normalizeForRepeat(previous);
+  const rest = next.trim();
+  if (!priorNorm || !rest) return rest;
+
+  const sentences = sentencesOf(rest);
+  const kept = sentences.filter((sentence) => {
+    const sentenceNorm = normalizeForRepeat(sentence);
+    if (sentenceNorm.length < 24) return true;
+    return !priorNorm.includes(sentenceNorm);
+  });
+  if (kept.length === sentences.length) return rest;
+  return kept.join(" ");
+}
+
+function sentencesOf(text: string): string[] {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return [];
+  return trimmed
+    .split(/(?<=[.!?…])\s+/u)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+function normalizeForRepeat(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}' ]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function narrationWithEncounter(narration: string, encounter: GmEncounter | null): string {
   if (!encounter) return narration;
   if (narration.toLowerCase().includes(encounter.name.toLowerCase())) return narration;
@@ -736,6 +816,7 @@ function applyWoundCount(
   }
 
   let nextCharacter: TableCharacter = { ...character, wounds };
+  if (wounds.includes("down")) nextCharacter = { ...nextCharacter, situation: "unconscious" };
   if (death === "out-of-scene") nextCharacter = { ...nextCharacter, inScene: false };
   if (death === "new-character") nextCharacter = { ...nextCharacter, archived: true, inScene: false };
   return { character: nextCharacter, woundsApplied: applied, death };

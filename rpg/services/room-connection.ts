@@ -8,6 +8,7 @@ import { readHostAi } from "@/rpg/lib/host-ai";
 import { runGmTurn } from "@/rpg/lib/host-gm-turn";
 import {
   hydrateSceneImageUrl,
+  isSceneImageGenerating,
   prepareSceneImageRequest,
   queueSceneImageGeneration,
   registerSceneImageReadyListener,
@@ -137,12 +138,14 @@ let current: Session | null = null;
 let view: RoomView | null = null;
 
 registerSceneImageReadyListener((payload) => {
-  if (!current || current.roomCode !== payload.roomCode || current.role !== "host") return;
-  current.table = payload.table;
+  if (!current || current.roomCode !== payload.roomCode || current.role !== "host" || !current.table) return;
+  if ((current.table.sceneImageId ?? "") !== payload.imageId) return;
+
+  const table = { ...current.table, imageBusy: false };
   if (payload.dataUrl.length > 0 && payload.imageId.length > 0) {
     current.sceneImageUrls.set(payload.imageId, payload.dataUrl);
   }
-  publish(current);
+  rememberTable(current, table);
   if (payload.dataUrl.length > 0 && payload.imageId.length > 0) {
     void broadcastSceneImage(current, payload.imageId, payload.revision, payload.dataUrl);
     void broadcastSnapshot(current);
@@ -998,14 +1001,21 @@ function scheduleBeatSceneImage(
 
 async function hydrateSceneImageForSession(session: Session): Promise<void> {
   if (session.role !== "host" || !session.table) return;
-  if (session.table.imageBusy) {
+  const loaded = await hydrateSceneImageUrl(session.table);
+  if (loaded) {
+    session.sceneImageUrls.set(loaded.id, loaded.dataUrl);
+    if (session.table.imageBusy) {
+      session.table = { ...session.table, imageBusy: false };
+      writeHostSession({ roomCode: session.roomCode, table: session.table });
+    }
+    publish(session);
+    return;
+  }
+  if (session.table.imageBusy && !isSceneImageGenerating(session.table.sceneImageId)) {
     session.table = { ...session.table, imageBusy: false };
     writeHostSession({ roomCode: session.roomCode, table: session.table });
+    publish(session);
   }
-  const loaded = await hydrateSceneImageUrl(session.table);
-  if (!loaded) return;
-  session.sceneImageUrls.set(loaded.id, loaded.dataUrl);
-  publish(session);
 }
 
 async function runHandshake(

@@ -107,12 +107,14 @@ async function generateGmOutcome(
     hostAi,
     buildGmOutcomeUserMessage(table, intent, resolution),
     table,
+    resolution.success,
   );
   if (first.ok) return first;
   const second = await requestOutcome(
     hostAi,
     buildGmOutcomeRetryMessage(table, intent, resolution, first.error),
     table,
+    resolution.success,
   );
   if (second.ok) return second;
   return {
@@ -145,6 +147,7 @@ async function requestOutcome(
   hostAi: HostAi,
   user: string,
   table: TableState,
+  checkSucceeded: boolean,
 ): Promise<GmGeneration<GmBeat>> {
   const response = await callHostChat(hostAi, {
     temperature: 0.7,
@@ -154,7 +157,7 @@ async function requestOutcome(
   if (!response.ok) return { ok: false, error: response.error, content: response.error };
   const parsed = parseJsonContent(response.content);
   if (parsed === null) return { ok: false, error: "Response JSON must be an object.", content: response.content };
-  const read = readGmOutcome(repairGmOutcomePayload(parsed), table);
+  const read = readGmOutcome(repairGmOutcomePayload(parsed), table, checkSucceeded);
   if (!read.ok) return { ok: false, error: read.error, content: response.content };
   return { ok: true, value: read.value, content: response.content };
 }

@@ -2,7 +2,6 @@ import type { GmBeat } from "@/rpg/lib/gm-turn";
 import { generateSceneImagePrompt } from "@/rpg/lib/host-image-prompt";
 import { callHostImage, resolveImageModel } from "@/rpg/lib/host-image";
 import type { HostAi } from "@/rpg/lib/host-ai";
-import { writeHostSession } from "@/rpg/lib/host-session";
 import { createSceneImageId } from "@/rpg/lib/ids";
 import {
   imageGenerationSupported,
@@ -20,7 +19,6 @@ import type { SceneLocation, TableState } from "@/rpg/lib/table";
 
 export interface SceneImageReadyPayload {
   roomCode: string;
-  table: TableState;
   imageId: string;
   revision: number;
   dataUrl: string;
@@ -29,13 +27,14 @@ export interface SceneImageReadyPayload {
 export type SceneImageReadyListener = (payload: SceneImageReadyPayload) => void;
 
 let readyListener: SceneImageReadyListener | null = null;
+const generatingIds = new Set<string>();
+
+export function isSceneImageGenerating(imageId: string | null | undefined): boolean {
+  return typeof imageId === "string" && generatingIds.has(imageId);
+}
 
 export function registerSceneImageReadyListener(listener: SceneImageReadyListener | null): void {
   readyListener = listener;
-}
-
-export function tableWithSceneImageBusy(table: TableState, busy: boolean): TableState {
-  return { ...table, imageBusy: busy };
 }
 
 export function prepareSceneImageRequest(
@@ -100,35 +99,37 @@ async function runSceneImageGeneration(
   const revision = table.sceneImageRevision ?? 0;
   if (!imageId) return;
 
-  const promptResult = await generateSceneImagePrompt(table, hostAi, beat);
-  if (!promptResult.ok) {
-    clearImageBusy(roomCode, table);
-    return;
-  }
-
-  const imageResult = await callHostImage(hostAi, promptResult.prompt);
-  if (!imageResult.ok) {
-    clearImageBusy(roomCode, table);
-    return;
-  }
-
+  generatingIds.add(imageId);
   try {
+    const promptResult = await generateSceneImagePrompt(table, hostAi, beat);
+    if (!promptResult.ok) {
+      clearImageBusy(roomCode, table);
+      return;
+    }
+
+    const imageResult = await callHostImage(hostAi, promptResult.prompt);
+    if (!imageResult.ok) {
+      clearImageBusy(roomCode, table);
+      return;
+    }
+
     let dataUrl = base64ToDataUrl(imageResult.b64, imageResult.mime);
     dataUrl = await compressSceneImageDataUrl(dataUrl);
     await saveSceneImageDataUrl(imageId, dataUrl);
-
-    const cleared: TableState = { ...table, imageBusy: false };
-    writeHostSession({ roomCode, table: cleared });
-    readyListener?.({ roomCode, table: cleared, imageId, revision, dataUrl });
+    notifySceneImage(roomCode, imageId, revision, dataUrl);
   } catch {
     clearImageBusy(roomCode, table);
+  } finally {
+    generatingIds.delete(imageId);
   }
 }
 
 function clearImageBusy(roomCode: string, table: TableState): void {
-  const cleared = tableWithSceneImageBusy(table, false);
-  writeHostSession({ roomCode, table: cleared });
-  readyListener?.({ roomCode, table: cleared, imageId: "", revision: 0, dataUrl: "" });
+  notifySceneImage(roomCode, table.sceneImageId ?? "", table.sceneImageRevision ?? 0, "");
+}
+
+function notifySceneImage(roomCode: string, imageId: string, revision: number, dataUrl: string): void {
+  readyListener?.({ roomCode, imageId, revision, dataUrl });
 }
 
 export async function hydrateSceneImageUrl(

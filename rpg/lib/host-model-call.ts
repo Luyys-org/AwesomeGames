@@ -29,8 +29,9 @@ export function parseJsonContent(body: string): unknown | null {
 
 export async function callHostChat(
   hostAi: HostAi,
-  options: { temperature: number; system: string; user: string },
+  options: { temperature: number; system: string; user: string; maxTokens?: number },
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  const maxTokens = options.maxTokens ?? 2048;
   try {
     if (hostAi.provider === "anthropic") {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -42,7 +43,7 @@ export async function callHostChat(
         },
         body: JSON.stringify({
           model: hostAi.model,
-          max_tokens: 2048,
+          max_tokens: maxTokens,
           temperature: options.temperature,
           system: options.system,
           messages: [{ role: "user", content: options.user }],
@@ -70,7 +71,7 @@ export async function callHostChat(
       body: JSON.stringify({
         model: hostAi.model,
         temperature: options.temperature,
-        max_tokens: 2048,
+        max_tokens: maxTokens,
         messages: [
           { role: "system", content: options.system },
           { role: "user", content: options.user },

@@ -3,6 +3,7 @@ import {
   type CharacterOptions,
   type ItemModifier,
 } from "@/rpg/lib/character-options";
+import { DEFAULT_CHARACTER_SITUATION, type CharacterSituation } from "@/rpg/lib/character-situation";
 import { createCharacterId, createClaimCode } from "@/rpg/lib/ids";
 
 export type Owner = "host" | "peer";
@@ -44,6 +45,7 @@ export interface TableCharacter {
   raceStatIds: string[];
   stats: Record<string, number>;
   wounds: Wound[];
+  situation: CharacterSituation;
   claimCode: string;
   owner: Owner;
   archived: boolean;
@@ -123,6 +125,7 @@ export function addCharacter(
       raceStatIds: racePicks.raceStatIds,
       stats: stats.value,
       wounds: [],
+      situation: DEFAULT_CHARACTER_SITUATION,
       claimCode: createClaimCode(),
       owner,
       archived: false,

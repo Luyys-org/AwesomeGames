@@ -52,8 +52,13 @@ Currency name: {{currencyName}}
 Characters:
 {{json:characters}}
 
+Campaign plan:
+{{json:plan}}
+
+{{planNote}}
+
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Fix the JSON and return only { "kits", "actions" } matching the schema. Each action needs stat, difficulty, failure, precise labels, and ids with hyphens only, no underscores.
+Task: Fix the JSON and return only { "kits", "actions" } matching the schema. Each action needs stat, difficulty, failure, precise labels, and ids with hyphens only, no underscores. When a campaign plan is present, those actions pursue its next gate or travel toward that gate. They do not finish the principal quest.
 `.trim();
