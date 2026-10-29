@@ -6,7 +6,6 @@ import {
 } from "@/rpg/lib/character-options";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
-  buildStartingLoadoutRetryMessage,
   buildStartingLoadoutUserMessage,
   buildGmSystemPrompt,
   type StartingLoadoutCharacterPrompt,
@@ -29,17 +28,10 @@ export async function generateStartingLoadout(
   { ok: true; kits: DraftStartingKit[]; actions: SceneAction[] } | { ok: false; error: string }
 > {
   const prompt = loadoutPrompt(table);
-  const first = await requestLoadout(hostAi, buildStartingLoadoutUserMessage(prompt), table);
-  if (first.ok) return first;
+  const loadout = await requestLoadout(hostAi, buildStartingLoadoutUserMessage(prompt), table);
+  if (loadout.ok) return loadout;
 
-  const second = await requestLoadout(
-    hostAi,
-    buildStartingLoadoutRetryMessage(prompt, first.error),
-    table,
-  );
-  if (second.ok) return second;
-
-  return { ok: false, error: "The starting loadout could not be generated." };
+  return { ok: false, error: loadout.error };
 }
 
 function loadoutPrompt(table: TableState): {

@@ -5,28 +5,19 @@ import { buildGmSystemPrompt, serializeCampaignForGm } from "@/rpg/lib/host-gm-p
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
-import campaignPlanRetryTemplate from "@/rpg/prompts/campaign-plan-retry";
 import campaignPlanTemplate from "@/rpg/prompts/campaign-plan";
 
 export async function generateCampaignPlan(
   settings: CampaignSettings,
   hostAi: HostAi,
 ): Promise<{ ok: true; plan: CampaignPlan } | { ok: false; error: string }> {
-  const first = await requestPlan(hostAi, settings, buildPlanMessage(settings));
-  if (first.ok) return first;
-
-  const second = await requestPlan(hostAi, settings, buildPlanRetryMessage(settings, first.error));
-  if (second.ok) return second;
-
+  const plan = await requestPlan(hostAi, settings, buildPlanMessage(settings));
+  if (plan.ok) return plan;
   return { ok: false, error: "The campaign plan could not be generated." };
 }
 
 function buildPlanMessage(settings: CampaignSettings): string {
   return renderTemplate(campaignPlanTemplate, planVars(settings));
-}
-
-function buildPlanRetryMessage(settings: CampaignSettings, validationError: string): string {
-  return renderTemplate(campaignPlanRetryTemplate, { ...planVars(settings), validationError });
 }
 
 function planVars(settings: CampaignSettings): Record<string, unknown> {

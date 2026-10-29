@@ -2,7 +2,6 @@ import type { PlanStartRoom } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
-  buildOpeningSituationRetryMessage,
   buildOpeningSituationUserMessage,
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
@@ -22,23 +21,14 @@ export async function generateOpeningSituation(
   hostAi: HostAi,
   startRoom: PlanStartRoom,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
-  const first = await requestSituation(
+  const situation = await requestSituation(
     hostAi,
     buildOpeningSituationUserMessage(settings, startRoom),
     settings,
     startRoom,
   );
-  if (first.ok) return first;
-
-  const second = await requestSituation(
-    hostAi,
-    buildOpeningSituationRetryMessage(settings, startRoom, first.error),
-    settings,
-    startRoom,
-  );
-  if (second.ok) return second;
-
-  return { ok: false, error: "The opening situation could not be generated." };
+  if (situation.ok) return situation;
+  return { ok: false, error: situation.error };
 }
 
 async function requestSituation(

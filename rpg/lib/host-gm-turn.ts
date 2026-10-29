@@ -13,9 +13,7 @@ import {
 } from "@/rpg/lib/gm-turn";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
-  buildGmOutcomeRetryMessage,
   buildGmOutcomeUserMessage,
-  buildGmReactionRetryMessage,
   buildGmReactionUserMessage,
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
@@ -81,19 +79,12 @@ async function generateGmReaction(
   hostAi: HostAi,
   intent: GmIntent,
 ): Promise<GmGeneration<GmReaction>> {
-  const first = await requestReaction(hostAi, buildGmReactionUserMessage(table, intent), table, intent);
-  if (first.ok) return first;
-  const second = await requestReaction(
-    hostAi,
-    buildGmReactionRetryMessage(table, intent, first.error),
-    table,
-    intent,
-  );
-  if (second.ok) return second;
+  const reaction = await requestReaction(hostAi, buildGmReactionUserMessage(table, intent), table, intent);
+  if (reaction.ok) return reaction;
   return {
     ok: false,
-    error: second.error,
-    content: formatGmFailureBody(second.error, preferModelContent(second, first)),
+    error: reaction.error,
+    content: formatGmFailureBody(reaction.error, reaction.content),
   };
 }
 
@@ -103,24 +94,17 @@ async function generateGmOutcome(
   intent: GmIntent,
   resolution: Parameters<typeof buildGmOutcomeUserMessage>[2],
 ): Promise<GmGeneration<GmBeat>> {
-  const first = await requestOutcome(
+  const outcome = await requestOutcome(
     hostAi,
     buildGmOutcomeUserMessage(table, intent, resolution),
     table,
     resolution.success,
   );
-  if (first.ok) return first;
-  const second = await requestOutcome(
-    hostAi,
-    buildGmOutcomeRetryMessage(table, intent, resolution, first.error),
-    table,
-    resolution.success,
-  );
-  if (second.ok) return second;
+  if (outcome.ok) return outcome;
   return {
     ok: false,
-    error: second.error,
-    content: formatGmFailureBody(second.error, preferModelContent(second, first)),
+    error: outcome.error,
+    content: formatGmFailureBody(outcome.error, outcome.content),
   };
 }
 
