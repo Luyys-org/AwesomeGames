@@ -1,0 +1,7 @@
+{
+  "name": "gm_reaction",
+  "properties": {
+    "$fragment": "gmBeat",
+    "check": { "anyOf": [{ "type": "null" }, { "$fragment": "check" }] }
+  }
+}

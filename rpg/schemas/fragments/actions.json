@@ -1,0 +1,20 @@
+{
+  "type": "array",
+  "minItems": { "$bind": "actionMin" },
+  "maxItems": { "$bind": "actionMax" },
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "label", "stat", "difficulty", "failure", "abilityId", "characterIds", "itemId"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "[a-z][a-z0-9-]{0,31}" },
+      "label": { "type": "string", "minLength": 1, "maxLength": 72, "pattern": "[^\\r\\n]+" },
+      "stat": { "$bind": "statEnum" },
+      "difficulty": { "type": "integer", "enum": [8, 10, 12, 15] },
+      "failure": { "type": "string", "enum": ["setback", "harm", "severe"] },
+      "abilityId": { "$bind": "abilityEnum" },
+      "characterIds": { "$bind": "characterIds" },
+      "itemId": { "$bind": "itemIdEnum" }
+    }
+  }
+}

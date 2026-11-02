@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "summary"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": { "$bind": "encounterNameMax" },
+      "pattern": "[^\\r\\n]+"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": { "$bind": "encounterSummaryMax" },
+      "pattern": "[^\\r\\n]+"
+    }
+  }
+}

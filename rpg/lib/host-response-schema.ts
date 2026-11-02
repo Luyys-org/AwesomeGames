@@ -19,222 +19,183 @@ import {
 import type { HostResponseSchema } from "@/rpg/lib/host-model-call";
 import { XP_AWARD_MAX, XP_AWARD_MIN } from "@/rpg/lib/progression";
 import type { TableState } from "@/rpg/lib/table";
+import actionsFragment from "@/rpg/schemas/fragments/actions.json";
+import checkFragment from "@/rpg/schemas/fragments/check.json";
+import encounterFragment from "@/rpg/schemas/fragments/encounter.json";
+import gmBeatFragment from "@/rpg/schemas/fragments/gm-beat.json";
+import itemFragment from "@/rpg/schemas/fragments/item.json";
+import planIdFragment from "@/rpg/schemas/fragments/plan-id.json";
+import campaignPlanFile from "@/rpg/schemas/campaign-plan.json";
+import gmOutcomeFile from "@/rpg/schemas/gm-outcome.json";
+import gmReactionFile from "@/rpg/schemas/gm-reaction.json";
+import openingSituationFile from "@/rpg/schemas/opening-situation.json";
+import sceneImageFile from "@/rpg/schemas/scene-image.json";
+import startingLoadoutFile from "@/rpg/schemas/starting-loadout.json";
 
-const DIFFICULTIES = [8, 10, 12, 15] as const;
-const FAILURES = ["setback", "harm", "severe"] as const;
-const PLAN_ID_PATTERN = "[a-z0-9]+(?:-[a-z0-9]+)*";
-const ACTION_ID_PATTERN = "[a-z][a-z0-9-]{0,31}";
-const SLOT_PATTERN = "[a-z][a-z0-9-]{0,23}";
+/** `$bind` inserts a runtime value. `$fragment` splices another schema file, then overlays sibling keys. */
+const fragments: Record<string, unknown> = {
+  actions: actionsFragment,
+  check: checkFragment,
+  encounter: encounterFragment,
+  gmBeat: gmBeatFragment,
+  item: itemFragment,
+  planId: planIdFragment,
+};
 
-type JsonSchema = Record<string, unknown>;
+const sharedBinds = {
+  locationMax: LOCATION_MAX,
+  narrationMax: NARRATION_MAX,
+  encounterNameMax: ENCOUNTER_NAME_MAX,
+  encounterSummaryMax: ENCOUNTER_SUMMARY_MAX,
+  setupMax: SETUP_MAX,
+  xpMin: XP_AWARD_MIN,
+  xpMax: XP_AWARD_MAX,
+  planIdMax: PLAN_ID_MAX,
+  planNameMax: PLAN_NAME_MAX,
+  planSummaryMax: PLAN_SUMMARY_MAX,
+  planLabelMax: PLAN_LABEL_MAX,
+  planDetailMax: PLAN_DETAIL_MAX,
+  situationEnum: { type: "string", enum: [...CHARACTER_SITUATIONS] },
+} satisfies Record<string, unknown>;
 
 export function openingSituationSchema(place: string): HostResponseSchema {
-  return named("opening_situation", {
-    situation: text(1, 800),
+  return compile(openingSituationFile, {
+    ...sharedBinds,
     place: { type: "string", const: place },
-    weather: line(1, LOCATION_MAX),
-    reputation: line(1, LOCATION_MAX),
   });
 }
 
 export function campaignPlanSchema(bounds: PlanBounds): HostResponseSchema {
-  const id = { type: "string", minLength: 1, maxLength: PLAN_ID_MAX, pattern: PLAN_ID_PATTERN };
-  return named("campaign_plan", {
-    rooms: {
-      type: "array",
-      minItems: bounds.roomMin,
-      maxItems: bounds.roomMax,
-      items: objectSchema({
-        id,
-        name: line(1, PLAN_NAME_MAX),
-        summary: line(1, PLAN_SUMMARY_MAX),
-        exits: { type: "array", items: id },
-        role: { type: "string", enum: ["start", "path", "finale"] },
-      }),
-    },
-    gates: {
-      type: "array",
-      minItems: bounds.gateMin,
-      maxItems: bounds.gateMax,
-      items: objectSchema({
-        id,
-        roomId: id,
-        kind: { type: "string", enum: ["lock", "boss", "obstacle", "clue"] },
-        label: line(1, PLAN_LABEL_MAX),
-        detail: line(1, PLAN_DETAIL_MAX),
-      }),
-    },
+  return compile(campaignPlanFile, {
+    ...sharedBinds,
+    roomMin: bounds.roomMin,
+    roomMax: bounds.roomMax,
+    gateMin: bounds.gateMin,
+    gateMax: bounds.gateMax,
   });
 }
 
 export function sceneImagePromptSchema(): HostResponseSchema {
-  return named("scene_image_prompt", {
-    prompt: text(1, 1000),
-  });
+  return compile(sceneImageFile, sharedBinds);
 }
 
 export function startingLoadoutSchema(table: TableState): HostResponseSchema {
-  const stats = statIds(table);
-  const living = livingIds(table);
-  return named("starting_loadout", {
-    kits: {
-      type: "array",
-      minItems: living.length,
-      maxItems: living.length,
-      items: objectSchema({
-        characterId: stringEnum(living),
-        currency: { type: "integer", minimum: 0 },
-        inventory: { type: "array", items: itemSchema(stats) },
-      }),
-    },
-    actions: actionArray(table, 3, 8),
+  return compile(startingLoadoutFile, {
+    ...sharedBinds,
+    ...tableBinds(table, { actionMin: 2, actionMax: 4, allowProgress: false }),
   });
 }
 
 export function gmReactionSchema(table: TableState, actorId: string): HostResponseSchema {
-  return named("gm_reaction", {
-    ...beatFields(table, true),
-    check: nullable(checkSchema(actorId, statIds(table))),
+  return compile(gmReactionFile, {
+    ...sharedBinds,
+    ...tableBinds(table, { actionMin: 2, actionMax: 4, allowProgress: true, actorId }),
   });
 }
 
 export function gmOutcomeSchema(table: TableState, checkSucceeded: boolean): HostResponseSchema {
-  const fields = beatFields(table, checkSucceeded);
-  return named("gm_outcome", {
-    ...fields,
-    narration: { type: "string", minLength: 1, maxLength: NARRATION_MAX },
-    actions: actionArray(table, 3, 8),
+  return compile(gmOutcomeFile, {
+    ...sharedBinds,
+    ...tableBinds(table, { actionMin: 2, actionMax: 4, allowProgress: checkSucceeded }),
   });
 }
 
-function beatFields(table: TableState, allowProgress: boolean): Record<string, JsonSchema> {
-  const stats = statIds(table);
-  const limits = gmLootLimits(table.settings);
-  const living = livingIds(table);
-  const inScene = table.characters
-    .filter((character) => !character.archived && character.inScene)
-    .map((character) => character.id);
+function compile(
+  file: { name: string; properties: object },
+  binds: Record<string, unknown>,
+): HostResponseSchema {
+  const properties = resolve(file.properties, binds);
+  if (!isRecord(properties)) throw new Error(`Schema ${file.name} properties did not resolve to an object.`);
   return {
-    narration: { type: "string", maxLength: NARRATION_MAX },
-    encounter: nullable(
-      objectSchema({
-        name: line(1, ENCOUNTER_NAME_MAX),
-        summary: line(1, ENCOUNTER_SUMMARY_MAX),
-      }),
-    ),
-    place: { type: "string", maxLength: LOCATION_MAX },
-    weather: { type: "string", maxLength: LOCATION_MAX },
-    reputation: { type: "string", maxLength: LOCATION_MAX },
-    situations: {
-      type: "array",
-      maxItems: Math.max(living.length, 0),
-      items: objectSchema({
-        characterId: stringEnum(living),
-        situation: { type: "string", enum: [...CHARACTER_SITUATIONS] },
-      }),
+    name: file.name,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties,
+      required: Object.keys(properties),
     },
-    loot: {
-      type: "array",
-      items: objectSchema({
-        characterId: stringEnum(inScene),
-        currency: { type: "integer", minimum: 0, maximum: limits.currencyMax },
-        items: {
-          type: "array",
-          maxItems: limits.itemMax,
-          items: itemSchema(stats),
-        },
-      }),
-    },
-    actions: actionArray(table, 0, 8),
-    progress: {
-      type: "array",
-      items: objectSchema({
-        characterId: stringEnum(living),
-        xp: { type: "integer", minimum: XP_AWARD_MIN, maximum: XP_AWARD_MAX },
-      }),
-    },
-    roomId: roomIdSchema(table.campaignPlan ?? null, allowProgress),
-    clearedGateIds: clearedGateIdsSchema(table.campaignPlan ?? null, allowProgress),
   };
 }
 
-function checkSchema(actorId: string, stats: string[]): JsonSchema {
-  return objectSchema({
-    characterId: actorId.length > 0 ? { type: "string", const: actorId } : { type: "string" },
-    stat: stringEnum(stats),
-    difficulty: { type: "integer", enum: [...DIFFICULTIES] },
-    failure: { type: "string", enum: [...FAILURES] },
-    abilityApplies: { type: "boolean" },
-    setup: line(1, SETUP_MAX),
-  });
+function resolve(node: unknown, binds: Record<string, unknown>): unknown {
+  if (Array.isArray(node)) return node.map((entry) => resolve(entry, binds));
+  if (!isRecord(node)) return node;
+
+  if (typeof node.$bind === "string" && Object.keys(node).length === 1) {
+    const value = binds[node.$bind];
+    if (value === undefined) throw new Error(`Missing schema bind: ${node.$bind}`);
+    return resolve(value, binds);
+  }
+
+  if (typeof node.$fragment === "string") {
+    const source = fragments[node.$fragment];
+    if (source === undefined) throw new Error(`Missing schema fragment: ${node.$fragment}`);
+    const rest: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== "$fragment") rest[key] = value;
+    }
+    const base = resolve(source, binds);
+    if (Object.keys(rest).length === 0) return base;
+    const overlay = resolve(rest, binds);
+    if (isRecord(base) && isRecord(overlay)) return { ...base, ...overlay };
+    return overlay;
+  }
+
+  const resolved: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) resolved[key] = resolve(value, binds);
+  return resolved;
 }
 
-function actionArray(table: TableState, minItems: number, maxItems: number): JsonSchema {
+function tableBinds(
+  table: TableState,
+  options: { actionMin: number; actionMax: number; allowProgress: boolean; actorId?: string },
+): Record<string, unknown> {
+  const stats = table.settings.characterOptions.stats.map((stat) => stat.id);
+  const skills = table.settings.characterOptions.skills.map((skill) => skill.id);
+  const living = table.characters.filter((character) => !character.archived).map((character) => character.id);
+  const inScene = table.characters
+    .filter((character) => !character.archived && character.inScene)
+    .map((character) => character.id);
   const acting = table.characters
     .filter((character) => !character.archived && character.inScene && !character.wounds.includes("down"))
     .map((character) => character.id);
   const carried = table.characters.flatMap((character) =>
     character.archived ? [] : character.inventory.map((item) => item.id),
   );
+  const limits = gmLootLimits(table.settings);
+  const actorId = options.actorId ?? "";
   return {
-    type: "array",
-    minItems,
-    maxItems,
-    items: objectSchema({
-      id: { type: "string", minLength: 1, maxLength: 32, pattern: ACTION_ID_PATTERN },
-      label: line(1, 72),
-      stat: stringEnum(statIds(table)),
-      difficulty: { type: "integer", enum: [...DIFFICULTIES] },
-      failure: { type: "string", enum: [...FAILURES] },
-      abilityId: stringEnum(["", ...skillIds(table)]),
-      characterIds:
-        acting.length === 0
-          ? { type: "array", maxItems: 0, items: { type: "string" } }
-          : { type: "array", items: { type: "string", enum: unique(acting) } },
-      itemId: stringEnum(["", ...carried]),
-    }),
+    actionMin: options.actionMin,
+    actionMax: options.actionMax,
+    statEnum: stringEnum(stats),
+    abilityEnum: stringEnum(["", ...skills]),
+    modifierStatEnum: stringEnum(["", ...stats]),
+    livingEnum: stringEnum(living),
+    inSceneEnum: stringEnum(inScene),
+    livingCount: living.length,
+    characterIds:
+      acting.length === 0
+        ? { type: "array", maxItems: 0, items: { type: "string" } }
+        : { type: "array", items: { type: "string", enum: unique(acting) } },
+    itemIdEnum: stringEnum(["", ...carried]),
+    currencyMax: limits.currencyMax,
+    itemMax: limits.itemMax,
+    actorId: actorId.length > 0 ? { type: "string", const: actorId } : { type: "string" },
+    roomId: roomIdSchema(table.campaignPlan ?? null, options.allowProgress),
+    clearedGateIds: clearedGateIdsSchema(table.campaignPlan ?? null, options.allowProgress),
   };
 }
 
-function itemSchema(stats: string[]): JsonSchema {
-  return objectSchema({
-    name: line(1, 80),
-    slot: {
-      anyOf: [
-        { type: "string", const: "" },
-        { type: "string", minLength: 1, maxLength: 24, pattern: SLOT_PATTERN },
-      ],
-    },
-    equipped: { type: "boolean" },
-    modifiers: {
-      type: "array",
-      maxItems: 4,
-      items: objectSchema({
-        kind: { type: "string", enum: ["stat", "roll"] },
-        statId: stringEnum(["", ...stats]),
-        amount: {
-          anyOf: [
-            { type: "integer", minimum: -3, maximum: -1 },
-            { type: "integer", minimum: 1, maximum: 3 },
-          ],
-        },
-      }),
-    },
-  });
-}
-
-function roomIdSchema(plan: CampaignPlan | null, allowProgress: boolean): JsonSchema {
+function roomIdSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
   if (!plan) return { type: "string", const: "" };
   const current = plan.rooms.find((room) => room.id === plan.currentRoomId);
-  if (!allowProgress) {
-    return { type: "string", enum: unique(["", ...(current ? [current.id] : [])]) };
-  }
+  if (!allowProgress) return { type: "string", enum: unique(["", ...(current ? [current.id] : [])]) };
   const exits = current ? current.exits : plan.rooms.map((room) => room.id);
   return { type: "string", enum: unique(["", ...(current ? [current.id] : []), ...exits]) };
 }
 
-function clearedGateIdsSchema(plan: CampaignPlan | null, allowProgress: boolean): JsonSchema {
-  const empty: JsonSchema = { type: "array", maxItems: 0, items: { type: "string" } };
+function clearedGateIdsSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
+  const empty = { type: "array", maxItems: 0, items: { type: "string" } };
   if (!plan || !allowProgress) return empty;
   const pending = plan.gates
     .filter((gate) => gate.status === "pending" && gate.roomId === plan.currentRoomId)
@@ -243,32 +204,7 @@ function clearedGateIdsSchema(plan: CampaignPlan | null, allowProgress: boolean)
   return { type: "array", maxItems: 1, items: { type: "string", enum: unique(pending) } };
 }
 
-function named(name: string, properties: Record<string, JsonSchema>): HostResponseSchema {
-  return { name, schema: objectSchema(properties) };
-}
-
-function objectSchema(properties: Record<string, JsonSchema>): JsonSchema {
-  return {
-    type: "object",
-    additionalProperties: false,
-    properties,
-    required: Object.keys(properties),
-  };
-}
-
-function nullable(schema: JsonSchema): JsonSchema {
-  return { anyOf: [{ type: "null" }, schema] };
-}
-
-function text(minLength: number, maxLength: number): JsonSchema {
-  return { type: "string", minLength, maxLength };
-}
-
-function line(minLength: number, maxLength: number): JsonSchema {
-  return { ...text(minLength, maxLength), pattern: "[^\\r\\n]+" };
-}
-
-function stringEnum(values: readonly string[]): JsonSchema {
+function stringEnum(values: readonly string[]): Record<string, unknown> {
   const entries = unique(values);
   if (entries.length === 0) return { type: "string" };
   return { type: "string", enum: entries };
@@ -278,14 +214,6 @@ function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-function livingIds(table: TableState): string[] {
-  return table.characters.filter((character) => !character.archived).map((character) => character.id);
-}
-
-function statIds(table: TableState): string[] {
-  return table.settings.characterOptions.stats.map((stat) => stat.id);
-}
-
-function skillIds(table: TableState): string[] {
-  return table.settings.characterOptions.skills.map((skill) => skill.id);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

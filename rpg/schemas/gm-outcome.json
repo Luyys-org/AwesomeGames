@@ -1,0 +1,7 @@
+{
+  "name": "gm_outcome",
+  "properties": {
+    "$fragment": "gmBeat",
+    "narration": { "type": "string", "minLength": 1, "maxLength": { "$bind": "narrationMax" } }
+  }
+}

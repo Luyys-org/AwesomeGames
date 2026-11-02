@@ -1,0 +1,59 @@
+{
+  "name": "campaign_plan",
+  "properties": {
+    "rooms": {
+      "type": "array",
+      "minItems": { "$bind": "roomMin" },
+      "maxItems": { "$bind": "roomMax" },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "summary", "exits", "role"],
+        "properties": {
+          "id": { "$fragment": "planId" },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planNameMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planSummaryMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "exits": { "type": "array", "items": { "$fragment": "planId" } },
+          "role": { "type": "string", "enum": ["start", "path", "finale"] }
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": { "$bind": "gateMin" },
+      "maxItems": { "$bind": "gateMax" },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "roomId", "kind", "label", "detail"],
+        "properties": {
+          "id": { "$fragment": "planId" },
+          "roomId": { "$fragment": "planId" },
+          "kind": { "type": "string", "enum": ["lock", "boss", "obstacle", "clue"] },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planLabelMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planDetailMax" },
+            "pattern": "[^\\r\\n]+"
+          }
+        }
+      }
+    }
+  }
+}
