@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   type HostAi,
+  GROK_PLAN_MODEL,
   HOST_AI_STORAGE_KEY,
   clearHostAi,
   readHostAi,
@@ -11,7 +12,6 @@ import {
 } from "@/rpg/lib/host-ai";
 
 export interface HostAiInput {
-  model: string;
   apiKey: string;
   imageModel?: string;
 }
@@ -35,14 +35,12 @@ export function useHostAi() {
 
   const save = useCallback(
     (input: HostAiInput): string | null => {
-      const model = input.model.trim();
       const apiKey = input.apiKey.trim() || hostAi?.apiKey || "";
-      if (!model) return "Enter a model name.";
       if (!apiKey) return "Enter an API key.";
 
       const imageModel = input.imageModel?.trim();
       const next: HostAi = {
-        model,
+        model: GROK_PLAN_MODEL,
         apiKey,
         ...(imageModel ? { imageModel } : {}),
       };
@@ -73,7 +71,6 @@ export function useHostAi() {
   return {
     ready,
     linked: hostAi !== null,
-    model: hostAi?.model ?? "",
     imageModel: hostAi?.imageModel ?? "",
     save,
     remove,

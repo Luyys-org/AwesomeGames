@@ -35,6 +35,7 @@ async function requestPlan(
   user: string,
 ): Promise<{ ok: true; plan: CampaignPlan } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "plan",
     temperature: 0,
     maxTokens: 4096,
     system: buildGmSystemPrompt(settings),

@@ -1,4 +1,4 @@
-import type { HostAi } from "@/rpg/lib/host-ai";
+import { hostChatModel, type HostAi, type HostChatRole } from "@/rpg/lib/host-ai";
 
 export function truncateText(value: string, max: number): string {
   const trimmed = value.trim();
@@ -35,6 +35,7 @@ export interface HostResponseSchema {
 export async function callHostChat(
   hostAi: HostAi,
   options: {
+    role: HostChatRole;
     temperature: number;
     system: string;
     user: string;
@@ -51,7 +52,7 @@ export async function callHostChat(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: hostAi.model,
+        model: hostChatModel(options.role),
         temperature: options.temperature,
         max_tokens: maxTokens,
         messages: [

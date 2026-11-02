@@ -39,7 +39,9 @@ async function requestSituation(
   startPlace: PlanStartPlace,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "plan",
     temperature: 0,
+    maxTokens: 4096,
     system: buildGmSystemPrompt(settings),
     user,
     responseSchema: openingSituationSchema(startPlace.name),

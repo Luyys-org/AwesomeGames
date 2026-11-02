@@ -49,6 +49,7 @@ export async function generateSceneImagePrompt(
   beat?: GmBeat,
 ): Promise<{ ok: true; prompt: string } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0,
     system: buildGmSystemPrompt(table.settings),
     user: buildSceneImageUserMessage(table, beat),

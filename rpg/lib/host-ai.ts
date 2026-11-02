@@ -1,7 +1,14 @@
 export const HOST_AI_STORAGE_KEY = "rpg.host.ai";
 
-export const GROK_MODEL_PLACEHOLDER = "grok-4.7";
+export const GROK_PLAN_MODEL = "grok-4.7";
+export const GROK_GM_MODEL = "grok-4.20-non-reasoning";
 export const GROK_IMAGE_MODEL = "grok-imagine-image-2.0";
+
+export type HostChatRole = "plan" | "gm";
+
+export function hostChatModel(role: HostChatRole): string {
+  return role === "plan" ? GROK_PLAN_MODEL : GROK_GM_MODEL;
+}
 
 export interface HostAi {
   model: string;

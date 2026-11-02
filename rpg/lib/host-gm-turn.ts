@@ -116,6 +116,7 @@ async function requestReaction(
   intent: GmIntent,
 ): Promise<GmGeneration<GmReaction>> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,
@@ -136,6 +137,7 @@ async function requestOutcome(
   checkSucceeded: boolean,
 ): Promise<GmGeneration<GmBeat>> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,

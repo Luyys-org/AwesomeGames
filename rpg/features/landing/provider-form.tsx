@@ -7,12 +7,11 @@ import {
   useProviderHealth,
 } from "@/rpg/features/landing/use-provider-health";
 import { type HostAiInput } from "@/rpg/features/landing/use-host-ai";
-import { GROK_IMAGE_MODEL, GROK_MODEL_PLACEHOLDER } from "@/rpg/lib/host-ai";
+import { GROK_GM_MODEL, GROK_IMAGE_MODEL, GROK_PLAN_MODEL } from "@/rpg/lib/host-ai";
 
 interface ProviderFormProps {
   ready: boolean;
   linked: boolean;
-  model: string;
   imageModel: string;
   save: (input: HostAiInput) => string | null;
   remove: () => string | null;
@@ -21,12 +20,10 @@ interface ProviderFormProps {
 export function ProviderForm({
   ready,
   linked,
-  model,
   imageModel,
   save,
   remove,
 }: ProviderFormProps) {
-  const [modelName, setModelName] = useState("");
   const [imageModelName, setImageModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +36,6 @@ export function ProviderForm({
 
   if (ready && !hydrated) {
     setHydrated(true);
-    if (model) setModelName(model);
     if (imageModel) setImageModelName(imageModel);
   }
 
@@ -49,7 +45,6 @@ export function ProviderForm({
   }, [ready, linked, editing, check]);
 
   function beginEdit() {
-    if (model) setModelName(model);
     if (imageModel) setImageModelName(imageModel);
     setApiKey("");
     setError(null);
@@ -65,7 +60,6 @@ export function ProviderForm({
     }
     reset();
     setEditing(false);
-    setModelName("");
     setImageModelName("");
     setApiKey("");
     setError(null);
@@ -77,8 +71,8 @@ export function ProviderForm({
         AI provider
       </h2>
       <p className="mt-1 text-sm text-zinc-400">
-        Stored in this browser only. It is not written into the campaign save. Scene images use the
-        Grok image model.
+        Stored in this browser only. It is not written into the campaign save. Plan and setup use{" "}
+        {GROK_PLAN_MODEL}. Play uses {GROK_GM_MODEL}. Scene images use the Grok image model.
       </p>
 
       <form
@@ -89,7 +83,6 @@ export function ProviderForm({
           setError(null);
 
           const message = save({
-            model: modelName,
             apiKey,
             imageModel: imageModelName,
           });
@@ -103,43 +96,23 @@ export function ProviderForm({
           void check();
         }}
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm text-zinc-300">
-            Model
-            <input
-              type="text"
-              required
-              autoComplete="off"
-              spellCheck={false}
-              disabled={fieldsDisabled}
-              placeholder={GROK_MODEL_PLACEHOLDER}
-              value={modelName}
-              onChange={(event) => {
-                setModelName(event.target.value);
-                setError(null);
-              }}
-              className="field mt-1 w-full"
-            />
-          </label>
-
-          <label className="block text-sm text-zinc-300">
-            API key
-            <input
-              type="password"
-              required={!linked}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={fieldsDisabled}
-              placeholder={linked && !locked ? "Blank keeps the saved key" : ""}
-              value={locked ? "••••••••" : apiKey}
-              onChange={(event) => {
-                setApiKey(event.target.value);
-                setError(null);
-              }}
-              className="field mt-1 w-full"
-            />
-          </label>
-        </div>
+        <label className="block text-sm text-zinc-300">
+          API key
+          <input
+            type="password"
+            required={!linked}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={fieldsDisabled}
+            placeholder={linked && !locked ? "Blank keeps the saved key" : ""}
+            value={locked ? "••••••••" : apiKey}
+            onChange={(event) => {
+              setApiKey(event.target.value);
+              setError(null);
+            }}
+            className="field mt-1 w-full"
+          />
+        </label>
 
         <label className="block text-sm text-zinc-300">
           Image model
@@ -209,9 +182,7 @@ export function ProviderForm({
               ) : null}
             </>
           )}
-          {linked && !locked ? (
-            <p className="min-w-0 text-sm break-all text-zinc-300">Linked · {model}</p>
-          ) : null}
+          {linked && !locked ? <p className="min-w-0 text-sm text-zinc-300">Linked</p> : null}
           <ProviderHealth status={status} detail={detail} />
         </div>
       </form>

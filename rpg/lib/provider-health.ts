@@ -1,4 +1,4 @@
-import { type HostAi } from "@/rpg/lib/host-ai";
+import { GROK_GM_MODEL, GROK_PLAN_MODEL, type HostAi } from "@/rpg/lib/host-ai";
 
 const PROBE_TIMEOUT_MS = 20_000;
 const DETAIL_MAX = 180;
@@ -17,10 +17,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function probeRequest(hostAi: HostAi): ProbeRequest {
-  const model = encodeURIComponent(hostAi.model);
+function probeRequest(hostAi: HostAi, model: string): ProbeRequest {
   return {
-    url: `https://api.x.ai/v1/models/${model}`,
+    url: `https://api.x.ai/v1/models/${encodeURIComponent(model)}`,
     headers: {
       authorization: `Bearer ${hostAi.apiKey}`,
     },
@@ -57,14 +56,14 @@ function failureDetail(status: number, payload: unknown, apiKey: string): string
     return "The API key was rejected.";
   }
 
-  if (status === 404) return "The model was not found.";
+  if (status === 404) return "A required model was not found.";
 
   if (message) return presentDetail(message, apiKey);
   return "The provider could not be reached.";
 }
 
-export async function checkProviderHealth(hostAi: HostAi): Promise<ProviderHealthResult> {
-  const request = probeRequest(hostAi);
+async function probeModel(hostAi: HostAi, model: string): Promise<ProviderHealthResult> {
+  const request = probeRequest(hostAi, model);
 
   try {
     const response = await fetch(request.url, {
@@ -83,7 +82,9 @@ export async function checkProviderHealth(hostAi: HostAi): Promise<ProviderHealt
     }
 
     if (!response.ok) {
-      return { ok: false, detail: failureDetail(response.status, payload, hostAi.apiKey) };
+      const detail = failureDetail(response.status, payload, hostAi.apiKey);
+      if (response.status === 404) return { ok: false, detail: `${model} was not found.` };
+      return { ok: false, detail };
     }
 
     if (raw.trim() === "") {
@@ -94,4 +95,10 @@ export async function checkProviderHealth(hostAi: HostAi): Promise<ProviderHealt
   } catch {
     return { ok: false, detail: "The provider did not respond." };
   }
+}
+
+export async function checkProviderHealth(hostAi: HostAi): Promise<ProviderHealthResult> {
+  const plan = await probeModel(hostAi, GROK_PLAN_MODEL);
+  if (!plan.ok) return plan;
+  return probeModel(hostAi, GROK_GM_MODEL);
 }

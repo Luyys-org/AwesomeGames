@@ -13,7 +13,6 @@ export function LandingScreen() {
       <ProviderForm
         ready={hostAi.ready}
         linked={hostAi.linked}
-        model={hostAi.model}
         imageModel={hostAi.imageModel}
         save={hostAi.save}
         remove={hostAi.remove}

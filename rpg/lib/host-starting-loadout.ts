@@ -80,7 +80,9 @@ async function requestLoadout(
   table: TableState,
 ): Promise<{ ok: true; kits: DraftStartingKit[]; actions: SceneAction[] } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "plan",
     temperature: 0.7,
+    maxTokens: 4096,
     system: buildGmSystemPrompt(table.settings),
     user,
     responseSchema: startingLoadoutSchema(table),
