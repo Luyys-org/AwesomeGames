@@ -71,8 +71,9 @@ export function ProviderForm({
         AI provider
       </h2>
       <p className="mt-1 text-sm text-zinc-400">
-        Stored in this browser only. It is not written into the campaign save. Plan and setup use{" "}
-        {GROK_PLAN_MODEL}. Play uses {GROK_GM_MODEL}. Scene images use the Grok image model.
+        Stored in this browser only. It is not written into the campaign save. The campaign plan uses{" "}
+        {GROK_PLAN_MODEL}. The opening scene, starting gear, and play use {GROK_GM_MODEL}. Scene
+        images use the Grok image model.
       </p>
 
       <form

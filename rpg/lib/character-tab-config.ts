@@ -153,12 +153,6 @@ export function validateCharacterConfiguration(
   if (!deathRecovery.ok) return deathRecovery;
 
   const rules = input.equipmentValidationRules;
-  if (input.equipmentRules) {
-    const anyRule = rules.level || rules.stats || rules.race || rules.class;
-    if (!anyRule) {
-      return { ok: false, error: "Choose at least one equipment validation rule." };
-    }
-  }
 
   return {
     ok: true,

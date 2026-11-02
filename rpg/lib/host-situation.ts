@@ -1,4 +1,4 @@
-import type { PlanStartPlace } from "@/rpg/lib/campaign-plan";
+import { planStartPlace, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
@@ -20,13 +20,15 @@ export interface OpeningScene {
 export async function generateOpeningSituation(
   settings: CampaignSettings,
   hostAi: HostAi,
-  startPlace: PlanStartPlace,
+  plan: CampaignPlan,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
+  const startPlace = planStartPlace(plan);
+  if (!startPlace) return { ok: false, error: "The campaign plan has no start place." };
   const situation = await requestSituation(
     hostAi,
-    buildOpeningSituationUserMessage(settings, startPlace),
+    buildOpeningSituationUserMessage(settings, plan),
     settings,
-    startPlace,
+    startPlace.name,
   );
   if (situation.ok) return situation;
   return { ok: false, error: situation.error };
@@ -36,15 +38,14 @@ async function requestSituation(
   hostAi: HostAi,
   user: string,
   settings: CampaignSettings,
-  startPlace: PlanStartPlace,
+  startPlaceName: string,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
-    role: "plan",
+    role: "gm",
     temperature: 0,
-    maxTokens: 4096,
     system: buildGmSystemPrompt(settings),
     user,
-    responseSchema: openingSituationSchema(startPlace.name),
+    responseSchema: openingSituationSchema(startPlaceName),
   });
   if (!response.ok) return response;
 
@@ -54,13 +55,13 @@ async function requestSituation(
     return { ok: false, error: "Response JSON must include a non-empty situation string." };
   }
   const location = readLocation(parsed);
-  if (location.place.trim().toLowerCase() !== startPlace.name.trim().toLowerCase()) {
-    return { ok: false, error: `Place must be the start place name: ${startPlace.name}.` };
+  if (location.place.trim().toLowerCase() !== startPlaceName.trim().toLowerCase()) {
+    return { ok: false, error: `Place must be the start place name: ${startPlaceName}.` };
   }
   return {
     ok: true,
     situation: truncateText(situation, SITUATION_MAX),
-    location: { ...location, place: startPlace.name },
+    location: { ...location, place: startPlaceName },
   };
 }
 
