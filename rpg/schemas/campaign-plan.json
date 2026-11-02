@@ -1,14 +1,14 @@
 {
   "name": "campaign_plan",
   "properties": {
-    "rooms": {
+    "scenes": {
       "type": "array",
-      "minItems": { "$bind": "roomMin" },
-      "maxItems": { "$bind": "roomMax" },
+      "minItems": { "$bind": "sceneMin" },
+      "maxItems": { "$bind": "sceneMax" },
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name", "summary", "exits", "role"],
+        "required": ["id", "name", "summary", "objective", "next", "places"],
         "properties": {
           "id": { "$fragment": "planId" },
           "name": {
@@ -23,34 +23,38 @@
             "maxLength": { "$bind": "planSummaryMax" },
             "pattern": "[^\\r\\n]+"
           },
-          "exits": { "type": "array", "items": { "$fragment": "planId" } },
-          "role": { "type": "string", "enum": ["start", "path", "finale"] }
-        }
-      }
-    },
-    "gates": {
-      "type": "array",
-      "minItems": { "$bind": "gateMin" },
-      "maxItems": { "$bind": "gateMax" },
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "roomId", "kind", "label", "detail"],
-        "properties": {
-          "id": { "$fragment": "planId" },
-          "roomId": { "$fragment": "planId" },
-          "kind": { "type": "string", "enum": ["lock", "boss", "obstacle", "clue"] },
-          "label": {
+          "objective": {
             "type": "string",
             "minLength": 1,
-            "maxLength": { "$bind": "planLabelMax" },
+            "maxLength": { "$bind": "planObjectiveMax" },
             "pattern": "[^\\r\\n]+"
           },
-          "detail": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": { "$bind": "planDetailMax" },
-            "pattern": "[^\\r\\n]+"
+          "next": { "$fragment": "planLink" },
+          "places": {
+            "type": "array",
+            "minItems": { "$bind": "placeMin" },
+            "maxItems": { "$bind": "placeMax" },
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name", "summary", "next"],
+              "properties": {
+                "id": { "$fragment": "planId" },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": { "$bind": "planNameMax" },
+                  "pattern": "[^\\r\\n]+"
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": { "$bind": "planSummaryMax" },
+                  "pattern": "[^\\r\\n]+"
+                },
+                "next": { "$fragment": "planLink" }
+              }
+            }
           }
         }
       }

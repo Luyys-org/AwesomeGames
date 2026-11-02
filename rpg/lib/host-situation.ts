@@ -1,4 +1,4 @@
-import type { PlanStartRoom } from "@/rpg/lib/campaign-plan";
+import type { PlanStartPlace } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
@@ -20,13 +20,13 @@ export interface OpeningScene {
 export async function generateOpeningSituation(
   settings: CampaignSettings,
   hostAi: HostAi,
-  startRoom: PlanStartRoom,
+  startPlace: PlanStartPlace,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const situation = await requestSituation(
     hostAi,
-    buildOpeningSituationUserMessage(settings, startRoom),
+    buildOpeningSituationUserMessage(settings, startPlace),
     settings,
-    startRoom,
+    startPlace,
   );
   if (situation.ok) return situation;
   return { ok: false, error: situation.error };
@@ -36,13 +36,13 @@ async function requestSituation(
   hostAi: HostAi,
   user: string,
   settings: CampaignSettings,
-  startRoom: PlanStartRoom,
+  startPlace: PlanStartPlace,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
     temperature: 0,
     system: buildGmSystemPrompt(settings),
     user,
-    responseSchema: openingSituationSchema(startRoom.name),
+    responseSchema: openingSituationSchema(startPlace.name),
   });
   if (!response.ok) return response;
 
@@ -52,13 +52,13 @@ async function requestSituation(
     return { ok: false, error: "Response JSON must include a non-empty situation string." };
   }
   const location = readLocation(parsed);
-  if (location.place.trim().toLowerCase() !== startRoom.name.trim().toLowerCase()) {
-    return { ok: false, error: `Place must be the start room name: ${startRoom.name}.` };
+  if (location.place.trim().toLowerCase() !== startPlace.name.trim().toLowerCase()) {
+    return { ok: false, error: `Place must be the start place name: ${startPlace.name}.` };
   }
   return {
     ok: true,
     situation: truncateText(situation, SITUATION_MAX),
-    location: { ...location, place: startRoom.name },
+    location: { ...location, place: startPlace.name },
   };
 }
 

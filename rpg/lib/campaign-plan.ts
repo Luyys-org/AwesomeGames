@@ -3,79 +3,81 @@ import type { CampaignSettings, EnemyDifficultyId } from "@/rpg/lib/campaign-set
 export const PLAN_ID_MAX = 24;
 export const PLAN_NAME_MAX = 40;
 export const PLAN_SUMMARY_MAX = 400;
-export const PLAN_LABEL_MAX = 40;
-export const PLAN_DETAIL_MAX = 400;
+export const PLAN_OBJECTIVE_MAX = 280;
 
 const PLAN_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const ROOM_ROLES = ["start", "path", "finale"] as const;
-const GATE_KINDS = ["lock", "boss", "obstacle", "clue"] as const;
-const GATE_STATUSES = ["pending", "cleared"] as const;
+const OBJECTIVE_STATUSES = ["pending", "cleared"] as const;
 
-export type PlanRoomRole = (typeof ROOM_ROLES)[number];
-export type PlanGateKind = (typeof GATE_KINDS)[number];
-export type PlanGateStatus = (typeof GATE_STATUSES)[number];
+export type PlanObjectiveStatus = (typeof OBJECTIVE_STATUSES)[number];
 
-export interface PlanRoom {
+export interface PlanPlace {
   id: string;
   name: string;
   summary: string;
-  exits: string[];
-  role: PlanRoomRole;
+  next: string;
 }
 
-export interface PlanGate {
+export interface PlanScene {
   id: string;
-  roomId: string;
-  kind: PlanGateKind;
-  label: string;
-  detail: string;
-  status: PlanGateStatus;
+  name: string;
+  summary: string;
+  objective: string;
+  next: string;
+  places: PlanPlace[];
+  objectiveStatus: PlanObjectiveStatus;
 }
 
 export interface CampaignPlan {
-  rooms: PlanRoom[];
-  gates: PlanGate[];
-  currentRoomId: string;
+  scenes: PlanScene[];
+  currentSceneId: string;
+  currentPlaceId: string;
 }
 
 export interface PlanBounds {
-  roomMin: number;
-  roomMax: number;
-  gateMin: number;
-  gateMax: number;
-  pathMin: number;
+  sceneMin: number;
+  sceneMax: number;
+  placeMin: number;
+  placeMax: number;
   id: number;
   name: number;
   summary: number;
-  label: number;
-  detail: number;
+  objective: number;
 }
 
-export interface PlanStartRoom {
+export interface PlanStartPlace {
   id: string;
   name: string;
   summary: string;
+  sceneId: string;
+  sceneName: string;
+  objective: string;
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
-const BOUNDS: Record<EnemyDifficultyId, Pick<PlanBounds, "roomMin" | "roomMax" | "gateMin" | "gateMax" | "pathMin">> = {
-  easy: { roomMin: 5, roomMax: 6, gateMin: 3, gateMax: 4, pathMin: 4 },
-  standard: { roomMin: 6, roomMax: 7, gateMin: 4, gateMax: 5, pathMin: 4 },
-  hard: { roomMin: 7, roomMax: 8, gateMin: 5, gateMax: 6, pathMin: 5 },
-  severe: { roomMin: 8, roomMax: 8, gateMin: 6, gateMax: 6, pathMin: 5 },
+interface PlanLink {
+  id: string;
+  next: string;
+}
+
+const BOUNDS: Record<EnemyDifficultyId, Pick<PlanBounds, "sceneMin" | "sceneMax" | "placeMin" | "placeMax">> = {
+  easy: { sceneMin: 2, sceneMax: 3, placeMin: 2, placeMax: 3 },
+  standard: { sceneMin: 3, sceneMax: 3, placeMin: 2, placeMax: 3 },
+  hard: { sceneMin: 3, sceneMax: 4, placeMin: 2, placeMax: 3 },
+  severe: { sceneMin: 4, sceneMax: 4, placeMin: 2, placeMax: 3 },
 };
 
-const TURN_RULES = `The campaign plan is canon. Do not add, remove, or rename rooms or gates.
-roomId is an empty string to stay, or the id of the current room, or one id in that room's exits. Do not invent a place. When roomId names a different room, place is that room's name. When you stay, place is empty or the current room's name.
-clearedGateIds is empty, or one pending gate id whose room is the current room. Clear a gate only when this beat resolves it. A check that has not succeeded clears nothing and does not change roomId. If the fiction already resolved a pending gate in this room, include its id even when this beat has no new roll.
-Do not set roomId to the finale while mayEnterFinale is false. Do not narrate the principal quest as finished unless every gate is already cleared and the party is in the finale, or this beat clears the last pending gate and that gate is in the finale.
-Aim narration and the next actions at nextGate, or at travel along exits toward that gate's room. Do not skip ahead.`;
+const TURN_RULES = `The campaign plan is canon. Do not add, remove, or rename scenes, places, or scene objectives.
+placeId is an empty string to stay, the current place id, or that place's next id. Do not skip a place. When placeId names the next place, place is that place's name. When you stay, place is empty or the current place's name.
+sceneId is an empty string to stay, the current scene id, or the next scene id. Enter the next scene only when mayAdvanceScene is true, or when this beat clears the current scene objective. On that entry, placeId is empty or the next scene's first place id, and place is that place's name.
+clearedSceneId is an empty string, or the current scene id when this beat resolves that scene's objective. Clear it only from the last place of that scene. A check that has not succeeded clears nothing and does not change placeId or sceneId.
+Do not narrate the principal quest as finished unless mayFinishObjective is true, or this beat clears the last scene's objective from that scene's last place.
+Aim narration and the next actions at the current scene objective, or at travel along next toward the last place of this scene. Do not skip ahead.`;
 
 const NO_PLAN_RULES =
-  "No campaign plan is stored. Return roomId as an empty string and clearedGateIds as an empty array.";
+  "No campaign plan is stored. Return placeId, sceneId, and clearedSceneId as empty strings.";
 
-const LOADOUT_NOTE = `The campaign plan is the map. The party is in currentRoomId. The first actions pursue nextGate, or travel along an exit toward that gate's room. Do not offer an action that enters the finale while mayEnterFinale is false, or that finishes the principal quest while mayFinishObjective is false.`;
+const LOADOUT_NOTE = `The campaign plan is the map. The party is in currentPlaceId of currentSceneId. The first actions pursue that scene's objective, or travel along next toward the last place of this scene. Do not offer an action that enters the next scene while mayAdvanceScene is false, or that finishes the principal quest while mayFinishObjective is false.`;
 
 export function planBounds(difficulty: EnemyDifficultyId): PlanBounds {
   return {
@@ -83,46 +85,49 @@ export function planBounds(difficulty: EnemyDifficultyId): PlanBounds {
     id: PLAN_ID_MAX,
     name: PLAN_NAME_MAX,
     summary: PLAN_SUMMARY_MAX,
-    label: PLAN_LABEL_MAX,
-    detail: PLAN_DETAIL_MAX,
+    objective: PLAN_OBJECTIVE_MAX,
   };
 }
 
-export function planStartRoom(plan: CampaignPlan): PlanStartRoom | null {
-  const start = plan.rooms.find((room) => room.role === "start");
-  if (!start) return null;
-  return { id: start.id, name: start.name, summary: start.summary };
+export function planStartPlace(plan: CampaignPlan): PlanStartPlace | null {
+  const scene = plan.scenes[0];
+  const place = scene?.places[0];
+  if (!scene || !place) return null;
+  return {
+    id: place.id,
+    name: place.name,
+    summary: place.summary,
+    sceneId: scene.id,
+    sceneName: scene.name,
+    objective: scene.objective,
+  };
 }
 
 export function planForPrompt(plan: CampaignPlan | null): Record<string, unknown> | null {
   if (!plan) return null;
-  const finale = plan.rooms.find((room) => room.role === "finale");
-  const finaleId = finale?.id ?? "";
-  const pending = plan.gates.filter((gate) => gate.status === "pending");
-  const next = nextGate(plan);
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const place = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
+  const onLastPlace = place?.next === "";
+  const onLastScene = scene?.next === "";
   return {
-    currentRoomId: plan.currentRoomId,
-    finaleRoomId: finaleId,
-    mayEnterFinale: !pending.some((gate) => gate.roomId !== finaleId),
-    mayFinishObjective: pending.length === 0 && plan.currentRoomId === finaleId,
-    nextGate: next
-      ? { id: next.id, roomId: next.roomId, kind: next.kind, label: next.label, detail: next.detail }
-      : null,
-    pendingHere: pending.filter((gate) => gate.roomId === plan.currentRoomId).map((gate) => gate.id),
-    rooms: plan.rooms.map((room) => ({
-      id: room.id,
-      name: room.name,
-      summary: room.summary,
-      exits: room.exits,
-      role: room.role,
-    })),
-    gates: plan.gates.map((gate) => ({
-      id: gate.id,
-      roomId: gate.roomId,
-      kind: gate.kind,
-      label: gate.label,
-      detail: gate.detail,
-      status: gate.status,
+    currentSceneId: plan.currentSceneId,
+    currentPlaceId: plan.currentPlaceId,
+    currentObjective: scene?.objective ?? "",
+    mayAdvanceScene: Boolean(scene && scene.next !== "" && scene.objectiveStatus === "cleared"),
+    mayFinishObjective: Boolean(scene && onLastScene && onLastPlace && scene.objectiveStatus === "cleared"),
+    scenes: plan.scenes.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      summary: entry.summary,
+      objective: entry.objective,
+      objectiveStatus: entry.objectiveStatus,
+      next: entry.next,
+      places: entry.places.map((spot) => ({
+        id: spot.id,
+        name: spot.name,
+        summary: spot.summary,
+        next: spot.next,
+      })),
     })),
   };
 }
@@ -139,61 +144,35 @@ export function parseGeneratedPlan(value: unknown, settings: CampaignSettings): 
   const structure = parsePlanStructure(value);
   if (!structure.ok) return structure;
   const bounds = planBounds(settings.enemyDifficulty);
-  const { rooms, gates } = structure.value;
-  if (rooms.length < bounds.roomMin || rooms.length > bounds.roomMax) {
+  const { scenes } = structure.value;
+  if (scenes.length < bounds.sceneMin || scenes.length > bounds.sceneMax) {
     return {
       ok: false,
-      error: `Return ${bounds.roomMin} to ${bounds.roomMax} rooms for this enemy difficulty.`,
+      error: `Return ${bounds.sceneMin} to ${bounds.sceneMax} scenes for this enemy difficulty.`,
     };
   }
-  if (gates.length < bounds.gateMin || gates.length > bounds.gateMax) {
+  if (scenes.some((scene) => scene.places.length < bounds.placeMin || scene.places.length > bounds.placeMax)) {
     return {
       ok: false,
-      error: `Return ${bounds.gateMin} to ${bounds.gateMax} gates for this enemy difficulty.`,
+      error: `Each scene needs ${bounds.placeMin} to ${bounds.placeMax} places for this enemy difficulty.`,
     };
   }
-
-  const start = rooms.find((room) => room.role === "start");
-  const finale = rooms.find((room) => room.role === "finale");
-  if (!start || !finale) return { ok: false, error: "The plan needs one start room and one finale room." };
-
-  const path = shortestPath(rooms, start.id, finale.id);
-  if (!path) return { ok: false, error: "The finale must be reachable from the start room." };
-  if (path.length < bounds.pathMin) {
+  const campaignObjective = typeof settings.objective === "string" ? settings.objective.trim().toLowerCase() : "";
+  if (campaignObjective && scenes.some((scene) => scene.objective.toLowerCase() === campaignObjective)) {
     return {
       ok: false,
-      error: `The shortest path from start to finale must include at least ${bounds.pathMin} rooms.`,
+      error: "A scene objective must be a step toward the campaign objective, not a copy of it.",
     };
   }
-
-  const finaleGates = gates.filter((gate) => gate.roomId === finale.id);
-  if (finaleGates.length !== 1 || finaleGates[0]?.kind !== "boss") {
-    return { ok: false, error: "The finale room needs exactly one gate, and its kind is boss." };
-  }
-  const beforeFinale = gates.filter((gate) => gate.roomId !== finale.id);
-  if (beforeFinale.length < 2) {
-    return { ok: false, error: "At least two gates must sit outside the finale." };
-  }
-  if (!beforeFinale.some((gate) => gate.roomId !== start.id)) {
-    return { ok: false, error: "At least one gate must sit in a room that is neither the start nor the finale." };
-  }
-
-  const middle = path.slice(1, -1);
-  const gatedMiddle = middle.filter((id) => gates.some((gate) => gate.roomId === id));
-  const needed = Math.ceil(middle.length / 2);
-  if (gatedMiddle.length < needed) {
-    return {
-      ok: false,
-      error: "Put a gate in enough rooms on the path between the start and the finale. Do not leave that path empty.",
-    };
-  }
-
+  const first = scenes[0];
+  const start = first?.places[0];
+  if (!first || !start) return { ok: false, error: "The plan needs a first scene and a first place." };
   return {
     ok: true,
     value: {
-      rooms,
-      gates: gates.map((gate) => ({ ...gate, status: "pending" })),
-      currentRoomId: start.id,
+      scenes: scenes.map((scene) => ({ ...scene, objectiveStatus: "pending" })),
+      currentSceneId: first.id,
+      currentPlaceId: start.id,
     },
   };
 }
@@ -201,23 +180,22 @@ export function parseGeneratedPlan(value: unknown, settings: CampaignSettings): 
 export function parseStoredPlan(value: unknown): Parsed<CampaignPlan> {
   const structure = parsePlanStructure(value);
   if (!structure.ok) return structure;
-  if (!isRecord(value) || typeof value.currentRoomId !== "string") {
-    return { ok: false, error: "The campaign plan needs a current room." };
+  if (!isRecord(value) || typeof value.currentSceneId !== "string" || typeof value.currentPlaceId !== "string") {
+    return { ok: false, error: "The campaign plan needs a current scene and a current place." };
   }
-  const currentRoomId = value.currentRoomId.trim();
-  if (!structure.value.rooms.some((room) => room.id === currentRoomId)) {
-    return { ok: false, error: "The current room is not on the campaign plan." };
+  const currentSceneId = value.currentSceneId.trim();
+  const currentPlaceId = value.currentPlaceId.trim();
+  const scene = structure.value.scenes.find((entry) => entry.id === currentSceneId);
+  if (!scene) return { ok: false, error: "The current scene is not on the campaign plan." };
+  if (!scene.places.some((place) => place.id === currentPlaceId)) {
+    return { ok: false, error: "The current place is not in the current scene." };
   }
-  const gates = structure.value.gates.map((gate) => {
-    const source = gateSource(value, gate.id);
-    const status = source && isGateStatus(source.status) ? source.status : "pending";
-    return { ...gate, status };
+  const scenes = structure.value.scenes.map((entry) => {
+    const source = sceneSource(value, entry.id);
+    const status = source && isObjectiveStatus(source.objectiveStatus) ? source.objectiveStatus : "pending";
+    return { ...entry, objectiveStatus: status };
   });
-  if (!structure.value.rooms.some((room) => room.role === "finale")) {
-    return { ok: false, error: "The campaign plan needs a finale room." };
-  }
-  if (gates.length === 0) return { ok: false, error: "The campaign plan needs at least one gate." };
-  return { ok: true, value: { rooms: structure.value.rooms, gates, currentRoomId } };
+  return { ok: true, value: { scenes, currentSceneId, currentPlaceId } };
 }
 
 export function readStoredCampaignPlan(value: unknown): CampaignPlan | null {
@@ -235,183 +213,233 @@ export function resolvePlanBeat(
   if (!plan) return { ok: true, value: { place, planUpdate: null } };
   if (!isRecord(raw)) return { ok: false, error: "Response JSON must be an object." };
 
-  if (typeof raw.roomId !== "string") {
-    return { ok: false, error: "roomId must be a string. Use an empty string to stay." };
-  }
-  if (!Array.isArray(raw.clearedGateIds)) {
-    return { ok: false, error: "clearedGateIds must be an array. Use [] when no gate is resolved." };
-  }
-  const requested = readRoomId(raw.roomId);
-  if (!requested.ok) return requested;
-  const cleared = readClearedIds(raw.clearedGateIds);
-  if (!cleared.ok) return cleared;
+  const requestedPlace = readOptionalId(raw.placeId, "placeId");
+  if (!requestedPlace.ok) return requestedPlace;
+  const requestedScene = readOptionalId(raw.sceneId, "sceneId");
+  if (!requestedScene.ok) return requestedScene;
+  const clearedScene = readOptionalId(raw.clearedSceneId, "clearedSceneId");
+  if (!clearedScene.ok) return clearedScene;
 
-  const current = plan.rooms.find((room) => room.id === plan.currentRoomId);
-  if (!current) return { ok: false, error: "The campaign plan has no current room." };
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const spot = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
+  if (!scene || !spot) return { ok: false, error: "The campaign plan has no current place." };
 
   if (!allowProgress) {
-    if (cleared.value.length > 0) {
-      return { ok: false, error: "Do not clear a gate before the check succeeds." };
+    if (clearedScene.value.length > 0) {
+      return { ok: false, error: "Do not clear a scene objective before the check succeeds." };
     }
-    if (requested.value.length > 0 && requested.value !== plan.currentRoomId) {
-      return { ok: false, error: "Do not change rooms before the check succeeds." };
+    if (requestedPlace.value.length > 0 && requestedPlace.value !== spot.id) {
+      return { ok: false, error: "Do not change places before the check succeeds." };
     }
-    const stayed = stayPlace(place, current.name);
+    if (requestedScene.value.length > 0 && requestedScene.value !== scene.id) {
+      return { ok: false, error: "Do not change scenes before the check succeeds." };
+    }
+    const stayed = stayPlace(place, spot.name);
     if (!stayed.ok) return stayed;
     return { ok: true, value: { place: stayed.value, planUpdate: plan } };
   }
 
-  if (requested.value.length > 0 && !plan.rooms.some((room) => room.id === requested.value)) {
-    return { ok: false, error: "roomId must be empty or a room id from the campaign plan." };
-  }
+  const scenes = plan.scenes.map((entry) => ({
+    ...entry,
+    places: entry.places.map((node) => ({ ...node })),
+  }));
+  const current = scenes.find((entry) => entry.id === scene.id);
+  if (!current) return { ok: false, error: "The campaign plan has no current scene." };
 
-  const destinationId = requested.value.length > 0 ? requested.value : plan.currentRoomId;
-  if (destinationId !== plan.currentRoomId && !current.exits.includes(destinationId)) {
-    return { ok: false, error: "roomId must be the current room or a room in its exits." };
-  }
-  const destination = plan.rooms.find((room) => room.id === destinationId);
-  if (!destination) return { ok: false, error: "roomId must be a room id from the campaign plan." };
-
-  if (cleared.value.length > 1) return { ok: false, error: "Clear at most one gate in a beat." };
-
-  const gates = plan.gates.map((gate) => ({ ...gate }));
-  if (cleared.value.length === 1) {
-    const gateId = cleared.value[0] ?? "";
-    const gate = gates.find((entry) => entry.id === gateId);
-    if (!gate) return { ok: false, error: "clearedGateIds must name a gate on the campaign plan." };
-    if (gate.status === "cleared") return { ok: false, error: "That gate is already cleared." };
-    if (gate.roomId !== plan.currentRoomId) {
-      return { ok: false, error: "Clear a gate only in the room where the party already is." };
+  if (clearedScene.value.length > 0) {
+    if (clearedScene.value !== current.id) {
+      return { ok: false, error: "Clear only the current scene objective." };
     }
-    gate.status = "cleared";
-  }
-
-  const finale = plan.rooms.find((room) => room.role === "finale");
-  if (finale && destinationId === finale.id && destinationId !== plan.currentRoomId) {
-    const blocking = gates.some((gate) => gate.status === "pending" && gate.roomId !== finale.id);
-    if (blocking) {
-      return { ok: false, error: "Do not enter the finale until every gate outside it is cleared." };
+    if (current.objectiveStatus === "cleared") {
+      return { ok: false, error: "That scene objective is already cleared." };
     }
+    if (spot.next !== "") {
+      return { ok: false, error: "Clear a scene objective only from its last place." };
+    }
+    current.objectiveStatus = "cleared";
   }
 
-  const moved = destinationId !== plan.currentRoomId;
-  if (!moved) {
-    const stayed = stayPlace(place, current.name);
-    if (!stayed.ok) return stayed;
-    return {
-      ok: true,
-      value: {
-        place: stayed.value,
-        planUpdate: { rooms: plan.rooms, gates, currentRoomId: destinationId },
-      },
-    };
+  let destinationScene = current;
+  if (requestedScene.value.length > 0 && requestedScene.value !== current.id) {
+    if (requestedScene.value !== current.next) {
+      return { ok: false, error: "sceneId must be empty, the current scene, or the next scene." };
+    }
+    if (current.objectiveStatus !== "cleared") {
+      return { ok: false, error: "Do not enter the next scene until this scene's objective is cleared." };
+    }
+    const nextScene = scenes.find((entry) => entry.id === current.next);
+    if (!nextScene) return { ok: false, error: "sceneId must be a scene id from the campaign plan." };
+    destinationScene = nextScene;
   }
 
-  return {
-    ok: true,
-    value: {
-      place: destination.name,
-      planUpdate: { rooms: plan.rooms, gates, currentRoomId: destinationId },
-    },
+  const head = destinationScene.places[0];
+  if (!head) return { ok: false, error: "The next scene has no place." };
+
+  let destination = spot;
+  if (destinationScene.id !== current.id) {
+    if (requestedPlace.value.length > 0 && requestedPlace.value !== head.id) {
+      return { ok: false, error: "When entering the next scene, placeId is empty or that scene's first place." };
+    }
+    destination = head;
+  } else if (requestedPlace.value.length > 0 && requestedPlace.value !== spot.id) {
+    if (requestedPlace.value !== spot.next) {
+      return { ok: false, error: "placeId must be empty, the current place, or the next place in this scene." };
+    }
+    const nextPlace = current.places.find((entry) => entry.id === spot.next);
+    if (!nextPlace) return { ok: false, error: "placeId must be a place id from the current scene." };
+    destination = nextPlace;
+  }
+
+  const moved = destination.id !== spot.id || destinationScene.id !== scene.id;
+  const planUpdate = {
+    scenes,
+    currentSceneId: destinationScene.id,
+    currentPlaceId: destination.id,
   };
+  if (!moved) {
+    const stayed = stayPlace(place, spot.name);
+    if (!stayed.ok) return stayed;
+    return { ok: true, value: { place: stayed.value, planUpdate } };
+  }
+  return { ok: true, value: { place: destination.name, planUpdate } };
 }
 
-function parsePlanStructure(value: unknown): Parsed<{ rooms: PlanRoom[]; gates: PlanGate[] }> {
-  if (!isRecord(value) || !Array.isArray(value.rooms) || !Array.isArray(value.gates)) {
-    return { ok: false, error: "The plan must be an object with rooms and gates arrays." };
+function parsePlanStructure(value: unknown): Parsed<{ scenes: PlanScene[] }> {
+  if (!isRecord(value) || !Array.isArray(value.scenes)) {
+    return { ok: false, error: "The plan must be an object with a scenes array." };
   }
-  if (value.rooms.length === 0 || value.rooms.length > 8) {
-    return { ok: false, error: "Return between 1 and 8 rooms." };
+  if (value.scenes.length === 0 || value.scenes.length > 8) {
+    return { ok: false, error: "Return between 1 and 8 scenes." };
   }
-  if (value.gates.length > 8) return { ok: false, error: "Return at most 8 gates." };
 
-  const rooms: PlanRoom[] = [];
-  const seenRooms = new Set<string>();
+  const seenIds = new Set<string>();
   const seenNames = new Set<string>();
-  for (const entry of value.rooms) {
-    const room = readRoom(entry);
-    if (!room.ok) return room;
-    if (seenRooms.has(room.value.id)) return { ok: false, error: `Room id ${room.value.id} is duplicated.` };
-    const nameKey = room.value.name.toLowerCase();
-    if (seenNames.has(nameKey)) return { ok: false, error: "Two rooms share a name." };
-    seenRooms.add(room.value.id);
-    seenNames.add(nameKey);
-    rooms.push(room.value);
+  const seenObjectives = new Set<string>();
+  const scenes: PlanScene[] = [];
+
+  for (const entry of value.scenes) {
+    const scene = readScene(entry, seenIds, seenNames);
+    if (!scene.ok) return scene;
+    const objectiveKey = scene.value.objective.toLowerCase();
+    if (seenObjectives.has(objectiveKey)) return { ok: false, error: "Two scenes share an objective." };
+    seenObjectives.add(objectiveKey);
+    scenes.push(scene.value);
   }
 
-  const starts = rooms.filter((room) => room.role === "start");
-  const finales = rooms.filter((room) => room.role === "finale");
-  if (starts.length !== 1 || finales.length !== 1) {
-    return { ok: false, error: "Use exactly one start room and one finale room. Every other room is path." };
-  }
+  const orderedScenes = orderLinks(scenes, "scene");
+  if (!orderedScenes.ok) return orderedScenes;
 
-  for (const room of rooms) {
-    for (const exit of room.exits) {
-      if (exit === room.id) return { ok: false, error: `Room ${room.id} cannot exit to itself.` };
-      if (!seenRooms.has(exit)) return { ok: false, error: `Room ${room.id} exits to unknown room ${exit}.` };
+  const withPlaces: PlanScene[] = [];
+  for (const scene of orderedScenes.value) {
+    const places = orderLinks(scene.places, "place");
+    if (!places.ok) {
+      const reason = places.error.charAt(0).toLowerCase() + places.error.slice(1);
+      return { ok: false, error: `In scene ${scene.id}, ${reason}` };
     }
+    withPlaces.push({ ...scene, places: places.value });
   }
 
-  const linked = symmetrize(rooms);
-  if (!reachable(linked, starts[0]?.id ?? "")) {
-    return { ok: false, error: "Every room must be reachable from the start room." };
-  }
-
-  const gates: PlanGate[] = [];
-  const seenGates = new Set<string>();
-  for (const entry of value.gates) {
-    const gate = readGate(entry, seenRooms);
-    if (!gate.ok) return gate;
-    if (seenGates.has(gate.value.id)) return { ok: false, error: `Gate id ${gate.value.id} is duplicated.` };
-    seenGates.add(gate.value.id);
-    gates.push(gate.value);
-  }
-
-  return { ok: true, value: { rooms: linked, gates } };
+  return { ok: true, value: { scenes: withPlaces } };
 }
 
-function readRoom(value: unknown): Parsed<PlanRoom> {
-  if (!isRecord(value)) return { ok: false, error: "Each room needs id, name, summary, exits, and role." };
-  const id = readId(value.id, "Room id");
+function readScene(
+  value: unknown,
+  seenIds: Set<string>,
+  seenNames: Set<string>,
+): Parsed<PlanScene> {
+  if (!isRecord(value) || !Array.isArray(value.places)) {
+    return { ok: false, error: "Each scene needs id, name, summary, objective, next, and places." };
+  }
+  const id = readId(value.id, "Scene id");
   if (!id.ok) return id;
-  const name = readText(value.name, "Room name", PLAN_NAME_MAX);
+  if (seenIds.has(id.value)) return { ok: false, error: `Scene id ${id.value} is duplicated.` };
+  seenIds.add(id.value);
+  const name = readText(value.name, "Scene name", PLAN_NAME_MAX);
   if (!name.ok) return name;
-  const summary = readText(value.summary, "Room summary", PLAN_SUMMARY_MAX);
+  const nameKey = name.value.toLowerCase();
+  if (seenNames.has(nameKey)) return { ok: false, error: "That name is already used." };
+  seenNames.add(nameKey);
+  const summary = readText(value.summary, "Scene summary", PLAN_SUMMARY_MAX);
   if (!summary.ok) return summary;
-  if (!isRoomRole(value.role)) return { ok: false, error: "Room role must be start, path, or finale." };
-  if (!Array.isArray(value.exits)) return { ok: false, error: `Exits for ${id.value} must be an array of room ids.` };
-  const exits: string[] = [];
-  for (const exit of value.exits) {
-    const exitId = readId(exit, "Exit id");
-    if (!exitId.ok) return exitId;
-    if (!exits.includes(exitId.value)) exits.push(exitId.value);
+  const objective = readText(value.objective, "Scene objective", PLAN_OBJECTIVE_MAX);
+  if (!objective.ok) return objective;
+  const next = readLink(value.next, "Scene next");
+  if (!next.ok) return next;
+  if (value.places.length === 0 || value.places.length > 8) {
+    return { ok: false, error: "Each scene needs between 1 and 8 places." };
   }
-  return { ok: true, value: { id: id.value, name: name.value, summary: summary.value, exits, role: value.role } };
-}
 
-function readGate(value: unknown, rooms: Set<string>): Parsed<PlanGate> {
-  if (!isRecord(value)) return { ok: false, error: "Each gate needs id, roomId, kind, label, and detail." };
-  const id = readId(value.id, "Gate id");
-  if (!id.ok) return id;
-  const roomId = readId(value.roomId, "Gate roomId");
-  if (!roomId.ok) return roomId;
-  if (!rooms.has(roomId.value)) return { ok: false, error: `Gate ${id.value} names an unknown room.` };
-  if (!isGateKind(value.kind)) return { ok: false, error: "Gate kind must be lock, boss, obstacle, or clue." };
-  const label = readText(value.label, "Gate label", PLAN_LABEL_MAX);
-  if (!label.ok) return label;
-  const detail = readText(value.detail, "Gate detail", PLAN_DETAIL_MAX);
-  if (!detail.ok) return detail;
+  const places: PlanPlace[] = [];
+  for (const entry of value.places) {
+    const place = readPlace(entry, seenIds, seenNames);
+    if (!place.ok) return place;
+    places.push(place.value);
+  }
   return {
     ok: true,
     value: {
       id: id.value,
-      roomId: roomId.value,
-      kind: value.kind,
-      label: label.value,
-      detail: detail.value,
-      status: "pending",
+      name: name.value,
+      summary: summary.value,
+      objective: objective.value,
+      next: next.value,
+      places,
+      objectiveStatus: "pending",
     },
   };
+}
+
+function readPlace(value: unknown, seenIds: Set<string>, seenNames: Set<string>): Parsed<PlanPlace> {
+  if (!isRecord(value)) return { ok: false, error: "Each place needs id, name, summary, and next." };
+  const id = readId(value.id, "Place id");
+  if (!id.ok) return id;
+  if (seenIds.has(id.value)) return { ok: false, error: `Place id ${id.value} is duplicated.` };
+  seenIds.add(id.value);
+  const name = readText(value.name, "Place name", PLAN_NAME_MAX);
+  if (!name.ok) return name;
+  const nameKey = name.value.toLowerCase();
+  if (seenNames.has(nameKey)) return { ok: false, error: "That name is already used." };
+  seenNames.add(nameKey);
+  const summary = readText(value.summary, "Place summary", PLAN_SUMMARY_MAX);
+  if (!summary.ok) return summary;
+  const next = readLink(value.next, "Place next");
+  if (!next.ok) return next;
+  return { ok: true, value: { id: id.value, name: name.value, summary: summary.value, next: next.value } };
+}
+
+function orderLinks<T extends PlanLink>(nodes: T[], noun: string): Parsed<T[]> {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const targeted = new Set<string>();
+  let tails = 0;
+  for (const node of nodes) {
+    if (node.next === "") {
+      tails += 1;
+      continue;
+    }
+    if (node.next === node.id) return { ok: false, error: `${noun} ${node.id} cannot point at itself.` };
+    if (!byId.has(node.next)) return { ok: false, error: `${noun} ${node.id} points at unknown id ${node.next}.` };
+    if (targeted.has(node.next)) return { ok: false, error: `${noun} ${node.next} has two predecessors.` };
+    targeted.add(node.next);
+  }
+  if (tails !== 1) {
+    return { ok: false, error: `The ${noun} list needs exactly one last node, with an empty next.` };
+  }
+  const heads = nodes.filter((node) => !targeted.has(node.id));
+  if (heads.length !== 1) return { ok: false, error: `The ${noun} list needs exactly one first node.` };
+
+  const ordered: T[] = [];
+  const seen = new Set<string>();
+  let current: T | undefined = heads[0];
+  while (current) {
+    if (seen.has(current.id)) return { ok: false, error: `The ${noun} list contains a cycle.` };
+    seen.add(current.id);
+    ordered.push(current);
+    current = current.next === "" ? undefined : byId.get(current.next);
+  }
+  if (ordered.length !== nodes.length) {
+    return { ok: false, error: `Every ${noun} must be reachable from the first.` };
+  }
+  return { ok: true, value: ordered };
 }
 
 function readId(value: unknown, label: string): Parsed<string> {
@@ -426,6 +454,15 @@ function readId(value: unknown, label: string): Parsed<string> {
   return { ok: true, value: trimmed };
 }
 
+function readLink(value: unknown, label: string): Parsed<string> {
+  if (typeof value !== "string") {
+    return { ok: false, error: `${label} must be a string. Use an empty string on the last node.` };
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return { ok: true, value: "" };
+  return readId(trimmed, label);
+}
+
 function readText(value: unknown, label: string, max: number): Parsed<string> {
   if (typeof value !== "string" || value.includes("\n") || value.includes("\r")) {
     return { ok: false, error: `${label} must be a single line.` };
@@ -437,125 +474,34 @@ function readText(value: unknown, label: string, max: number): Parsed<string> {
   return { ok: true, value: trimmed };
 }
 
-function readRoomId(value: unknown): Parsed<string> {
-  if (value === undefined || value === null || value === "") return { ok: true, value: "" };
-  if (typeof value !== "string") return { ok: false, error: "roomId must be a string." };
+function readOptionalId(value: unknown, label: string): Parsed<string> {
+  if (typeof value !== "string") return { ok: false, error: `${label} must be a string. Use an empty string to stay.` };
   const trimmed = value.trim();
   if (trimmed.length === 0) return { ok: true, value: "" };
-  if (!PLAN_ID.test(trimmed)) return { ok: false, error: "roomId must be empty or a room id from the campaign plan." };
+  if (!PLAN_ID.test(trimmed)) return { ok: false, error: `${label} must be empty or an id from the campaign plan.` };
   return { ok: true, value: trimmed };
 }
 
-function readClearedIds(value: unknown): Parsed<string[]> {
-  if (value === undefined || value === null) return { ok: true, value: [] };
-  if (!Array.isArray(value)) return { ok: false, error: "clearedGateIds must be an array." };
-  const ids: string[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "string") return { ok: false, error: "Each clearedGateIds entry must be a string." };
-    const trimmed = entry.trim();
-    if (trimmed.length === 0) continue;
-    if (!ids.includes(trimmed)) ids.push(trimmed);
-  }
-  return { ok: true, value: ids };
-}
-
-function stayPlace(place: string, roomName: string): Parsed<string> {
+function stayPlace(place: string, placeName: string): Parsed<string> {
   const trimmed = place.trim();
   if (trimmed.length === 0) return { ok: true, value: "" };
-  if (trimmed.toLowerCase() === roomName.toLowerCase()) return { ok: true, value: roomName };
+  if (trimmed.toLowerCase() === placeName.toLowerCase()) return { ok: true, value: placeName };
   return {
     ok: false,
-    error: "Place must stay empty or match the current room. Set roomId to an adjacent room to travel. Do not invent a place.",
+    error: "Place must stay empty or match the current place. Set placeId to the next place to travel. Do not invent a place.",
   };
 }
 
-function symmetrize(rooms: PlanRoom[]): PlanRoom[] {
-  const byId = new Map(rooms.map((room) => [room.id, { ...room, exits: [...room.exits] }]));
-  for (const room of byId.values()) {
-    for (const exit of [...room.exits]) {
-      const other = byId.get(exit);
-      if (other && !other.exits.includes(room.id)) other.exits.push(room.id);
-    }
-  }
-  return [...byId.values()];
-}
-
-function reachable(rooms: PlanRoom[], startId: string): boolean {
-  const byId = new Map(rooms.map((room) => [room.id, room]));
-  const seen = new Set<string>();
-  const queue = [startId];
-  while (queue.length > 0) {
-    const id = queue.shift();
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    const room = byId.get(id);
-    if (!room) continue;
-    for (const exit of room.exits) {
-      if (!seen.has(exit)) queue.push(exit);
-    }
-  }
-  return seen.size === rooms.length;
-}
-
-function shortestPath(rooms: PlanRoom[], startId: string, finaleId: string): string[] | null {
-  const byId = new Map(rooms.map((room) => [room.id, room]));
-  const queue: string[][] = [[startId]];
-  const seen = new Set<string>([startId]);
-  while (queue.length > 0) {
-    const path = queue.shift();
-    if (!path) continue;
-    const last = path[path.length - 1] ?? "";
-    if (last === finaleId) return path;
-    const room = byId.get(last);
-    if (!room) continue;
-    for (const exit of room.exits) {
-      if (seen.has(exit)) continue;
-      seen.add(exit);
-      queue.push([...path, exit]);
-    }
-  }
-  return null;
-}
-
-function nextGate(plan: CampaignPlan): PlanGate | null {
-  const pending = plan.gates.filter((gate) => gate.status === "pending");
-  const here = pending.find((gate) => gate.roomId === plan.currentRoomId);
-  if (here) return here;
-
-  const byId = new Map(plan.rooms.map((room) => [room.id, room]));
-  const seen = new Set<string>([plan.currentRoomId]);
-  const queue = [...(byId.get(plan.currentRoomId)?.exits ?? [])];
-  while (queue.length > 0) {
-    const id = queue.shift();
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    const gate = pending.find((entry) => entry.roomId === id);
-    if (gate) return gate;
-    for (const exit of byId.get(id)?.exits ?? []) {
-      if (!seen.has(exit)) queue.push(exit);
-    }
-  }
-  return pending[0] ?? null;
-}
-
-function gateSource(value: unknown, id: string): Record<string, unknown> | null {
-  if (!isRecord(value) || !Array.isArray(value.gates)) return null;
-  for (const entry of value.gates) {
+function sceneSource(value: unknown, id: string): Record<string, unknown> | null {
+  if (!isRecord(value) || !Array.isArray(value.scenes)) return null;
+  for (const entry of value.scenes) {
     if (isRecord(entry) && typeof entry.id === "string" && entry.id.trim() === id) return entry;
   }
   return null;
 }
 
-function isRoomRole(value: unknown): value is PlanRoomRole {
-  return ROOM_ROLES.some((role) => role === value);
-}
-
-function isGateKind(value: unknown): value is PlanGateKind {
-  return GATE_KINDS.some((kind) => kind === value);
-}
-
-function isGateStatus(value: unknown): value is PlanGateStatus {
-  return GATE_STATUSES.some((status) => status === value);
+function isObjectiveStatus(value: unknown): value is PlanObjectiveStatus {
+  return OBJECTIVE_STATUSES.some((status) => status === value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

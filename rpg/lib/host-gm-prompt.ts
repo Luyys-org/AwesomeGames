@@ -3,7 +3,7 @@ import {
   planNoteForLoadout,
   planRulesForTurn,
   type CampaignPlan,
-  type PlanStartRoom,
+  type PlanStartPlace,
 } from "@/rpg/lib/campaign-plan";
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import {
@@ -112,8 +112,8 @@ function campaignVars(settings: CampaignSettings): Record<string, unknown> {
   };
 }
 
-export function buildOpeningSituationUserMessage(settings: CampaignSettings, startRoom: PlanStartRoom): string {
-  return renderTemplate(openingSituationTemplate, { ...campaignVars(settings), startRoom });
+export function buildOpeningSituationUserMessage(settings: CampaignSettings, startPlace: PlanStartPlace): string {
+  return renderTemplate(openingSituationTemplate, { ...campaignVars(settings), startPlace });
 }
 
 export interface StartingLoadoutCharacterPrompt {

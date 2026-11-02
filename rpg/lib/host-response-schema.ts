@@ -1,8 +1,7 @@
 import {
-  PLAN_DETAIL_MAX,
   PLAN_ID_MAX,
-  PLAN_LABEL_MAX,
   PLAN_NAME_MAX,
+  PLAN_OBJECTIVE_MAX,
   PLAN_SUMMARY_MAX,
   type CampaignPlan,
   type PlanBounds,
@@ -25,6 +24,7 @@ import encounterFragment from "@/rpg/schemas/fragments/encounter.json";
 import gmBeatFragment from "@/rpg/schemas/fragments/gm-beat.json";
 import itemFragment from "@/rpg/schemas/fragments/item.json";
 import planIdFragment from "@/rpg/schemas/fragments/plan-id.json";
+import planLinkFragment from "@/rpg/schemas/fragments/plan-link.json";
 import campaignPlanFile from "@/rpg/schemas/campaign-plan.json";
 import gmOutcomeFile from "@/rpg/schemas/gm-outcome.json";
 import gmReactionFile from "@/rpg/schemas/gm-reaction.json";
@@ -40,6 +40,7 @@ const fragments: Record<string, unknown> = {
   gmBeat: gmBeatFragment,
   item: itemFragment,
   planId: planIdFragment,
+  planLink: planLinkFragment,
 };
 
 const sharedBinds = {
@@ -53,8 +54,7 @@ const sharedBinds = {
   planIdMax: PLAN_ID_MAX,
   planNameMax: PLAN_NAME_MAX,
   planSummaryMax: PLAN_SUMMARY_MAX,
-  planLabelMax: PLAN_LABEL_MAX,
-  planDetailMax: PLAN_DETAIL_MAX,
+  planObjectiveMax: PLAN_OBJECTIVE_MAX,
   situationEnum: { type: "string", enum: [...CHARACTER_SITUATIONS] },
 } satisfies Record<string, unknown>;
 
@@ -68,10 +68,10 @@ export function openingSituationSchema(place: string): HostResponseSchema {
 export function campaignPlanSchema(bounds: PlanBounds): HostResponseSchema {
   return compile(campaignPlanFile, {
     ...sharedBinds,
-    roomMin: bounds.roomMin,
-    roomMax: bounds.roomMax,
-    gateMin: bounds.gateMin,
-    gateMax: bounds.gateMax,
+    sceneMin: bounds.sceneMin,
+    sceneMax: bounds.sceneMax,
+    placeMin: bounds.placeMin,
+    placeMax: bounds.placeMax,
   });
 }
 
@@ -181,27 +181,37 @@ function tableBinds(
     currencyMax: limits.currencyMax,
     itemMax: limits.itemMax,
     actorId: actorId.length > 0 ? { type: "string", const: actorId } : { type: "string" },
-    roomId: roomIdSchema(table.campaignPlan ?? null, options.allowProgress),
-    clearedGateIds: clearedGateIdsSchema(table.campaignPlan ?? null, options.allowProgress),
+    placeId: placeIdSchema(table.campaignPlan ?? null, options.allowProgress),
+    sceneId: sceneIdSchema(table.campaignPlan ?? null, options.allowProgress),
+    clearedSceneId: clearedSceneIdSchema(table.campaignPlan ?? null, options.allowProgress),
   };
 }
 
-function roomIdSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
+function placeIdSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
   if (!plan) return { type: "string", const: "" };
-  const current = plan.rooms.find((room) => room.id === plan.currentRoomId);
-  if (!allowProgress) return { type: "string", enum: unique(["", ...(current ? [current.id] : [])]) };
-  const exits = current ? current.exits : plan.rooms.map((room) => room.id);
-  return { type: "string", enum: unique(["", ...(current ? [current.id] : []), ...exits]) };
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const place = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
+  const here = place ? [place.id] : [];
+  if (!allowProgress || !place || place.next === "") return { type: "string", enum: unique(["", ...here]) };
+  return { type: "string", enum: unique(["", ...here, place.next]) };
 }
 
-function clearedGateIdsSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
-  const empty = { type: "array", maxItems: 0, items: { type: "string" } };
-  if (!plan || !allowProgress) return empty;
-  const pending = plan.gates
-    .filter((gate) => gate.status === "pending" && gate.roomId === plan.currentRoomId)
-    .map((gate) => gate.id);
-  if (pending.length === 0) return empty;
-  return { type: "array", maxItems: 1, items: { type: "string", enum: unique(pending) } };
+function sceneIdSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
+  if (!plan) return { type: "string", const: "" };
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const here = scene ? [scene.id] : [];
+  if (!allowProgress || !scene || scene.next === "") return { type: "string", enum: unique(["", ...here]) };
+  return { type: "string", enum: unique(["", ...here, scene.next]) };
+}
+
+function clearedSceneIdSchema(plan: CampaignPlan | null, allowProgress: boolean): Record<string, unknown> {
+  if (!plan || !allowProgress) return { type: "string", const: "" };
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const place = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
+  if (!scene || !place || place.next !== "" || scene.objectiveStatus === "cleared") {
+    return { type: "string", const: "" };
+  }
+  return { type: "string", enum: unique(["", scene.id]) };
 }
 
 function stringEnum(values: readonly string[]): Record<string, unknown> {

@@ -39,7 +39,7 @@ import {
   parseNewCampaignSettingsImport,
 } from "@/rpg/lib/campaign-settings-import-export";
 import { readHostAi } from "@/rpg/lib/host-ai";
-import { planStartRoom } from "@/rpg/lib/campaign-plan";
+import { planStartPlace } from "@/rpg/lib/campaign-plan";
 import { generateCampaignPlan } from "@/rpg/lib/host-campaign-plan";
 import { generateOpeningSituation } from "@/rpg/lib/host-situation";
 import { rememberJourney } from "@/rpg/lib/journey";
@@ -320,14 +320,14 @@ export function useNewCampaign() {
       setSubmitting(false);
       return;
     }
-    const startRoom = planStartRoom(planResult.plan);
-    if (!startRoom) {
+    const startPlace = planStartPlace(planResult.plan);
+    if (!startPlace) {
       setError("The campaign plan could not be generated.");
       setSubmitting(false);
       return;
     }
 
-    const situationResult = await generateOpeningSituation(settings, hostAi, startRoom);
+    const situationResult = await generateOpeningSituation(settings, hostAi, startPlace);
     if (!situationResult.ok) {
       setError(situationResult.error);
       setSubmitting(false);

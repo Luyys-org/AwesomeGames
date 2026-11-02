@@ -47,6 +47,7 @@
       }
     }
   },
-  "roomId": { "$bind": "roomId" },
-  "clearedGateIds": { "$bind": "clearedGateIds" }
+  "placeId": { "$bind": "placeId" },
+  "sceneId": { "$bind": "sceneId" },
+  "clearedSceneId": { "$bind": "clearedSceneId" }
 }

@@ -10,11 +10,11 @@ Limits:
 Campaign:
 {{json:campaign}}
 
-Start room. The party begins here. place must be this name:
-{{json:startRoom}}
+Start place. The party begins here, in the first scene. place must be this place's name:
+{{json:startPlace}}
 
 Language: {{language}}
 Write player-facing prose in that language. Keep JSON keys, stat ids, and action ids in English.
 
-Task: Write the opening situation for scene 1. The party is in the start room, ready to act toward the first gate, not the end of the objective. place is the start room name. Also name the weather and the party's reputation there.
+Task: Write the opening situation for scene 1. The party is in the start place, ready to act toward that scene's objective, not the end of the campaign objective. place is the start place name. Also name the weather and the party's reputation there.
 `.trim();
