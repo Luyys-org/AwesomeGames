@@ -1,26 +1,4 @@
 export default `
-Reply with JSON only, matching this schema:
-{
-  "rooms": [
-    {
-      "id": "gatehouse",
-      "name": "Gatehouse",
-      "summary": "A watched door at the edge of the quest.",
-      "exits": ["courtyard"],
-      "role": "start"
-    }
-  ],
-  "gates": [
-    {
-      "id": "outer-door",
-      "roomId": "gatehouse",
-      "kind": "lock",
-      "label": "Barred outer door",
-      "detail": "The way on stays shut until the bar is lifted or the lock is opened."
-    }
-  ]
-}
-
 Limits:
 {{json:bounds}}
 
@@ -40,5 +18,5 @@ Each gate is one check the party must finish: a lock, a boss, an obstacle, or a 
 
 Player freedom narrow keeps the map close to one path, with at most one room off that path. Guided keeps the path clear and allows one or two side rooms. Open allows side rooms, and still gives no exit that skips a gate on the way to the finale.
 
-Do not copy the schema example. Do not resolve the objective in this JSON. Do not include a current room or a cleared status.
+Do not resolve the objective in this JSON. Do not include a current room or a cleared status.
 `.trim();

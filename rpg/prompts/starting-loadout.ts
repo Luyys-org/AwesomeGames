@@ -1,34 +1,4 @@
 export default `
-Reply with JSON only, matching this schema:
-{
-  "kits": [
-    {
-      "characterId": "string",
-      "currency": "integer",
-      "inventory": [
-        {
-          "name": "string",
-          "slot": "string",
-          "equipped": "boolean",
-          "modifiers": [{ "kind": "stat", "statId": "string", "amount": 1 }]
-        }
-      ]
-    }
-  ],
-  "actions": [
-    {
-      "id": "string",
-      "label": "string",
-      "stat": "string",
-      "difficulty": 8,
-      "failure": "setback",
-      "abilityId": "",
-      "characterIds": [],
-      "itemId": ""
-    }
-  ]
-}
-
 Limits:
 {
   "itemName": 80,

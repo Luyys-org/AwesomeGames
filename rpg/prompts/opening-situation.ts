@@ -1,12 +1,4 @@
 export default `
-Reply with JSON only, matching this schema:
-{
-  "situation": "string",
-  "place": "string",
-  "weather": "string",
-  "reputation": "string"
-}
-
 Limits:
 {
   "situation": 800,
