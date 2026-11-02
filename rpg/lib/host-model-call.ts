@@ -27,9 +27,20 @@ export function parseJsonContent(body: string): unknown | null {
   }
 }
 
+export interface HostResponseSchema {
+  name: string;
+  schema: Record<string, unknown>;
+}
+
 export async function callHostChat(
   hostAi: HostAi,
-  options: { temperature: number; system: string; user: string; maxTokens?: number },
+  options: {
+    temperature: number;
+    system: string;
+    user: string;
+    maxTokens?: number;
+    responseSchema: HostResponseSchema;
+  },
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
   const maxTokens = options.maxTokens ?? 2048;
   try {
@@ -62,21 +73,32 @@ export async function callHostChat(
       hostAi.provider === "grok"
         ? "https://api.x.ai/v1/chat/completions"
         : "https://api.openai.com/v1/chat/completions";
+    const body: Record<string, unknown> = {
+      model: hostAi.model,
+      temperature: options.temperature,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: options.system },
+        { role: "user", content: options.user },
+      ],
+    };
+    if (hostAi.provider === "grok") {
+      body.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: options.responseSchema.name,
+          strict: true,
+          schema: options.responseSchema.schema,
+        },
+      };
+    }
     const response = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hostAi.apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model: hostAi.model,
-        temperature: options.temperature,
-        max_tokens: maxTokens,
-        messages: [
-          { role: "system", content: options.system },
-          { role: "user", content: options.user },
-        ],
-      }),
+      body: JSON.stringify(body),
     });
     const payload = (await response.json()) as unknown;
     if (!response.ok) {

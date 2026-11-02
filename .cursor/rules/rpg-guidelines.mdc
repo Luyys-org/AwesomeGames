@@ -34,7 +34,7 @@ The host sets `provider`, `model`, and `apiKey` before situation generation and 
 |----------|------|
 | `openai` | `POST https://api.openai.com/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
 | `anthropic` | `POST https://api.anthropic.com/v1/messages`. Headers `x-api-key: <apiKey>`, `anthropic-version: 2023-06-01`, `content-type: application/json`. Body `model`, `max_tokens: 1024`, `temperature`, top-level `system`, and one `user` message. Read the concatenated `text` blocks of `content` |
-| `grok` | `POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
+| `grok` | `POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`, and `response_format` `{ "type": "json_schema", "json_schema": { "name", "strict": true, "schema" } }` for that call. Read `choices[0].message.content` |
 
 Temperature is **0** for situation generation and check proposals. Temperature is **0.7** for outcome narration and new-scene prose. No tools, no function calls.
 

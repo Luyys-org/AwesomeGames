@@ -4,6 +4,7 @@ import type { HostAi } from "@/rpg/lib/host-ai";
 import { buildGmSystemPrompt, serializeCampaignForGm } from "@/rpg/lib/host-gm-prompt";
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
+import { campaignPlanSchema } from "@/rpg/lib/host-response-schema";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
 import campaignPlanTemplate from "@/rpg/prompts/campaign-plan";
 
@@ -13,7 +14,7 @@ export async function generateCampaignPlan(
 ): Promise<{ ok: true; plan: CampaignPlan } | { ok: false; error: string }> {
   const plan = await requestPlan(hostAi, settings, buildPlanMessage(settings));
   if (plan.ok) return plan;
-  return { ok: false, error: "The campaign plan could not be generated." };
+  return { ok: false, error: plan.error };
 }
 
 function buildPlanMessage(settings: CampaignSettings): string {
@@ -38,6 +39,7 @@ async function requestPlan(
     maxTokens: 4096,
     system: buildGmSystemPrompt(settings),
     user,
+    responseSchema: campaignPlanSchema(planBounds(settings.enemyDifficulty)),
   });
   if (!response.ok) return response;
 

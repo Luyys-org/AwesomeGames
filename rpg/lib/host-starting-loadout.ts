@@ -11,6 +11,7 @@ import {
   type StartingLoadoutCharacterPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
+import { startingLoadoutSchema } from "@/rpg/lib/host-response-schema";
 import {
   currencyLabel,
   currencyRange,
@@ -82,6 +83,7 @@ async function requestLoadout(
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,
+    responseSchema: startingLoadoutSchema(table),
   });
   if (!response.ok) return response;
 

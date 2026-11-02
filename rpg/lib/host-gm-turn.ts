@@ -18,6 +18,7 @@ import {
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
+import { gmOutcomeSchema, gmReactionSchema } from "@/rpg/lib/host-response-schema";
 import type { TableState } from "@/rpg/lib/table";
 
 export interface GmTurnResult {
@@ -118,6 +119,7 @@ async function requestReaction(
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,
+    responseSchema: gmReactionSchema(table, intent.characterId),
   });
   if (!response.ok) return { ok: false, error: response.error, content: response.error };
   const parsed = parseJsonContent(response.content);
@@ -137,6 +139,7 @@ async function requestOutcome(
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,
+    responseSchema: gmOutcomeSchema(table, checkSucceeded),
   });
   if (!response.ok) return { ok: false, error: response.error, content: response.error };
   const parsed = parseJsonContent(response.content);

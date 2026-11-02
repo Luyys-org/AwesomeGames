@@ -3,6 +3,7 @@ import { characterSituationLabel, readStoredCharacterSituation } from "@/rpg/lib
 import type { GmBeat } from "@/rpg/lib/gm-turn";
 import { buildGmSystemPrompt, serializeCampaignForGm } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
+import { sceneImagePromptSchema } from "@/rpg/lib/host-response-schema";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
 import sceneImageTemplate from "@/rpg/prompts/scene-image";
@@ -51,6 +52,7 @@ export async function generateSceneImagePrompt(
     temperature: 0,
     system: buildGmSystemPrompt(table.settings),
     user: buildSceneImageUserMessage(table, beat),
+    responseSchema: sceneImagePromptSchema(),
   });
   if (!response.ok) return response;
 

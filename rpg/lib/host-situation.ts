@@ -6,6 +6,7 @@ import {
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
+import { openingSituationSchema } from "@/rpg/lib/host-response-schema";
 import type { SceneLocation } from "@/rpg/lib/table";
 
 const SITUATION_MAX = 800;
@@ -41,6 +42,7 @@ async function requestSituation(
     temperature: 0,
     system: buildGmSystemPrompt(settings),
     user,
+    responseSchema: openingSituationSchema(startRoom.name),
   });
   if (!response.ok) return response;
 
