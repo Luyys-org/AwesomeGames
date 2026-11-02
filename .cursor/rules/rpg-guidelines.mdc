@@ -20,7 +20,7 @@ When this rule applies: implement this ruleset as written. It is closed.
 | Peer | Joins with the room code, submits a character and intents, and renders host snapshots |
 | Game master | Model output. Proposes fiction and check fields. Applies no state |
 
-The host player's intents use the same queue as peers. Host-only controls are: provider, save, load, start, roll commit, `abilityApplies` correction, scene confirm, rest, objective confirm, forced-check confirm, and end session.
+The host player's intents use the same queue as peers. Host-only controls are: Grok link, save, load, start, roll commit, `abilityApplies` correction, scene confirm, rest, objective confirm, forced-check confirm, and end session.
 
 A snapshot carries an integer `revision`, starting at **1** when the campaign exists and increasing by **1** on each committed change. Peers apply a snapshot only when its `revision` is strictly greater than the last one applied. The host browser is the source of truth.
 
@@ -28,17 +28,13 @@ A snapshot carries an integer `revision`, starting at **1** when the campaign ex
 
 ## Provider
 
-The host sets `provider`, `model`, and `apiKey` before situation generation and before play from a save. `model` and `apiKey` are non-empty strings. `provider` is `openai`, `anthropic` or `grok`.
+The host sets `model` and `apiKey` before situation generation and before play from a save. Both are non-empty strings. Calls go to Grok.
 
-| Provider | Call |
-|----------|------|
-| `openai` | `POST https://api.openai.com/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`. Read `choices[0].message.content` |
-| `anthropic` | `POST https://api.anthropic.com/v1/messages`. Headers `x-api-key: <apiKey>`, `anthropic-version: 2023-06-01`, `content-type: application/json`. Body `model`, `max_tokens: 1024`, `temperature`, top-level `system`, and one `user` message. Read the concatenated `text` blocks of `content` |
-| `grok` | `POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`, and `response_format` `{ "type": "json_schema", "json_schema": { "name", "strict": true, "schema" } }` for that call. Read `choices[0].message.content` |
+`POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`, and `response_format` `{ "type": "json_schema", "json_schema": { "name", "strict": true, "schema" } }`. Read `choices[0].message.content`.
 
 Temperature is **0** for situation generation and check proposals. Temperature is **0.7** for outcome narration and new-scene prose. No tools, no function calls.
 
-The API key may live in host memory and in `localStorage` key `rpg.host.ai` as `{ "provider", "model", "apiKey" }`. It is never written into the save, a snapshot, a log, or a prompt.
+The API key may live in host memory and in `localStorage` key `rpg.host.ai` as `{ "model", "apiKey" }`. It is never written into the save, a snapshot, a log, or a prompt. A stored record whose `provider` is present and not `grok` is ignored.
 
 A transport failure or an empty body leaves state unchanged. The host shows one error string and may resend.
 
@@ -262,7 +258,7 @@ A snapshot contains `revision`, `roomCode`, `roomStatus`, `phase`, `campaignName
 
 Every commit also writes the save JSON to `localStorage` key `rpg.host.save`. If that write throws, play continues and the host shows one error. Download name: slug of `campaignName` plus `.rpg.json`. The slug is trimmed, lowercased, spaces turned into `-`, characters outside `[a-z0-9-]` removed, repeated hyphens collapsed, and end hyphens removed. An empty slug becomes `campaign`.
 
-Load is a file pick or the current `rpg.host.save`. The host sets the provider again after a load. Validation failure rejects the whole document with one reason. There is no partial load.
+Load is a file pick or the current `rpg.host.save`. The host links Grok again after a load. Validation failure rejects the whole document with one reason. There is no partial load.
 
 A document is valid only when every rule here holds. Otherwise the host rejects it with one reason. `schemaVersion` is `1`. Enums and string limits match this rule. Stats match the campaign character options. A document without `characterOptions` uses the preset for its universe, or Might, Finesse, Wits and the eight skills when the universe is `custom`. `classId` and `raceId` may be absent on those older documents. Wounds are a legal prefix. Names are unique ignoring case. Non-archived count is **0–6**. `lobby` has **1–6** non-archived characters and none archived. `play` or `ended` has **2–6** non-archived characters when none are archived, and **0–6** when at least one is archived. At most one character is non-archived with `owner: "host"`. A non-archived character with `inScene: false` has wounds `[]` or a `down` box. `roomStatus` is session-only, starts `open`, and is absent from the save.
 

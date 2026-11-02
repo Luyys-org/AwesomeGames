@@ -1,10 +1,9 @@
 import type { GmBeat } from "@/rpg/lib/gm-turn";
 import { generateSceneImagePrompt } from "@/rpg/lib/host-image-prompt";
-import { callHostImage, resolveImageModel } from "@/rpg/lib/host-image";
+import { callHostImage } from "@/rpg/lib/host-image";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import { createSceneImageId } from "@/rpg/lib/ids";
 import {
-  imageGenerationSupported,
   lastImageGmTurnAfterGeneration,
   shouldGenerateSceneImage,
   type SceneImageTriggerKind,
@@ -40,11 +39,9 @@ export function registerSceneImageReadyListener(listener: SceneImageReadyListene
 export function prepareSceneImageRequest(
   table: TableState,
   kind: SceneImageTriggerKind,
-  hostAi: HostAi,
   beat?: GmBeat,
   locationBefore?: SceneLocation,
 ): TableState | null {
-  if (!imageGenerationSupported(hostAi.provider) || !resolveImageModel(hostAi)) return null;
   if (
     !shouldGenerateSceneImage({
       kind,
@@ -83,7 +80,7 @@ export function startOpeningSceneImage(
   table: TableState,
   hostAi: HostAi,
 ): TableState {
-  const prepared = prepareSceneImageRequest(table, "opening", hostAi);
+  const prepared = prepareSceneImageRequest(table, "opening");
   if (!prepared) return table;
   queueSceneImageGeneration(roomCode, prepared, hostAi);
   return prepared;

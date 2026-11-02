@@ -1,35 +1,21 @@
 export const HOST_AI_STORAGE_KEY = "rpg.host.ai";
 
-export type AiProvider = "openai" | "anthropic" | "grok";
+export const GROK_MODEL_PLACEHOLDER = "grok-4.7";
+export const GROK_IMAGE_MODEL = "grok-imagine-image-2.0";
 
 export interface HostAi {
-  provider: AiProvider;
   model: string;
   apiKey: string;
   imageModel?: string;
 }
 
-export const AI_PROVIDERS: {
-  id: AiProvider;
-  label: string;
-  modelPlaceholder: string;
-  imageModelPlaceholder?: string;
-}[] = [
-  { id: "openai", label: "OpenAI", modelPlaceholder: "gpt-4o", imageModelPlaceholder: "gpt-image-1" },
-  { id: "anthropic", label: "Anthropic", modelPlaceholder: "claude-sonnet-4-5" },
-  { id: "grok", label: "Grok", modelPlaceholder: "grok-4.7", imageModelPlaceholder: "grok-imagine-image-2.0" },
-];
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function isAiProvider(value: unknown): value is AiProvider {
-  return AI_PROVIDERS.some((entry) => entry.id === value);
-}
-
 export function parseHostAi(value: unknown): HostAi | null {
-  if (!isRecord(value) || !isAiProvider(value.provider)) return null;
+  if (!isRecord(value)) return null;
+  if ("provider" in value && value.provider !== "grok") return null;
   if (typeof value.model !== "string" || value.model.trim() === "") return null;
   if (typeof value.apiKey !== "string" || value.apiKey.trim() === "") return null;
 
@@ -39,7 +25,6 @@ export function parseHostAi(value: unknown): HostAi | null {
       : undefined;
 
   return {
-    provider: value.provider,
     model: value.model.trim(),
     apiKey: value.apiKey.trim(),
     ...(imageModel ? { imageModel } : {}),
@@ -60,7 +45,6 @@ export function readHostAi(): HostAi | null {
 
 export function writeHostAi(hostAi: HostAi): void {
   const stored: HostAi = {
-    provider: hostAi.provider,
     model: hostAi.model,
     apiKey: hostAi.apiKey,
     ...(hostAi.imageModel?.trim() ? { imageModel: hostAi.imageModel.trim() } : {}),
@@ -70,8 +54,4 @@ export function writeHostAi(hostAi: HostAi): void {
 
 export function clearHostAi(): void {
   window.localStorage.removeItem(HOST_AI_STORAGE_KEY);
-}
-
-export function providerLabel(provider: AiProvider): string {
-  return AI_PROVIDERS.find((entry) => entry.id === provider)?.label ?? provider;
 }

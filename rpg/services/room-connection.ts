@@ -992,7 +992,7 @@ function scheduleBeatSceneImage(
   table: TableState,
 ): void {
   if (!hostAi) return;
-  const prepared = prepareSceneImageRequest(table, "beat", hostAi, beat, locationBefore);
+  const prepared = prepareSceneImageRequest(table, "beat", beat, locationBefore);
   if (!prepared) return;
   rememberTable(session, prepared);
   void broadcastSnapshot(session);

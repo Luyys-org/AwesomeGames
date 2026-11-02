@@ -7,17 +7,11 @@ import {
   useProviderHealth,
 } from "@/rpg/features/landing/use-provider-health";
 import { type HostAiInput } from "@/rpg/features/landing/use-host-ai";
-import {
-  type AiProvider,
-  AI_PROVIDERS,
-  isAiProvider,
-  providerLabel,
-} from "@/rpg/lib/host-ai";
+import { GROK_IMAGE_MODEL, GROK_MODEL_PLACEHOLDER } from "@/rpg/lib/host-ai";
 
 interface ProviderFormProps {
   ready: boolean;
   linked: boolean;
-  provider: AiProvider | null;
   model: string;
   imageModel: string;
   save: (input: HostAiInput) => string | null;
@@ -27,13 +21,11 @@ interface ProviderFormProps {
 export function ProviderForm({
   ready,
   linked,
-  provider,
   model,
   imageModel,
   save,
   remove,
 }: ProviderFormProps) {
-  const [selectedProvider, setSelectedProvider] = useState<AiProvider | "">("");
   const [modelName, setModelName] = useState("");
   const [imageModelName, setImageModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -47,7 +39,6 @@ export function ProviderForm({
 
   if (ready && !hydrated) {
     setHydrated(true);
-    if (provider) setSelectedProvider(provider);
     if (model) setModelName(model);
     if (imageModel) setImageModelName(imageModel);
   }
@@ -58,7 +49,6 @@ export function ProviderForm({
   }, [ready, linked, editing, check]);
 
   function beginEdit() {
-    if (provider) setSelectedProvider(provider);
     if (model) setModelName(model);
     if (imageModel) setImageModelName(imageModel);
     setApiKey("");
@@ -75,7 +65,6 @@ export function ProviderForm({
     }
     reset();
     setEditing(false);
-    setSelectedProvider("");
     setModelName("");
     setImageModelName("");
     setApiKey("");
@@ -88,8 +77,8 @@ export function ProviderForm({
         AI provider
       </h2>
       <p className="mt-1 text-sm text-zinc-400">
-        Stored in this browser only. It is not written into the campaign save. Scene images use OpenAI
-        or Grok image models; Anthropic does not generate images.
+        Stored in this browser only. It is not written into the campaign save. Scene images use the
+        Grok image model.
       </p>
 
       <form
@@ -99,13 +88,7 @@ export function ProviderForm({
           event.preventDefault();
           setError(null);
 
-          if (!isAiProvider(selectedProvider)) {
-            setError("Choose OpenAI, Anthropic, or Grok.");
-            return;
-          }
-
           const message = save({
-            provider: selectedProvider,
             model: modelName,
             apiKey,
             imageModel: imageModelName,
@@ -120,29 +103,7 @@ export function ProviderForm({
           void check();
         }}
       >
-        <div className="grid gap-4 sm:grid-cols-3">
-          <label className="block text-sm text-zinc-300">
-            Provider
-            <select
-              required
-              value={selectedProvider}
-              disabled={fieldsDisabled}
-              onChange={(event) => {
-                const value = event.target.value;
-                setSelectedProvider(isAiProvider(value) ? value : "");
-                setError(null);
-              }}
-              className="field mt-1 w-full"
-            >
-              <option value="">Choose a provider</option>
-              {AI_PROVIDERS.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
+        <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm text-zinc-300">
             Model
             <input
@@ -151,10 +112,7 @@ export function ProviderForm({
               autoComplete="off"
               spellCheck={false}
               disabled={fieldsDisabled}
-              placeholder={
-                AI_PROVIDERS.find((entry) => entry.id === selectedProvider)?.modelPlaceholder ??
-                "gpt-4o"
-              }
+              placeholder={GROK_MODEL_PLACEHOLDER}
               value={modelName}
               onChange={(event) => {
                 setModelName(event.target.value);
@@ -189,11 +147,8 @@ export function ProviderForm({
             type="text"
             autoComplete="off"
             spellCheck={false}
-            disabled={fieldsDisabled || selectedProvider === "anthropic"}
-            placeholder={
-              AI_PROVIDERS.find((entry) => entry.id === selectedProvider)?.imageModelPlaceholder ??
-              "Optional — provider default"
-            }
+            disabled={fieldsDisabled}
+            placeholder={GROK_IMAGE_MODEL}
             value={imageModelName}
             onChange={(event) => {
               setImageModelName(event.target.value);
@@ -202,7 +157,7 @@ export function ProviderForm({
             className="field mt-1 w-full"
           />
           <span className="mt-1 block text-xs text-zinc-500">
-            Used for campaign scene art during play. Leave blank to use the provider default.
+            Used for campaign scene art during play. Leave blank to use {GROK_IMAGE_MODEL}.
           </span>
         </label>
 
@@ -254,10 +209,8 @@ export function ProviderForm({
               ) : null}
             </>
           )}
-          {linked && provider && !locked ? (
-            <p className="min-w-0 text-sm break-all text-zinc-300">
-              Linked · {providerLabel(provider)} · {model}
-            </p>
+          {linked && !locked ? (
+            <p className="min-w-0 text-sm break-all text-zinc-300">Linked · {model}</p>
           ) : null}
           <ProviderHealth status={status} detail={detail} />
         </div>

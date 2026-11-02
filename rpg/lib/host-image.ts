@@ -1,15 +1,9 @@
-import type { AiProvider, HostAi } from "@/rpg/lib/host-ai";
+import { GROK_IMAGE_MODEL, type HostAi } from "@/rpg/lib/host-ai";
 
-const DEFAULT_IMAGE_MODEL: Record<Exclude<AiProvider, "anthropic">, string> = {
-  openai: "gpt-image-1",
-  grok: "grok-imagine-image-2.0",
-};
-
-export function resolveImageModel(hostAi: HostAi): string | null {
-  if (hostAi.provider === "anthropic") return null;
+export function resolveImageModel(hostAi: HostAi): string {
   const trimmed = hostAi.imageModel?.trim();
   if (trimmed) return trimmed;
-  return DEFAULT_IMAGE_MODEL[hostAi.provider];
+  return GROK_IMAGE_MODEL;
 }
 
 export async function callHostImage(
@@ -17,34 +11,9 @@ export async function callHostImage(
   prompt: string,
 ): Promise<{ ok: true; b64: string; mime: string } | { ok: false; error: string }> {
   const model = resolveImageModel(hostAi);
-  if (!model) return { ok: false, error: "This provider does not support scene images." };
 
   try {
-    if (hostAi.provider === "grok") {
-      const response = await fetch("https://api.x.ai/v1/images/generations", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${hostAi.apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          prompt,
-          n: 1,
-          aspect_ratio: "16:9",
-          response_format: "b64_json",
-        }),
-      });
-      const payload = (await response.json()) as unknown;
-      if (!response.ok) {
-        return { ok: false, error: readProviderError(payload) ?? "The image request failed." };
-      }
-      const b64 = readB64(payload);
-      if (!b64) return { ok: false, error: "The image response was empty." };
-      return { ok: true, b64, mime: "image/png" };
-    }
-
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
+    const response = await fetch("https://api.x.ai/v1/images/generations", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hostAi.apiKey}`,
@@ -54,7 +23,7 @@ export async function callHostImage(
         model,
         prompt,
         n: 1,
-        size: "1536x1024",
+        aspect_ratio: "16:9",
         response_format: "b64_json",
       }),
     });

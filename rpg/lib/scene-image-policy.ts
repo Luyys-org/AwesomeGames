@@ -1,5 +1,4 @@
 import type { GmBeat } from "@/rpg/lib/gm-turn";
-import type { AiProvider } from "@/rpg/lib/host-ai";
 import type { SceneLocation, TableState } from "@/rpg/lib/table";
 
 export const SCENE_IMAGE_COOLDOWN_TURNS = 5;
@@ -11,10 +10,6 @@ export interface SceneImagePolicyInput {
   table: TableState;
   beat?: GmBeat;
   locationBefore?: SceneLocation;
-}
-
-export function imageGenerationSupported(provider: AiProvider): boolean {
-  return provider === "openai" || provider === "grok";
 }
 
 function normalizePlace(value: string): string {

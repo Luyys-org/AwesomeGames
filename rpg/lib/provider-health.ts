@@ -19,23 +19,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function probeRequest(hostAi: HostAi): ProbeRequest {
   const model = encodeURIComponent(hostAi.model);
-
-  if (hostAi.provider === "anthropic") {
-    return {
-      url: `https://api.anthropic.com/v1/models/${model}`,
-      headers: {
-        "x-api-key": hostAi.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-    };
-  }
-
   return {
-    url:
-      hostAi.provider === "openai"
-        ? `https://api.openai.com/v1/models/${model}`
-        : `https://api.x.ai/v1/models/${model}`,
+    url: `https://api.x.ai/v1/models/${model}`,
     headers: {
       authorization: `Bearer ${hostAi.apiKey}`,
     },

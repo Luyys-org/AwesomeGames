@@ -4,7 +4,7 @@ export const PLAN_ID_MAX = 24;
 export const PLAN_NAME_MAX = 40;
 export const PLAN_SUMMARY_MAX = 100;
 export const PLAN_LABEL_MAX = 40;
-export const PLAN_DETAIL_MAX = 120;
+export const PLAN_DETAIL_MAX = 400;
 
 const PLAN_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ROOM_ROLES = ["start", "path", "finale"] as const;
