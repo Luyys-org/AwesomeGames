@@ -23,6 +23,7 @@ import {
   gmLootLimits,
   injuryEnabled,
   LOCATION_MAX,
+  gmStakeText,
   NARRATION_MAX,
   preferredCheckDifficulty,
   SETUP_MAX,
@@ -197,6 +198,7 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
     plan: planForPrompt(table.campaignPlan ?? null),
     planRules: planRulesForTurn(table.campaignPlan ?? null),
     intent: { ...intent, selectedAction },
+    stake: gmStakeText(intent, selectedAction?.label),
     resolution: resolution ?? null,
   };
 }

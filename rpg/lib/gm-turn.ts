@@ -159,6 +159,18 @@ export function gmLootLimits(settings: CampaignSettings): { currencyMax: number;
 
 const CHECK_SETUP_FALLBACK = "The attempt hangs in the balance.";
 
+export const GM_OPPOSITION_ERROR =
+  "The opposing clause names something other than the player intent. Finish that intent, or stop at a check of that intent, and do not cite another cause.";
+
+/** Chosen action label when that action is on the table; otherwise the intent text. */
+export function gmStakeText(intent: GmIntent, actionLabel?: string | null): string {
+  if (intent.kind === "act" && intent.actionId) {
+    const label = actionLabel?.trim() ?? "";
+    if (label.length > 0) return label;
+  }
+  return intent.text.trim();
+}
+
 export function formatGmFailureBody(validationError: string, modelBody: string): string {
   const error = validationError.trim();
   const body = modelBody.trim();
@@ -179,13 +191,13 @@ export function repairGmReactionPayload(
     const options = table.settings.characterOptions;
     const checkRepair: Record<string, unknown> = { ...check, characterId: intent.characterId };
 
+    const chosenAction = chosenActionForIntent(table, intent);
     if (intent.kind === "act" && intent.actionId && character) {
-      const action = availableActionsForTable(table).find((entry) => entry.id === intent.actionId);
-      if (action) {
-        checkRepair.stat = action.stat;
-        checkRepair.difficulty = action.difficulty;
-        checkRepair.failure = action.failure;
-        checkRepair.abilityApplies = actionAbilityApplies(character, options, action);
+      if (chosenAction) {
+        checkRepair.stat = chosenAction.stat;
+        checkRepair.difficulty = chosenAction.difficulty;
+        checkRepair.failure = chosenAction.failure;
+        checkRepair.abilityApplies = actionAbilityApplies(character, options, chosenAction);
       }
     } else if (typeof checkRepair.abilityApplies !== "boolean") {
       checkRepair.abilityApplies = false;
@@ -198,7 +210,11 @@ export function repairGmReactionPayload(
       checkRepair.abilityApplies = false;
     }
 
-    checkRepair.setup = setupFallbackForCheck(value.narration, intent, checkRepair.setup);
+    const lockedSetup = truncate(chosenAction?.label ?? "", SETUP_MAX);
+    checkRepair.setup =
+      lockedSetup.length > 0
+        ? lockedSetup
+        : setupFallbackForCheck(value.narration, intent, checkRepair.setup);
 
     return {
       ...value,
@@ -248,6 +264,10 @@ export function readGmReaction(
   if (check.value && statesCheckResult(`${beat.value.narration}\n${check.value.setup}`)) {
     return { ok: false, error: "Narration and setup must stop before the result." };
   }
+
+  const stake = gmStakeText(intent, chosenActionForIntent(table, intent)?.label);
+  const drift = gmOppositionDrift(stake, `${beat.value.narration}\n${check.value?.setup ?? ""}`);
+  if (drift) return { ok: false, error: drift };
 
   const narration = narrationWithEncounter(beat.value.narration || check.value?.setup || "", beat.value.encounter);
   if (!narration) return { ok: false, error: "Narration must not be empty." };
@@ -927,6 +947,127 @@ function signed(value: number): string {
 function truncate(value: string, max: number): string {
   const trimmed = value.trim();
   return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
+}
+
+function chosenActionForIntent(table: TableState, intent: GmIntent): SceneAction | undefined {
+  if (intent.kind !== "act" || !intent.actionId) return undefined;
+  return availableActionsForTable(table).find((entry) => entry.id === intent.actionId);
+}
+
+const OPPOSITION_MARKERS: RegExp[] = [
+  "sin embargo",
+  "parce que",
+  "cependant",
+  "toutefois",
+  "allerdings",
+  "pourtant",
+  "however",
+  "although",
+  "because",
+  "ponieważ",
+  "aunque",
+  "porque",
+  "perché",
+  "poiché",
+  "tuttavia",
+  "porém",
+  "contudo",
+  "todavia",
+  "jednak",
+  "jedoch",
+  "echter",
+  "omdat",
+  "though",
+  "mais",
+  "aber",
+  "weil",
+  "maar",
+  "pero",
+  "mas",
+  "ale",
+  "but",
+  "しかし",
+  "けれども",
+  "けれど",
+  "なぜなら",
+  "なのに",
+  "だが",
+  "でも",
+  "하지만",
+  "그러나",
+  "때문에",
+  "但是",
+  "然而",
+  "不过",
+  "因为",
+  "可是",
+].map((marker) => oppositionMarker(marker));
+
+function oppositionMarker(marker: string): RegExp {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const body = /\p{Script=Latin}/u.test(marker)
+    ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`
+    : escaped;
+  return new RegExp(body, "iu");
+}
+
+/** Reject an opposing clause that does not name the stake. Null means the prose may stand. */
+export function gmOppositionDrift(stake: string, prose: string): string | null {
+  const tokens = stakeTokens(stake);
+  if (tokens.length === 0) return null;
+  for (const sentence of oppositionSentences(prose)) {
+    const tail = oppositionTail(sentence);
+    if (tail === null || tail.length === 0) continue;
+    if (!tailNamesStake(tail, tokens)) return GM_OPPOSITION_ERROR;
+  }
+  return null;
+}
+
+function oppositionSentences(text: string): string[] {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return [];
+  return trimmed
+    .split(/(?<=[.!?…。！？])\s*/u)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+function oppositionTail(sentence: string): string | null {
+  let best: { index: number; length: number } | null = null;
+  for (const marker of OPPOSITION_MARKERS) {
+    const match = marker.exec(sentence);
+    if (!match) continue;
+    const found = { index: match.index, length: match[0].length };
+    if (!best || found.index < best.index || (found.index === best.index && found.length > best.length)) {
+      best = found;
+    }
+  }
+  if (!best) return null;
+  return sentence.slice(best.index + best.length).trim();
+}
+
+function stakeTokens(stake: string): string[] {
+  const found = new Set<string>();
+  const lower = stake.toLowerCase();
+  for (const match of lower.matchAll(/\p{L}[\p{L}\p{M}\p{N}]{3,}/gu)) {
+    found.add(match[0]);
+  }
+  for (const match of lower.matchAll(
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]{2,}/gu,
+  )) {
+    found.add(match[0]);
+  }
+  return [...found];
+}
+
+function tailNamesStake(tail: string, tokens: readonly string[]): boolean {
+  return tokens.some((token) => tokenInText(tail, token));
+}
+
+function tokenInText(text: string, token: string): boolean {
+  if (!/\p{Script=Latin}/u.test(token)) return text.toLowerCase().includes(token);
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "iu").test(text);
 }
 
 function setupFallbackForCheck(narration: unknown, intent: GmIntent, existing: unknown): string {
