@@ -140,6 +140,44 @@ export function planNoteForLoadout(plan: CampaignPlan | null): string {
   return plan ? LOADOUT_NOTE : "";
 }
 
+export interface RoomExit {
+  placeId: string;
+  name: string;
+  summary: string;
+}
+
+/** Doors for the current place: the previous and next plan links, including the scene boundary. */
+export function roomExits(plan: CampaignPlan): RoomExit[] {
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const place = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
+  if (!scene || !place) return [];
+
+  const exits: RoomExit[] = [];
+  const previous = scene.places.find((entry) => entry.next === place.id);
+  if (previous) {
+    exits.push(toExit(previous));
+  } else {
+    const previousScene = plan.scenes.find((entry) => entry.next === scene.id);
+    const back = previousScene?.places.find((entry) => entry.next === "");
+    if (back) exits.push(toExit(back));
+  }
+
+  if (place.next !== "") {
+    const next = scene.places.find((entry) => entry.id === place.next);
+    if (next) exits.push(toExit(next));
+  } else if (scene.next !== "") {
+    const nextScene = plan.scenes.find((entry) => entry.id === scene.next);
+    const forward = nextScene?.places[0];
+    if (forward) exits.push(toExit(forward));
+  }
+
+  return exits;
+}
+
+function toExit(place: PlanPlace): RoomExit {
+  return { placeId: place.id, name: place.name, summary: place.summary };
+}
+
 export function parseGeneratedPlan(value: unknown, settings: CampaignSettings): Parsed<CampaignPlan> {
   const structure = parsePlanStructure(value);
   if (!structure.ok) return structure;

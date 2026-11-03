@@ -9,6 +9,7 @@ export function resolveImageModel(hostAi: HostAi): string {
 export async function callHostImage(
   hostAi: HostAi,
   prompt: string,
+  aspectRatio = "16:9",
 ): Promise<{ ok: true; b64: string; mime: string } | { ok: false; error: string }> {
   const model = resolveImageModel(hostAi);
 
@@ -23,7 +24,7 @@ export async function callHostImage(
         model,
         prompt,
         n: 1,
-        aspect_ratio: "16:9",
+        aspect_ratio: aspectRatio,
         response_format: "b64_json",
       }),
     });

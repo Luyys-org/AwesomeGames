@@ -1,0 +1,31 @@
+{
+  "name": "room_map",
+  "properties": {
+    "shape": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": { "$bind": "shapeMax" },
+      "pattern": "[^\\r\\n]+"
+    },
+    "features": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": { "$bind": "featuresMax" },
+      "pattern": "[^\\r\\n]+"
+    },
+    "doors": {
+      "type": "array",
+      "minItems": { "$bind": "doorCount" },
+      "maxItems": { "$bind": "doorCount" },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["placeId", "wall"],
+        "properties": {
+          "placeId": { "$bind": "exitPlaceId" },
+          "wall": { "type": "string", "enum": ["north", "east", "south", "west"] }
+        }
+      }
+    }
+  }
+}

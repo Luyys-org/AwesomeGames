@@ -29,6 +29,7 @@ import {
 import { parseStoredCampaignConfiguration } from "@/rpg/lib/campaign-tab-config";
 import { parseStoredCharacterConfiguration } from "@/rpg/lib/character-tab-config";
 import { parseStoredPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
+import { normalizeStoredRoomMaps, type StoredRoomMap } from "@/rpg/lib/room-map";
 import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { createRoomCode, isClaimCode } from "@/rpg/lib/room-code";
 import { parseSceneActions } from "@/rpg/lib/scene-action";
@@ -74,6 +75,7 @@ interface CampaignSavePayload {
   lastImageGmTurn: number;
   sceneImageId: string | null;
   sceneImageRevision: number;
+  roomMaps: StoredRoomMap[];
 }
 
 type ParsedSave = { ok: true; value: CampaignSavePayload } | { ok: false; error: string };
@@ -512,6 +514,7 @@ function parseCampaignSave(value: unknown): ParsedSave {
       journey,
       campaignPlan: campaignPlan.value,
       ...sceneImageFieldsFromSave(value),
+      roomMaps: normalizeStoredRoomMaps(value.roomMaps),
     },
   };
 }
@@ -575,6 +578,7 @@ export function buildCampaignSaveDocument(table: TableState): Record<string, unk
     document.sceneImageRevision = table.sceneImageRevision ?? 0;
     if (table.sceneImageId) document.sceneImageId = table.sceneImageId;
   }
+  if ((table.roomMaps ?? []).length > 0) document.roomMaps = table.roomMaps;
   return document;
 }
 
@@ -650,6 +654,8 @@ export function startFromCampaignSave(
             sceneImageId: save.value.sceneImageId,
             sceneImageRevision: save.value.sceneImageRevision,
             imageBusy: false,
+            roomMaps: save.value.roomMaps,
+            roomMapBusy: false,
           }
         : {
             roomCode,
@@ -674,6 +680,8 @@ export function startFromCampaignSave(
             journey: emptyJourney(),
             campaignPlan: save.value.campaignPlan,
             ...defaultSceneImageState(),
+            roomMaps: save.value.roomMaps,
+            roomMapBusy: false,
           };
     writeHostSession({ roomCode, table });
     try {

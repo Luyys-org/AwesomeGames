@@ -25,3 +25,7 @@ export function createItemId(): string {
 export function createSceneImageId(): string {
   return randomHexId("img_");
 }
+
+export function createRoomMapId(): string {
+  return randomHexId("map_");
+}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { InventoryDialog } from "@/rpg/features/play/inventory-dialog";
+import { MapDialog } from "@/rpg/features/play/map-dialog";
 import { StatsDialog } from "@/rpg/features/play/stats-dialog";
 import { useRoom } from "@/rpg/features/room/use-room";
 import { characterHp } from "@/rpg/lib/character";
@@ -36,6 +37,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   const router = useRouter();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [speech, setSpeech] = useState("");
   const [actionId, setActionId] = useState("");
   const [actPending, setActPending] = useState(false);
@@ -50,16 +52,17 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   }, [roomCode, router, view]);
 
   useEffect(() => {
-    if (!inventoryOpen && !statsOpen) return;
+    if (!inventoryOpen && !statsOpen && !mapOpen) return;
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setInventoryOpen(false);
         setStatsOpen(false);
+        setMapOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [inventoryOpen, statsOpen]);
+  }, [inventoryOpen, mapOpen, statsOpen]);
 
   const character =
     view?.seat?.status === "active"
@@ -143,6 +146,9 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
             onClick={() => setStatsOpen(true)}
           >
             Stats
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setMapOpen(true)}>
+            Map
           </button>
         </div>
         <div className="text-center">
@@ -354,6 +360,16 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
           character={character}
           characterOptions={view.characterOptions}
           onClose={() => setStatsOpen(false)}
+        />
+      ) : null}
+
+      {mapOpen ? (
+        <MapDialog
+          place={view?.location?.place ?? ""}
+          imageUrl={view?.roomMapUrl ?? null}
+          busy={view?.roomMapBusy === true}
+          doors={view?.roomMapDoors ?? []}
+          onClose={() => setMapOpen(false)}
         />
       ) : null}
 

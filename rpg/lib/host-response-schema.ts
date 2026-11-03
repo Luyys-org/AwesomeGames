@@ -17,6 +17,7 @@ import {
 } from "@/rpg/lib/gm-turn";
 import type { HostResponseSchema } from "@/rpg/lib/host-model-call";
 import { XP_AWARD_MAX, XP_AWARD_MIN } from "@/rpg/lib/progression";
+import { ROOM_MAP_FEATURES_MAX, ROOM_MAP_SHAPE_MAX } from "@/rpg/lib/room-map";
 import type { TableState } from "@/rpg/lib/table";
 import actionsFragment from "@/rpg/schemas/fragments/actions.json";
 import checkFragment from "@/rpg/schemas/fragments/check.json";
@@ -29,6 +30,7 @@ import campaignPlanFile from "@/rpg/schemas/campaign-plan.json";
 import gmOutcomeFile from "@/rpg/schemas/gm-outcome.json";
 import gmReactionFile from "@/rpg/schemas/gm-reaction.json";
 import openingSituationFile from "@/rpg/schemas/opening-situation.json";
+import roomMapFile from "@/rpg/schemas/room-map.json";
 import sceneImageFile from "@/rpg/schemas/scene-image.json";
 import startingLoadoutFile from "@/rpg/schemas/starting-loadout.json";
 
@@ -77,6 +79,17 @@ export function campaignPlanSchema(bounds: PlanBounds): HostResponseSchema {
 
 export function sceneImagePromptSchema(): HostResponseSchema {
   return compile(sceneImageFile, sharedBinds);
+}
+
+export function roomMapSchema(exitPlaceIds: readonly string[]): HostResponseSchema {
+  const ids = [...new Set(exitPlaceIds)];
+  return compile(roomMapFile, {
+    shapeMax: ROOM_MAP_SHAPE_MAX,
+    featuresMax: ROOM_MAP_FEATURES_MAX,
+    doorCount: ids.length,
+    exitPlaceId:
+      ids.length === 0 ? { type: "string", enum: ["none"] } : { type: "string", enum: ids },
+  });
 }
 
 export function startingLoadoutSchema(table: TableState): HostResponseSchema {
