@@ -266,6 +266,15 @@ function normalizeTableCharacter(character: TableCharacter): TableCharacter {
   };
 }
 
+export function openLobby(table: TableState): TableState {
+  if (table.phase !== "waiting") return table;
+  return {
+    ...table,
+    phase: "lobby",
+    revision: table.revision < 1 ? 1 : table.revision,
+  };
+}
+
 export function createTable(roomCode: string, settings: CampaignSettings): TableState {
   return {
     roomCode,
@@ -306,7 +315,6 @@ export function commitCharacter(
   const created = addCharacter(table.characters, draft, owner, options);
   if (!created.ok) return created;
 
-  const opening = table.phase === "waiting";
   const character: TableCharacter = {
     ...created.character,
     ready: false,
@@ -319,8 +327,8 @@ export function commitCharacter(
     character,
     table: {
       ...table,
-      phase: "lobby",
-      revision: opening ? 1 : table.revision + 1,
+      phase: table.phase === "waiting" ? "lobby" : table.phase,
+      revision: table.revision < 1 ? 1 : table.revision + 1,
       characters: [...table.characters, character],
     },
   };

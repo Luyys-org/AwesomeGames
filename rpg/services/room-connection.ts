@@ -28,6 +28,15 @@ import { readSceneImageDataUrl } from "@/rpg/lib/scene-image-store";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
 import { downloadCampaignSave } from "@/rpg/lib/host-save";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
+import {
+  buildLobbyRoster,
+  forgetDeparted,
+  joiningCount as countJoiners,
+  parseLobbyPlayers,
+  peerLeft,
+  type DepartedPlayer,
+  type LobbyPlayer,
+} from "@/rpg/lib/lobby-presence";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
@@ -35,6 +44,7 @@ import {
   canStartCampaign,
   commitCharacter,
   commitLevelReward,
+  openLobby,
   commitSceneAction,
   commitSetItemEquipped,
   commitSpeak,
@@ -99,6 +109,8 @@ export interface RoomView {
   roomMapDoors: RoomMapDoorLabel[];
   seat: RoomSeat | null;
   joiningCount: number;
+  selfId: string;
+  players: LobbyPlayer[];
 }
 
 interface Intro {
@@ -123,12 +135,15 @@ interface HostWaiter {
 
 interface Session {
   mesh: Mesh;
+  meshReady: boolean;
   role: "host" | "peer";
   roomCode: string;
   openedAt: number;
   selfId: string;
   table: TableState | null;
   peers: Map<string, PeerRecord>;
+  departed: DepartedPlayer[];
+  players: LobbyPlayer[];
   intros: Map<string, Intro>;
   reserved: Set<string>;
   hostPeerId: string | null;
@@ -247,11 +262,14 @@ async function hostRoomNow(roomCode: string): Promise<void> {
 
   if (sameOpenSession(roomCode, "host")) return;
 
+  const table = openLobby(saved.table);
+  if (table !== saved.table) writeHostSession({ roomCode, table });
+
   const session = await openSession({
     role: "host",
     roomCode,
-    table: saved.table,
-    seat: hostSeat(saved.table),
+    table,
+    seat: hostSeat(table),
   });
   await finishOpen(session);
   void hydrateSceneImageForSession(session);
@@ -290,8 +308,11 @@ export async function submitCharacter(draft: CharacterDraft): Promise<string | n
       status: "active",
     };
     writeHostSession({ roomCode: session.roomCode, table: result.table });
+    session.departed = forgetDeparted(session.departed, result.character.id);
     publish(session);
     void broadcastSnapshot(session);
+    void broadcastPresence(session);
+    maybeStartCampaign(session);
     return null;
   }
 
@@ -524,12 +545,15 @@ async function openSession(input: {
 
   const session: Session = {
     mesh: null as unknown as Mesh,
+    meshReady: false,
     role: input.role,
     roomCode: input.roomCode,
     openedAt: Date.now(),
     selfId: "",
     table: input.table,
     peers: new Map(),
+    departed: [],
+    players: [],
     intros: new Map(),
     reserved: new Set(),
     hostPeerId: null,
@@ -583,7 +607,10 @@ async function openSession(input: {
     fail(session, message);
     throw new Error(message);
   }
+  session.meshReady = true;
   session.selfId = session.mesh.selfId;
+  for (const peerId of session.peers.keys()) watchPeer(session, peerId);
+  publish(session);
   return session;
 }
 
@@ -595,6 +622,7 @@ async function finishOpen(session: Session): Promise<void> {
     if (session.role === "host") {
       session.link = "open";
       publish(session);
+      void broadcastPresence(session);
     }
   } catch (caught) {
     const message = caught instanceof MeshError ? caught.message : "Could not join the room.";
@@ -614,14 +642,21 @@ function sameOpenSession(roomCode: string, role: "host" | "peer"): boolean {
   );
 }
 
+function sessionClosed(session: Session): boolean {
+  return session.hidden || session.link === "failed";
+}
+
 function handlePeerJoin(session: Session, peerId: string): void {
-  if (session.hidden || session.link === "failed") return;
+  if (sessionClosed(session)) return;
 
   session.reserved.delete(peerId);
   if (!session.peers.has(peerId)) {
     session.peers.set(peerId, { characterId: null });
   }
+  watchPeer(session, peerId);
+  if (sessionClosed(session)) return;
   publish(session);
+  if (session.role === "host") void broadcastPresence(session);
 
   const intro = session.intros.get(peerId);
   if (session.role === "peer" && intro?.role === "host") {
@@ -634,18 +669,28 @@ function handlePeerLeave(session: Session, peerId: string): void {
   if (session.hidden) return;
 
   const intro = session.intros.get(peerId);
-  session.peers.delete(peerId);
   session.intros.delete(peerId);
   session.reserved.delete(peerId);
-  session.mesh.unwatchIce(peerId);
+  if (session.meshReady) session.mesh.unwatchIce(peerId);
 
   if (intro?.role === "host" && session.role === "peer") {
+    session.peers.delete(peerId);
     fail(session, HOST_DISCONNECTED);
     return;
   }
 
+  if (session.role === "host") {
+    const next = peerLeft(connectedPeers(session), session.departed, peerId);
+    session.peers = new Map(next.peers.map((peer) => [peer.id, { characterId: peer.characterId }]));
+    session.departed = next.departed;
+    publish(session);
+    void broadcastPresence(session);
+    maybeStartCampaign(session);
+    return;
+  }
+
+  session.peers.delete(peerId);
   publish(session);
-  if (session.role === "host") maybeStartCampaign(session);
 }
 
 async function sendJoin(session: Session, hostId: string): Promise<void> {
@@ -665,9 +710,10 @@ async function sendJoin(session: Session, hostId: string): Promise<void> {
     session.hostAccepted = true;
     session.link = "open";
     resolveHostWaiters(session);
+    applyPresence(session, response.players);
     const snapshot = parseSnapshot(response.snapshot);
     if (snapshot) applySnapshot(session, snapshot);
-    else publish(session);
+    publish(session);
   } catch {
     if (!session.hidden && session.link !== "failed") {
       fail(session, HOST_MISSING);
@@ -686,7 +732,8 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     publish(session);
     void sendCurrentRoomMap(session, peerId);
     void sendCurrentSceneImage(session, peerId);
-    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+    void broadcastPresence(session);
+    return { ok: true, snapshot: toJson(toSnapshot(session.table)), players: toJson(session.players) };
   }
 
   if (data.type === "image") return readRequestedImage(session, data);
@@ -704,12 +751,15 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     const record = session.peers.get(peerId) ?? { characterId: null };
     record.characterId = result.character.id;
     session.peers.set(peerId, record);
+    session.departed = forgetDeparted(session.departed, result.character.id);
     writeHostSession({ roomCode: session.roomCode, table: result.table });
     publish(session);
     void broadcastSnapshot(session);
+    void broadcastPresence(session);
     return {
       ok: true,
       snapshot: toJson(toSnapshot(result.table)),
+      players: toJson(session.players),
       seat: {
         characterId: result.character.id,
         claimCode: result.character.claimCode,
@@ -743,9 +793,12 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     const record = session.peers.get(peerId) ?? { characterId: null };
     record.characterId = character.id;
     session.peers.set(peerId, record);
+    session.departed = forgetDeparted(session.departed, character.id);
     publish(session);
+    void broadcastPresence(session);
     return {
       ok: true,
+      players: toJson(session.players),
       seat: { characterId: character.id, claimCode: character.claimCode, status: "active" },
     };
   }
@@ -911,8 +964,8 @@ function rememberTable(session: Session, table: TableState): void {
 
 function maybeStartCampaign(session: Session): void {
   if (session.role !== "host" || !session.table || session.table.phase !== "lobby") return;
-  const joiningCount = [...session.peers.values()].filter((peer) => peer.characterId === null).length;
-  if (!canStartCampaign(session.table, joiningCount)) return;
+  syncHostRoster(session);
+  if (!canStartCampaign(session.table, countJoiners(session.players))) return;
   const started = startCampaign(session.table);
   if (!started.ok) return;
   session.table = started.table;
@@ -964,6 +1017,12 @@ function handleFeed(session: Session, data: JsonValue): void {
   if (data.type === "snapshot") {
     const snapshot = parseSnapshot(data.snapshot);
     if (snapshot) applySnapshot(session, snapshot);
+    return;
+  }
+
+  if (data.type === "presence") {
+    applyPresence(session, data.players);
+    publish(session);
     return;
   }
 
@@ -1026,6 +1085,7 @@ function applyActionResponse(session: Session, response: JsonValue, name: string
     writeStoredSeat(session.roomCode, { ...seat, name });
   }
 
+  applyPresence(session, response.players);
   const snapshot = parseSnapshot(response.snapshot);
   if (snapshot) {
     session.lastRevision = snapshot.revision;
@@ -1035,6 +1095,13 @@ function applyActionResponse(session: Session, response: JsonValue, name: string
   }
 
   return null;
+}
+
+async function broadcastPresence(session: Session): Promise<void> {
+  if (session.role !== "host" || session.hidden || !session.mesh) return;
+  syncHostRoster(session);
+  const targets = [...session.peers.keys()];
+  await session.mesh.broadcast({ type: "presence", players: toJson(session.players) }, targets);
 }
 
 async function broadcastSnapshot(session: Session): Promise<void> {
@@ -1460,9 +1527,51 @@ function resolveSceneImageUrl(
   return session.sceneImageUrls.get(id) ?? null;
 }
 
+function watchPeer(session: Session, peerId: string): void {
+  if (!session.meshReady || !session.peers.has(peerId)) return;
+  session.mesh.watchIce(peerId, () => {
+    handlePeerLeave(session, peerId);
+  });
+}
+
+function connectedPeers(session: Session): { id: string; characterId: string | null }[] {
+  return [...session.peers.entries()].map(([id, record]) => ({
+    id,
+    characterId: record.characterId,
+  }));
+}
+
+function livingHostCharacter(table: TableState | null): { id: string; name: string } | null {
+  const character = table?.characters.find((entry) => entry.owner === "host" && !entry.archived);
+  if (!character) return null;
+  return { id: character.id, name: character.name };
+}
+
+function syncHostRoster(session: Session): void {
+  if (session.role !== "host") return;
+  session.players = buildLobbyRoster({
+    hostId: session.selfId,
+    hostCharacter: livingHostCharacter(session.table),
+    peers: connectedPeers(session),
+    departed: session.departed,
+    characters: (session.table?.characters ?? []).map((character) => ({
+      id: character.id,
+      name: character.name,
+    })),
+  });
+}
+
+function applyPresence(session: Session, value: unknown): void {
+  if (session.role === "host") return;
+  const players = parseLobbyPlayers(value);
+  if (!players) return;
+  session.players = players;
+}
+
 function publish(session: Session, snapshot?: TableSnapshot): void {
   if (current !== session) return;
   if (snapshot) session.lastSnapshot = snapshot;
+  syncHostRoster(session);
 
   const table = session.table;
   const source = session.lastSnapshot;
@@ -1495,10 +1604,9 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     imageBusy: source?.imageBusy ?? table?.imageBusy === true,
     ...roomMapView(session, source, table),
     seat: session.seat,
-    joiningCount:
-      session.role === "host"
-        ? [...session.peers.values()].filter((peer) => peer.characterId === null).length
-        : 0,
+    selfId: session.selfId,
+    players: session.players,
+    joiningCount: session.role === "host" ? countJoiners(session.players) : 0,
   };
 
   for (const listener of listeners) listener();

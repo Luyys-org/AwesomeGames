@@ -44,7 +44,7 @@ import { rememberJourney } from "@/rpg/lib/journey";
 import { writeHostSession } from "@/rpg/lib/host-session";
 import { startOpeningSceneImage } from "@/rpg/lib/host-scene-image";
 import { createRoomCode } from "@/rpg/lib/room-code";
-import { createTable } from "@/rpg/lib/table";
+import { createTable, openLobby } from "@/rpg/lib/table";
 import { paths } from "@/rpg/paths";
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 
@@ -329,6 +329,7 @@ export function useNewCampaign() {
       });
       table.revision = 1;
       table = startOpeningSceneImage(roomCode, table, hostAi);
+      table = openLobby(table);
       writeHostSession({ roomCode, table });
       router.push(paths.room(roomCode));
     } catch {

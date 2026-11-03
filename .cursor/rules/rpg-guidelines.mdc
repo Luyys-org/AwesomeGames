@@ -85,7 +85,7 @@ The same file also holds that universe's character options. Star Wars, Dungeons 
 
 `custom` does not fill character options. The creator sets a point pool from **1** to **12**, a point cap from **1** through that pool, **1–6** stats, **1–12** skills, **1–8** classes, and **1–8** races. Players assign whole numbers from **0** through the cap, and the sum cannot exceed the pool. Each class and race has up to **4** modifiers. A modifier is `stat` or `roll`, from **−3** to **+3**, excluding **0**. A roll modifier names a stat, or applies to every roll when the stat is empty. Names are trimmed, 1–24 characters, unique in their list ignoring case. A skill names one of those stats and a 1–80 character description of when it applies.
 
-The host requests `{ "situation": string }` at temperature 0. An empty situation after trim is invalid. If both attempts fail, the host stays on settings and no campaign is stored. Scene **1** is that situation. The host then creates their character and the lobby opens.
+The host requests `{ "situation": string }` at temperature 0. An empty situation after trim is invalid. If both attempts fail, the host stays on settings and no campaign is stored. Scene **1** is that situation. The room then opens in the lobby. The host and guests create characters independently.
 
 ---
 
@@ -149,11 +149,11 @@ The room code is **6** characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (31 sym
 
 | Phase | Entry |
 |-------|-------|
-| `lobby` | Host character exists. Peers join and create characters. Each creator is claimed on that connection |
+| `lobby` | The room is open. The host and peers create characters independently. Each creator is claimed on that connection |
 | `play` | Host starts. Every non-archived character gets `inScene: true`. The situation is the first transcript entry |
 | `ended` | Host confirms `complete` or `failed` |
 
-Start is enabled only when the phase is `lobby`, at least **2** characters are non-archived, and every connected joiner has finished creation. A connected joiner with no character blocks start. After start, a new connection cannot create a character. Load restores each stored `inScene` value. The start transition is the only time every non-archived character is set in scene together.
+Start is enabled only when the phase is `lobby`, at least **2** characters are non-archived, and every connected player has finished creation. A connected player with no character, including the host, blocks start. A player who leaves without a character is removed from that count. A player who leaves after creating a character stays in the party and is shown disconnected. After start, a new connection cannot create a character. Load restores each stored `inScene` value. The start transition is the only time every non-archived character is set in scene together.
 
 On a loaded game, unclaimed characters block nobody. They cannot act until a connection claims them with the name, ignoring case, and the exact case-sensitive `claimCode`. Claim works for an archived character. Peers see only their own claim code, delivered in a seat message `{ "characterId", "claimCode", "status": "active" | "replaced" }`. Snapshots omit every claim code. One live connection per character: a successful claim sends the previous connection `status: "replaced"`, and that connection submits nothing until it claims again. The loading host claims the non-archived `owner: "host"` character locally. While that character is archived and the replacement is unsubmitted, the host has no seat and uses the host controls only.
 

@@ -12,6 +12,17 @@ interface RoomLobbyProps {
   roomCode: string;
 }
 
+function ConnectionDot({ connected, name }: { connected: boolean; name: string }) {
+  const status = connected ? "connected" : "not connected";
+  return (
+    <span
+      className={`size-2 shrink-0 rounded-full ${connected ? "bg-emerald-500" : "bg-red-500"}`}
+      title={status}
+      aria-label={`${name}: ${status}`}
+    />
+  );
+}
+
 export function RoomLobby({ roomCode }: RoomLobbyProps) {
   const { view, createCharacter, claimCharacter, setReady } = useRoom(roomCode);
   const router = useRouter();
@@ -21,9 +32,10 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
   const canCreate =
     view !== null &&
     view.seat === null &&
+    view.phase !== "play" &&
     (view.role === "host"
       ? view.error !== "This room already has a host."
-      : view.phase === "lobby" && view.link === "open");
+      : view.link === "open");
   const mustClaim = view?.seat?.status === "replaced" && view.link === "open";
 
   useEffect(() => {
@@ -72,7 +84,7 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
           ? "Share this code. Other players join from the RPG page and create a character."
           : view?.seat?.status === "active"
             ? "You are in the party."
-            : "You joined this table. Create your character when the lobby is open."}
+            : "You joined this table. Create your character."}
       </p>
 
       {view?.error ? (
@@ -88,10 +100,6 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
         <p className="mt-4 text-sm text-zinc-400">Connecting to the room.</p>
       ) : null}
 
-      {view?.link === "open" && view.role === "peer" && view.phase === "waiting" ? (
-        <p className="mt-4 text-sm text-zinc-400">Waiting for the host to create a character.</p>
-      ) : null}
-
       <section aria-labelledby="party-heading" className="panel mt-6 p-6">
         <h2 id="party-heading" className="text-xl font-semibold text-zinc-50">
           Party
@@ -101,6 +109,26 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
             </span>
           ) : null}
         </h2>
+
+        {view && view.players.length > 0 ? (
+          <ul className="mt-4" aria-label="Players">
+            {view.players.map((player) => {
+              const yours = player.id.length > 0 && player.id === view.selfId;
+              return (
+                <li
+                  key={`${player.id}:${player.characterId ?? "none"}`}
+                  className="flex items-center gap-3 border-t border-[var(--border)] py-3 first:border-t-0"
+                >
+                  <ConnectionDot connected={player.connected} name={player.name} />
+                  <p className="text-sm text-zinc-50">
+                    {player.name}
+                    {yours ? " (you)" : ""}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
 
         {characters.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-400">No characters yet.</p>
@@ -153,13 +181,6 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
           </ul>
         )}
 
-        {view && view.role === "host" && view.joiningCount > 0 ? (
-          <p className="mt-4 text-sm text-zinc-400">
-            {view.joiningCount === 1
-              ? "1 player has joined and has not created a character."
-              : `${view.joiningCount} players have joined and have not created a character.`}
-          </p>
-        ) : null}
       </section>
 
       {canCreate ? (
@@ -167,11 +188,7 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
           <h2 id="character-heading" className="text-xl font-semibold text-zinc-50">
             Your character
           </h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            {view?.role === "host"
-              ? "Create your character to open the lobby."
-              : "Create the character you will play."}
-          </p>
+          <p className="mt-1 text-sm text-zinc-400">Create the character you will play.</p>
           {view?.characterOptions ? (
             <CharacterForm options={view.characterOptions} onSubmit={createCharacter} />
           ) : null}
