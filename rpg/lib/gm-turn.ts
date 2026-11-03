@@ -842,6 +842,43 @@ function applyWoundCount(
   return { character: nextCharacter, woundsApplied: applied, death };
 }
 
+export function grantProgressAndLoot(
+  table: TableState,
+  loot: GmLootGrant[],
+  progress: ProgressGrant[],
+): { ok: true; characters: TableCharacter[]; notes: TranscriptEntry[] } | { ok: false; error: string } {
+  const granted = grantLoot(table.characters, loot);
+  if (!granted.ok) return granted;
+  const progressed = applyProgress(granted.characters, progress, table.settings);
+  return {
+    ok: true,
+    characters: progressed.characters,
+    notes: rewardEntries(progressed.characters, loot, progressed.gains, currencyLabel(table.settings.universe)),
+  };
+}
+
+export function inflictWounds(
+  table: TableState,
+  characterId: string,
+  count: number,
+): { ok: true; characters: TableCharacter[]; notes: TranscriptEntry[] } | { ok: false; error: string } {
+  const character = table.characters.find((entry) => entry.id === characterId);
+  if (!character || character.archived) return { ok: false, error: "That character is not at the table." };
+  const injured = applyWoundCount(character, count, table.settings.deathPenalty, injuryEnabled(table.settings));
+  const notes: TranscriptEntry[] = [];
+  if (injured.woundsApplied > 0) {
+    notes.push({ type: "wound", characterId: character.id, wounds: injured.character.wounds });
+  }
+  if (injured.death) {
+    notes.push({ type: "death", characterId: character.id, penalty: injured.death });
+  }
+  return {
+    ok: true,
+    characters: table.characters.map((entry) => (entry.id === character.id ? injured.character : entry)),
+    notes,
+  };
+}
+
 function grantLoot(
   characters: TableCharacter[],
   loot: GmLootGrant[],

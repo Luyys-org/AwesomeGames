@@ -30,7 +30,7 @@ A snapshot carries an integer `revision`, starting at **1** when the campaign ex
 
 The host sets `model` and `apiKey` before situation generation and before play from a save. Both are non-empty strings. Calls go to Grok.
 
-`POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `messages` of one `system` and one `user`, and `response_format` `{ "type": "json_schema", "json_schema": { "name", "strict": true, "schema" } }`. Read `choices[0].message.content`.
+`POST https://api.x.ai/v1/chat/completions`. Header `Authorization: Bearer <apiKey>`. Body `model`, `temperature`, `max_tokens: 1024`, `stream: true`, `messages` of one `system` and one `user`, and `response_format` `{ "type": "json_schema", "json_schema": { "name", "strict": true, "schema" } }`. Assemble `choices[0].delta.content` until `data: [DONE]`. Ignore reasoning deltas. Commit state only after the full JSON validates. A live draft of the `narration` or `situation` string may be shown before that commit. The draft is not saved and does not increase `revision`.
 
 Temperature is **0** for situation generation and check proposals. Temperature is **0.7** for outcome narration and new-scene prose. No tools, no function calls.
 

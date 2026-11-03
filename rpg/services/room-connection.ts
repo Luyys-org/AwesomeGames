@@ -5,7 +5,14 @@ import type { CharacterOptions } from "@/rpg/lib/character-options";
 import { markGmUnreadable, removeGmError, type GmBeat, type GmIntent } from "@/rpg/lib/gm-turn";
 import { progressionRules } from "@/rpg/lib/progression";
 import { readHostAi } from "@/rpg/lib/host-ai";
+import {
+  installCampaignPrepApplier,
+  installOpeningDraft,
+  preparedCampaignOpening,
+  scheduleCampaignPreparation,
+} from "@/rpg/lib/host-campaign-prep";
 import { runGmTurn } from "@/rpg/lib/host-gm-turn";
+import type { HostTextDraft } from "@/rpg/lib/host-model-call";
 import {
   isRoomMapGenerating,
   queueRoomMapGeneration,
@@ -17,6 +24,7 @@ import {
   prepareSceneImageRequest,
   queueSceneImageGeneration,
   registerSceneImageReadyListener,
+  startOpeningSceneImage,
 } from "@/rpg/lib/host-scene-image";
 import {
   roomMapDoorLabels,
@@ -25,7 +33,9 @@ import {
   type StoredRoomMap,
 } from "@/rpg/lib/room-map";
 import { readSceneImageDataUrl } from "@/rpg/lib/scene-image-store";
+import { generateSceneRewards } from "@/rpg/lib/host-scene-rewards";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
+import { installCurrentRoom } from "@/rpg/lib/scripted-turn";
 import { downloadCampaignSave } from "@/rpg/lib/host-save";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
 import {
@@ -40,6 +50,7 @@ import {
 import { ensureUniversePresets } from "@/rpg/lib/universe-presets";
 import { UNIVERSES } from "@/rpg/lib/campaign-settings";
 import {
+  applyCampaignOpening,
   applyStartingLoadout,
   canStartCampaign,
   commitCharacter,
@@ -55,6 +66,7 @@ import {
   startCampaign,
   toPublicCharacter,
   toSnapshot,
+  type CampaignOpening,
   type PublicCharacter,
   type SceneAction,
   type SceneLocation,
@@ -68,6 +80,7 @@ const RELAY_WAIT_MS = 12_000;
 const HOST_WAIT_MS = 15_000;
 const HANDSHAKE_TIMEOUT_MS = 12_000;
 const INTENT_TIMEOUT_MS = 12_000;
+const DRAFT_FLUSH_MS = 80;
 const MAX_REMOTE_PEERS = 5;
 
 const HOST_TAKEN = "This room already has a host.";
@@ -100,6 +113,7 @@ export interface RoomView {
   availableActions: SceneAction[];
   loadoutReady: boolean;
   gmBusy: boolean;
+  gmDraft: string;
   statCeiling: number;
   scene: number | null;
   sceneImageUrl: string | null;
@@ -161,6 +175,13 @@ interface Session {
   loadoutRequested: boolean;
   gmPending: number;
   gmQueue: Promise<void>;
+  gmDraft: string;
+  draftEpoch: number;
+  draftOpen: boolean;
+  closedDraftEpoch: number;
+  liveEpoch: number;
+  draftTimer: ReturnType<typeof setTimeout> | null;
+  draftPending: boolean;
   sceneImageUrls: Map<string, string>;
   roomMapUrls: Map<string, string>;
 }
@@ -272,6 +293,12 @@ async function hostRoomNow(roomCode: string): Promise<void> {
     seat: hostSeat(table),
   });
   await finishOpen(session);
+  if (!session.hidden && session.link !== "failed") {
+    adoptPreparedOpening(session);
+    if (session.table?.phase === "lobby" && !session.table.campaignPlan) {
+      scheduleCampaignPreparation(roomCode);
+    }
+  }
   void hydrateSceneImageForSession(session);
   hydrateRoomMapForSession(session);
   requestStartingLoadout(session);
@@ -571,6 +598,13 @@ async function openSession(input: {
     loadoutRequested: false,
     gmPending: 0,
     gmQueue: Promise.resolve(),
+    gmDraft: "",
+    draftEpoch: 0,
+    draftOpen: false,
+    closedDraftEpoch: 0,
+    liveEpoch: 0,
+    draftTimer: null,
+    draftPending: false,
     sceneImageUrls: new Map(),
     roomMapUrls: new Map(),
   };
@@ -733,7 +767,8 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     void sendCurrentRoomMap(session, peerId);
     void sendCurrentSceneImage(session, peerId);
     void broadcastPresence(session);
-    return { ok: true, snapshot: toJson(toSnapshot(session.table)), players: toJson(session.players) };
+    void sendGmDraft(session, peerId);
+    return { ok: true, snapshot: snapshotJson(session, session.table), players: toJson(session.players) };
   }
 
   if (data.type === "image") return readRequestedImage(session, data);
@@ -758,7 +793,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     void broadcastPresence(session);
     return {
       ok: true,
-      snapshot: toJson(toSnapshot(result.table)),
+      snapshot: snapshotJson(session, result.table),
       players: toJson(session.players),
       seat: {
         characterId: result.character.id,
@@ -814,7 +849,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     maybeStartCampaign(session);
     publish(session);
     void broadcastSnapshot(session);
-    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+    return { ok: true, snapshot: snapshotJson(session, session.table) };
   }
 
   if (data.type === "intent") {
@@ -829,7 +864,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (!result) return { ok: false };
     if (!result.ok) return { ok: false, error: result.error };
     acceptIntent(session, result.table);
-    return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
+    return { ok: true, snapshot: snapshotJson(session, session.table) };
   }
 
   if (
@@ -844,7 +879,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (!result.ok) return { ok: false, error: result.error };
     rememberTable(session, result.table);
     void broadcastSnapshot(session);
-    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
+    return { ok: true, snapshot: snapshotJson(session, result.table) };
   }
 
   if (data.type === "levelReward" && session.table) {
@@ -861,7 +896,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (!result.ok) return { ok: false, error: result.error };
     rememberTable(session, result.table);
     void broadcastSnapshot(session);
-    return { ok: true, snapshot: toJson(toSnapshot(result.table)) };
+    return { ok: true, snapshot: snapshotJson(session, result.table) };
   }
 
   if (data.type === "dismissGmError" && typeof data.index === "number" && session.table) {
@@ -869,7 +904,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (!next) return { ok: false, error: "That message is already gone." };
     rememberTable(session, next);
     void broadcastSnapshot(session);
-    return { ok: true, snapshot: toJson(toSnapshot(next)) };
+    return { ok: true, snapshot: snapshotJson(session, next) };
   }
 
   return { ok: false };
@@ -921,12 +956,18 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
     }
     const placeBefore = session.table.campaignPlan?.currentPlaceId ?? "";
     const locationBefore = session.table.location;
-    const turn = await runGmTurn(session.table, hostAi, intent, async (mid) => {
-      if (current !== session || session.hidden) return false;
-      rememberTable(session, mid);
-      await broadcastSnapshot(session);
-      return current === session && !session.hidden;
-    });
+    const turn = await runGmTurn(
+      session.table,
+      hostAi,
+      intent,
+      async (mid) => {
+        if (current !== session || session.hidden) return false;
+        rememberTable(session, mid);
+        await broadcastSnapshot(session);
+        return current === session && !session.hidden;
+      },
+      proseDraft(session),
+    );
     if (current !== session || session.hidden) return;
     const nextTable: TableState = {
       ...turn.table,
@@ -957,9 +998,35 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
 }
 
 function rememberTable(session: Session, table: TableState): void {
+  const previous = session.table;
+  const proseLanded =
+    previous !== null &&
+    (previous.situation !== table.situation || previous.transcript.length !== table.transcript.length);
   session.table = table;
   writeHostSession({ roomCode: session.roomCode, table });
+  if (proseLanded) closeGmDraft(session);
   publish(session);
+}
+
+function adoptPreparedOpening(session: Session): void {
+  if (session.role !== "host" || !session.table || session.table.campaignPlan) return;
+  const opening = preparedCampaignOpening(session.roomCode);
+  if (!opening) return;
+  applyOpeningToSession(session, opening);
+}
+
+function applyOpeningToSession(session: Session, opening: CampaignOpening): boolean {
+  if (!session.table) return false;
+  if (session.table.phase !== "lobby" || session.table.campaignPlan) return true;
+
+  const merged = applyCampaignOpening(session.table, opening);
+  if (!merged) return false;
+  const hostAi = readHostAi();
+  const table = hostAi ? startOpeningSceneImage(session.roomCode, merged, hostAi) : merged;
+  rememberTable(session, table);
+  void broadcastSnapshot(session);
+  maybeStartCampaign(session);
+  return true;
 }
 
 function maybeStartCampaign(session: Session): void {
@@ -1004,8 +1071,22 @@ async function fillStartingLoadout(session: Session): Promise<void> {
     return;
   }
 
-  const applied = applyStartingLoadout(session.table, generated.kits, generated.actions);
-  session.table = applied.ok ? applied.table : markLoadoutFailed(session.table);
+  let preparing = session.table;
+  if (preparing.campaignPlan?.scripted) {
+    const rewards = await generateSceneRewards(preparing, hostAi);
+    if (session.hidden || current !== session || !session.table) return;
+    if (!rewards.ok) {
+      session.table = markLoadoutFailed(session.table);
+      writeHostSession({ roomCode: session.roomCode, table: session.table });
+      publish(session);
+      void broadcastSnapshot(session);
+      return;
+    }
+    preparing = { ...preparing, campaignPlan: rewards.plan };
+  }
+
+  const applied = applyStartingLoadout(preparing, generated.kits, generated.actions);
+  session.table = applied.ok ? installCurrentRoom(applied.table) : markLoadoutFailed(session.table);
   writeHostSession({ roomCode: session.roomCode, table: session.table });
   publish(session);
   void broadcastSnapshot(session);
@@ -1048,12 +1129,24 @@ function handleFeed(session: Session, data: JsonValue): void {
     if (data.dataUrl.length === 0) return;
     session.roomMapUrls.set(data.id, data.dataUrl);
     publish(session);
+    return;
+  }
+
+  if (data.type === "gmDraft") {
+    if (typeof data.epoch !== "number" || !Number.isInteger(data.epoch) || data.epoch < 1) return;
+    if (typeof data.text !== "string") return;
+    if (data.epoch <= session.closedDraftEpoch || data.epoch < session.liveEpoch) return;
+    if (data.epoch === session.liveEpoch && data.text.length === 0 && session.gmDraft.length > 0) return;
+    session.liveEpoch = data.epoch;
+    session.gmDraft = data.text;
+    publish(session);
   }
 }
 
 function applySnapshot(session: Session, snapshot: TableSnapshot): void {
   if (snapshot.roomCode !== session.roomCode || snapshot.revision <= session.lastRevision) return;
   session.lastRevision = snapshot.revision;
+  absorbDraftEpoch(session, snapshot.draftEpoch);
   publish(session, snapshot);
   maybeClaimStoredSeat(session, snapshot);
   void requestMissingImages(session);
@@ -1089,6 +1182,7 @@ function applyActionResponse(session: Session, response: JsonValue, name: string
   const snapshot = parseSnapshot(response.snapshot);
   if (snapshot) {
     session.lastRevision = snapshot.revision;
+    absorbDraftEpoch(session, snapshot.draftEpoch);
     publish(session, snapshot);
   } else {
     publish(session);
@@ -1106,10 +1200,10 @@ async function broadcastPresence(session: Session): Promise<void> {
 
 async function broadcastSnapshot(session: Session): Promise<void> {
   if (!session.table) return;
-  const snapshot = toSnapshot(session.table);
+  const snapshot = snapshotJson(session, session.table);
   if (!snapshot) return;
   const targets = [...session.peers.keys()];
-  await session.mesh.broadcast({ type: "snapshot", snapshot: toJson(snapshot) }, targets);
+  await session.mesh.broadcast({ type: "snapshot", snapshot }, targets);
 }
 
 async function broadcastSceneImage(
@@ -1483,6 +1577,7 @@ function fail(session: Session, message: string): void {
 }
 
 async function forceClose(session: Session): Promise<void> {
+  cancelDraftTimer(session);
   session.hidden = true;
   session.closed = true;
   if (current === session) {
@@ -1598,6 +1693,7 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     availableActions: source?.availableActions ?? table?.availableActions ?? [],
     loadoutReady: source?.loadoutReady ?? table?.loadoutReady ?? false,
     gmBusy: source?.gmBusy ?? table?.gmBusy ?? false,
+    gmDraft: session.gmDraft,
     statCeiling: source?.statCeiling ?? (table ? progressionRules(table.settings).statCeiling : 10),
     scene: source?.scene ?? table?.scene ?? null,
     sceneImageUrl: resolveSceneImageUrl(session, source, table),
@@ -1746,6 +1842,106 @@ function toJson(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
+function snapshotJson(session: Session, table: TableState): JsonValue | null {
+  const snapshot = toSnapshot(table);
+  if (!snapshot) return null;
+  return toJson({ ...snapshot, draftEpoch: session.closedDraftEpoch });
+}
+
+function proseDraft(session: Session): HostTextDraft {
+  return {
+    start: () => beginGmDraft(session),
+    text: (value) => updateGmDraft(session, value),
+    flush: () => flushGmDraft(session),
+  };
+}
+
+function beginGmDraft(session: Session): void {
+  if (current !== session || session.hidden) return;
+  cancelDraftTimer(session);
+  session.draftEpoch += 1;
+  session.draftOpen = true;
+  session.gmDraft = "";
+  publish(session);
+  void sendGmDraft(session);
+}
+
+function updateGmDraft(session: Session, text: string): void {
+  if (current !== session || session.hidden || !session.draftOpen) return;
+  if (text === session.gmDraft) return;
+  session.gmDraft = text;
+  publish(session);
+  scheduleGmDraft(session);
+}
+
+function scheduleGmDraft(session: Session): void {
+  session.draftPending = true;
+  if (session.draftTimer) return;
+  session.draftTimer = setTimeout(() => {
+    session.draftTimer = null;
+    if (!session.draftPending || current !== session) return;
+    session.draftPending = false;
+    void sendGmDraft(session);
+  }, DRAFT_FLUSH_MS);
+}
+
+async function flushGmDraft(session: Session): Promise<void> {
+  if (current !== session) return;
+  cancelDraftTimer(session);
+  await sendGmDraft(session);
+}
+
+function closeGmDraft(session: Session): void {
+  cancelDraftTimer(session);
+  if (session.draftOpen && session.draftEpoch > session.closedDraftEpoch) {
+    session.closedDraftEpoch = session.draftEpoch;
+  }
+  session.draftOpen = false;
+  session.gmDraft = "";
+}
+
+function cancelDraftTimer(session: Session): void {
+  if (session.draftTimer) clearTimeout(session.draftTimer);
+  session.draftTimer = null;
+  session.draftPending = false;
+}
+
+function absorbDraftEpoch(session: Session, epoch: number | undefined): void {
+  if (typeof epoch === "number" && epoch > session.closedDraftEpoch) session.closedDraftEpoch = epoch;
+  if (session.liveEpoch <= session.closedDraftEpoch) session.gmDraft = "";
+}
+
+async function sendGmDraft(session: Session, peerId?: string): Promise<void> {
+  if (session.role !== "host" || session.hidden || !session.mesh || !session.draftOpen) return;
+  const payload = { type: "gmDraft", epoch: session.draftEpoch, text: session.gmDraft };
+  await broadcastToEachPeer(session, payload, peerId ? [peerId] : undefined);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+installCampaignPrepApplier((roomCode, opening) => {
+  const session = current;
+  if (!session || session.role !== "host" || session.roomCode !== roomCode) return false;
+  if (session.hidden || !session.table) return true;
+  return applyOpeningToSession(session, opening);
+});
+
+installOpeningDraft({
+  start: (roomCode) => {
+    const session = current;
+    if (!session || session.roomCode !== roomCode) return;
+    beginGmDraft(session);
+  },
+  text: (roomCode, value) => {
+    const session = current;
+    if (!session || session.roomCode !== roomCode) return;
+    updateGmDraft(session, value);
+  },
+  flush: async (roomCode) => {
+    const session = current;
+    if (!session || session.roomCode !== roomCode) return;
+    await flushGmDraft(session);
+  },
+});

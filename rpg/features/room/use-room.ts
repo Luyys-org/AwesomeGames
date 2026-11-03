@@ -2,6 +2,13 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 
+import type { CharacterDraft } from "@/rpg/lib/character";
+import {
+  campaignPrepState,
+  scheduleCampaignPreparation,
+  serverCampaignPrepState,
+  subscribeCampaignPrep,
+} from "@/rpg/lib/host-campaign-prep";
 import { readHostSession } from "@/rpg/lib/host-session";
 import {
   getRoomView,
@@ -19,10 +26,14 @@ import {
   submitSpeak,
   subscribeRoom,
 } from "@/rpg/services/room-connection";
-import type { CharacterDraft } from "@/rpg/lib/character";
 
 export function useRoom(roomCode: string) {
   const view = useSyncExternalStore(subscribeRoom, getRoomView, getServerRoomView);
+  const prep = useSyncExternalStore(
+    subscribeCampaignPrep,
+    () => campaignPrepState(roomCode),
+    serverCampaignPrepState,
+  );
 
   useEffect(() => {
     const session = readHostSession();
@@ -35,9 +46,11 @@ export function useRoom(roomCode: string) {
 
   return {
     view,
+    prep,
     createCharacter: (draft: CharacterDraft) => submitCharacter(draft),
     claimCharacter: (name: string, claimCode: string) => submitClaim(name, claimCode),
     setReady: (ready: boolean) => submitReady(ready),
+    retryPreparation: () => scheduleCampaignPreparation(roomCode),
     submitSpeak: (text: string) => submitSpeak(text),
     submitAction: (actionId: string) => submitChosenAction(actionId),
     dismissGmError: (index: number) => dismissGmError(index),

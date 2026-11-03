@@ -80,7 +80,7 @@ async function requestLoadout(
   table: TableState,
 ): Promise<{ ok: true; kits: DraftStartingKit[]; actions: SceneAction[] } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
-    role: "gm",
+    role: "plan",
     temperature: 0.7,
     maxTokens: 4096,
     system: buildGmSystemPrompt(table.settings),
@@ -124,6 +124,8 @@ function readLoadout(
   if (kits.length !== livingIds.size) {
     return { ok: false, error: "Return one kit for each living character." };
   }
+
+  if (table.campaignPlan?.scripted) return { ok: true, kits, actions: [] };
 
   const actions = validateSceneActions(repairSceneActionEntries(record.actions), table);
   if (!actions.ok) return actions;

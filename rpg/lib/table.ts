@@ -30,7 +30,7 @@ import {
   readStoredCharacterSituation,
   type CharacterSituation,
 } from "@/rpg/lib/character-situation";
-import { readStoredCampaignPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
+import { planStartPlace, readStoredCampaignPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import {
   normalizeStoredRoomMaps,
   parseRoomMapDoorLabels,
@@ -40,7 +40,7 @@ import {
   type RoomMapDoorLabel,
   type StoredRoomMap,
 } from "@/rpg/lib/room-map";
-import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
+import { emptyJourney, parseJourney, rememberJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { levelRewardOptions, progressionRules } from "@/rpg/lib/progression";
 
 export { parseSceneActions } from "@/rpg/lib/scene-action";
@@ -186,6 +186,8 @@ export interface TableSnapshot {
   roomMapId: string | null;
   roomMapBusy: boolean;
   roomMapDoors: RoomMapDoorLabel[];
+  /** Wire-only. Closes prose drafts at or below this epoch. */
+  draftEpoch?: number;
 }
 
 export function emptyLocation(): SceneLocation {
@@ -360,6 +362,40 @@ export function setCharacterReady(
   };
 }
 
+export interface CampaignOpening {
+  plan: CampaignPlan;
+  situation: string;
+  location: SceneLocation;
+}
+
+export function campaignOpeningReady(table: TableState): boolean {
+  return table.campaignPlan !== null && table.situation.trim().length > 0;
+}
+
+/** Patches the latest lobby table. Returns null when the opening is empty or already stored. */
+export function applyCampaignOpening(table: TableState, opening: CampaignOpening): TableState | null {
+  if (table.phase !== "lobby" || table.campaignPlan) return null;
+  const situation = opening.situation.trim();
+  if (!situation) return null;
+
+  const start = planStartPlace(opening.plan);
+  const place = start?.name || opening.location.place;
+
+  return {
+    ...table,
+    campaignPlan: opening.plan,
+    situation,
+    location: opening.location,
+    journey: rememberJourney(table.journey, {
+      scene: table.scene,
+      place,
+      encounter: null,
+      events: [],
+    }),
+    revision: table.revision + 1,
+  };
+}
+
 export function canStartCampaign(table: TableState, joiningCount: number): boolean {
   if (table.phase !== "lobby") return false;
   if (joiningCount > 0) return false;
@@ -375,6 +411,9 @@ export function startCampaign(
   if (living.length < 1) return { ok: false, error: "At least one character is needed to start." };
   if (!living.every((character) => character.ready)) {
     return { ok: false, error: "Every character must be ready." };
+  }
+  if (!campaignOpeningReady(table)) {
+    return { ok: false, error: "The campaign is still being prepared." };
   }
 
   const situationEntry: TranscriptEntry = {
@@ -748,7 +787,13 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
     roomMapId: readRoomMapImageId(value.roomMapId),
     roomMapBusy: value.roomMapBusy === true,
     roomMapDoors: parseRoomMapDoorLabels(value.roomMapDoors),
+    ...readDraftEpoch(value.draftEpoch),
   };
+}
+
+function readDraftEpoch(value: unknown): { draftEpoch: number } | Record<string, never> {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return {};
+  return { draftEpoch: value };
 }
 
 function resolveSnapshotOptions(universe: unknown, value: unknown): CharacterOptions | null {

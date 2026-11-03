@@ -8,7 +8,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name", "summary", "objective", "next", "places"],
+        "required": ["id", "name", "summary", "objective", "next", "narration", "success", "failure", "places"],
         "properties": {
           "id": { "$fragment": "planId" },
           "name": {
@@ -30,6 +30,24 @@
             "pattern": "[^\\r\\n]+"
           },
           "next": { "$fragment": "planLink" },
+          "narration": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planNarrationMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "success": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planLineMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "failure": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planLineMax" },
+            "pattern": "[^\\r\\n]+"
+          },
           "places": {
             "type": "array",
             "minItems": { "$bind": "placeMin" },
@@ -37,7 +55,7 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "name", "summary", "next"],
+              "required": ["id", "name", "summary", "next", "narration", "actions", "encounters"],
               "properties": {
                 "id": { "$fragment": "planId" },
                 "name": {
@@ -52,7 +70,127 @@
                   "maxLength": { "$bind": "planSummaryMax" },
                   "pattern": "[^\\r\\n]+"
                 },
-                "next": { "$fragment": "planLink" }
+                "next": { "$fragment": "planLink" },
+                "narration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": { "$bind": "planNarrationMax" },
+                  "pattern": "[^\\r\\n]+"
+                },
+                "actions": {
+                  "type": "array",
+                  "minItems": { "$bind": "actionMin" },
+                  "maxItems": { "$bind": "actionMax" },
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label",
+                      "stat",
+                      "difficulty",
+                      "failure",
+                      "abilityId",
+                      "effect",
+                      "encounterId",
+                      "certain",
+                      "setup",
+                      "success",
+                      "miss"
+                    ],
+                    "properties": {
+                      "id": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "[a-z][a-z0-9-]{0,31}" },
+                      "label": { "type": "string", "minLength": 1, "maxLength": 72, "pattern": "[^\\r\\n]+" },
+                      "stat": { "$bind": "statEnum" },
+                      "difficulty": { "type": "integer", "enum": [8, 10, 12, 15] },
+                      "failure": { "type": "string", "enum": ["setback", "harm", "severe"] },
+                      "abilityId": { "$bind": "abilityEnum" },
+                      "effect": { "type": "string", "enum": ["stay", "next-place", "clear-scene", "encounter"] },
+                      "encounterId": { "$fragment": "planLink" },
+                      "certain": { "type": "boolean" },
+                      "setup": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": { "$bind": "planLineMax" },
+                        "pattern": "[^\\r\\n]+"
+                      },
+                      "success": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": { "$bind": "planLineMax" },
+                        "pattern": "[^\\r\\n]+"
+                      },
+                      "miss": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": { "$bind": "planLineMax" },
+                        "pattern": "[^\\r\\n]+"
+                      }
+                    }
+                  }
+                },
+                "encounters": {
+                  "type": "array",
+                  "maxItems": { "$bind": "encounterMax" },
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["id", "name", "summary", "triggerActionId", "defeat", "malus"],
+                    "properties": {
+                      "id": { "$fragment": "planId" },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": { "$bind": "encounterNameMax" },
+                        "pattern": "[^\\r\\n]+"
+                      },
+                      "summary": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": { "$bind": "encounterSummaryMax" },
+                        "pattern": "[^\\r\\n]+"
+                      },
+                      "triggerActionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32,
+                        "pattern": "[a-z][a-z0-9-]{0,31}"
+                      },
+                      "defeat": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["xp", "currency", "items"],
+                        "properties": {
+                          "xp": {
+                            "type": "integer",
+                            "minimum": { "$bind": "xpMin" },
+                            "maximum": { "$bind": "xpMax" }
+                          },
+                          "currency": { "type": "integer", "minimum": 0, "maximum": { "$bind": "currencyMax" } },
+                          "items": {
+                            "type": "array",
+                            "maxItems": { "$bind": "itemMax" },
+                            "items": { "$fragment": "item" }
+                          }
+                        }
+                      },
+                      "malus": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["wounds", "consequence"],
+                        "properties": {
+                          "wounds": { "type": "integer", "enum": [0, 1, 2] },
+                          "consequence": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": { "$bind": "planLineMax" },
+                            "pattern": "[^\\r\\n]+"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }

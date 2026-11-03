@@ -1,4 +1,4 @@
-import { planBounds, parseGeneratedPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
+import { parseGeneratedPlan, planBounds, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import { buildGmSystemPrompt, serializeCampaignForGm } from "@/rpg/lib/host-gm-prompt";
@@ -37,10 +37,10 @@ async function requestPlan(
   const response = await callHostChat(hostAi, {
     role: "plan",
     temperature: 0,
-    maxTokens: 4096,
+    maxTokens: 16384,
     system: buildGmSystemPrompt(settings),
     user,
-    responseSchema: campaignPlanSchema(planBounds(settings.enemyDifficulty)),
+    responseSchema: campaignPlanSchema(settings),
   });
   if (!response.ok) return response;
 

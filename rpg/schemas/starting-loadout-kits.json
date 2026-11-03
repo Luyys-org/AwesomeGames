@@ -1,0 +1,20 @@
+{
+  "name": "starting_loadout",
+  "properties": {
+    "kits": {
+      "type": "array",
+      "minItems": { "$bind": "livingCount" },
+      "maxItems": { "$bind": "livingCount" },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["characterId", "currency", "inventory"],
+        "properties": {
+          "characterId": { "$bind": "livingEnum" },
+          "currency": { "type": "integer", "minimum": 0 },
+          "inventory": { "type": "array", "items": { "$fragment": "item" } }
+        }
+      }
+    }
+  }
+}

@@ -24,7 +24,7 @@ function ConnectionDot({ connected, name }: { connected: boolean; name: string }
 }
 
 export function RoomLobby({ roomCode }: RoomLobbyProps) {
-  const { view, createCharacter, claimCharacter, setReady } = useRoom(roomCode);
+  const { view, prep, createCharacter, claimCharacter, setReady, retryPreparation } = useRoom(roomCode);
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [readyPending, setReadyPending] = useState(false);
@@ -37,6 +37,16 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
       ? view.error !== "This room already has a host."
       : view.link === "open");
   const mustClaim = view?.seat?.status === "replaced" && view.link === "open";
+  const partyReady = characters.length >= 1 && characters.every((character) => character.ready);
+  const hostWaitingOnJoiners = view?.role === "host" && view.joiningCount > 0;
+  const liveSituation = view?.situation?.trim() ? view.situation : (view?.gmDraft ?? "");
+  const waitingOnOpening =
+    view?.phase === "lobby" &&
+    partyReady &&
+    !hostWaitingOnJoiners &&
+    !liveSituation.trim() &&
+    prep.status !== "failed";
+  const prepError = view?.role === "host" && prep.status === "failed" ? prep.error : null;
 
   useEffect(() => {
     if (view?.phase === "play") {
@@ -55,8 +65,8 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
       {view?.objective ? (
         <p className="mt-1 text-base text-zinc-400">{view.objective}</p>
       ) : null}
-      {view?.situation ? (
-        <p className="mt-4 text-sm leading-relaxed text-zinc-300">{view.situation}</p>
+      {liveSituation ? (
+        <p className="mt-4 text-sm leading-relaxed text-zinc-300">{liveSituation}</p>
       ) : null}
 
       <div className="mt-6 flex items-center gap-3">
@@ -94,6 +104,24 @@ export function RoomLobby({ roomCode }: RoomLobbyProps) {
         >
           {view.error}
         </p>
+      ) : null}
+
+      {waitingOnOpening ? (
+        <p className="mt-4 text-sm text-zinc-400">The campaign is still being prepared.</p>
+      ) : null}
+
+      {prepError ? (
+        <div className="mt-4">
+          <p
+            role="alert"
+            className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+          >
+            {prepError}
+          </p>
+          <button type="button" className="btn btn-secondary mt-3" onClick={retryPreparation}>
+            Retry
+          </button>
+        </div>
       ) : null}
 
       {!view || view.link === "connecting" ? (

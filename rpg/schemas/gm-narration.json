@@ -1,0 +1,6 @@
+{
+  "name": "gm_narration",
+  "properties": {
+    "narration": { "type": "string", "minLength": 1, "maxLength": { "$bind": "narrationMax" } }
+  }
+}

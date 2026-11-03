@@ -1,11 +1,17 @@
 import {
+  PLAN_ACTION_MAX,
+  PLAN_ACTION_MIN,
+  PLAN_ENCOUNTER_MAX,
   PLAN_ID_MAX,
+  PLAN_LINE_MAX,
   PLAN_NAME_MAX,
+  PLAN_NARRATION_MAX,
   PLAN_OBJECTIVE_MAX,
   PLAN_SUMMARY_MAX,
+  planBounds,
   type CampaignPlan,
-  type PlanBounds,
 } from "@/rpg/lib/campaign-plan";
+import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import { CHARACTER_SITUATIONS } from "@/rpg/lib/character-situation";
 import {
   ENCOUNTER_NAME_MAX,
@@ -27,12 +33,15 @@ import itemFragment from "@/rpg/schemas/fragments/item.json";
 import planIdFragment from "@/rpg/schemas/fragments/plan-id.json";
 import planLinkFragment from "@/rpg/schemas/fragments/plan-link.json";
 import campaignPlanFile from "@/rpg/schemas/campaign-plan.json";
+import campaignRewardsFile from "@/rpg/schemas/campaign-rewards.json";
+import gmNarrationFile from "@/rpg/schemas/gm-narration.json";
 import gmOutcomeFile from "@/rpg/schemas/gm-outcome.json";
 import gmReactionFile from "@/rpg/schemas/gm-reaction.json";
 import openingSituationFile from "@/rpg/schemas/opening-situation.json";
 import roomMapFile from "@/rpg/schemas/room-map.json";
 import sceneImageFile from "@/rpg/schemas/scene-image.json";
 import startingLoadoutFile from "@/rpg/schemas/starting-loadout.json";
+import startingLoadoutKitsFile from "@/rpg/schemas/starting-loadout-kits.json";
 
 /** `$bind` inserts a runtime value. `$fragment` splices another schema file, then overlays sibling keys. */
 const fragments: Record<string, unknown> = {
@@ -57,6 +66,8 @@ const sharedBinds = {
   planNameMax: PLAN_NAME_MAX,
   planSummaryMax: PLAN_SUMMARY_MAX,
   planObjectiveMax: PLAN_OBJECTIVE_MAX,
+  planNarrationMax: PLAN_NARRATION_MAX,
+  planLineMax: PLAN_LINE_MAX,
   situationEnum: { type: "string", enum: [...CHARACTER_SITUATIONS] },
 } satisfies Record<string, unknown>;
 
@@ -67,13 +78,26 @@ export function openingSituationSchema(place: string): HostResponseSchema {
   });
 }
 
-export function campaignPlanSchema(bounds: PlanBounds): HostResponseSchema {
+export function campaignPlanSchema(settings: CampaignSettings): HostResponseSchema {
+  const bounds = planBounds(settings.enemyDifficulty);
+  const stats = settings.characterOptions?.stats?.map((stat) => stat.id) ?? [];
+  const skills = settings.characterOptions?.skills?.map((skill) => skill.id) ?? [];
+  const statIds = stats.length > 0 ? stats : ["might"];
+  const limits = gmLootLimits(settings);
   return compile(campaignPlanFile, {
     ...sharedBinds,
     sceneMin: bounds.sceneMin,
     sceneMax: bounds.sceneMax,
     placeMin: bounds.placeMin,
     placeMax: bounds.placeMax,
+    statEnum: { type: "string", enum: statIds },
+    abilityEnum: { type: "string", enum: unique(["", ...skills]) },
+    modifierStatEnum: { type: "string", enum: unique(["", ...statIds]) },
+    currencyMax: limits.currencyMax,
+    itemMax: limits.itemMax,
+    actionMin: PLAN_ACTION_MIN,
+    actionMax: PLAN_ACTION_MAX,
+    encounterMax: PLAN_ENCOUNTER_MAX,
   });
 }
 
@@ -93,9 +117,25 @@ export function roomMapSchema(exitPlaceIds: readonly string[]): HostResponseSche
 }
 
 export function startingLoadoutSchema(table: TableState): HostResponseSchema {
-  return compile(startingLoadoutFile, {
+  const binds = {
     ...sharedBinds,
     ...tableBinds(table, { actionMin: 2, actionMax: 4, allowProgress: false }),
+  };
+  if (table.campaignPlan?.scripted) return compile(startingLoadoutKitsFile, binds);
+  return compile(startingLoadoutFile, binds);
+}
+
+export function gmNarrationSchema(): HostResponseSchema {
+  return compile(gmNarrationFile, sharedBinds);
+}
+
+export function sceneRewardsSchema(table: TableState): HostResponseSchema {
+  const sceneIds = table.campaignPlan?.scenes.map((scene) => scene.id) ?? [];
+  return compile(campaignRewardsFile, {
+    ...sharedBinds,
+    ...tableBinds(table, { actionMin: 0, actionMax: 0, allowProgress: false }),
+    sceneCount: sceneIds.length,
+    sceneIdEnum: sceneIds.length > 0 ? { type: "string", enum: sceneIds } : { type: "string" },
   });
 }
 

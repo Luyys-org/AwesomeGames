@@ -38,11 +38,8 @@ import {
   parseNewCampaignSettingsImport,
 } from "@/rpg/lib/campaign-settings-import-export";
 import { readHostAi } from "@/rpg/lib/host-ai";
-import { generateCampaignPlan } from "@/rpg/lib/host-campaign-plan";
-import { generateOpeningSituation } from "@/rpg/lib/host-situation";
-import { rememberJourney } from "@/rpg/lib/journey";
+import { scheduleCampaignPreparation } from "@/rpg/lib/host-campaign-prep";
 import { writeHostSession } from "@/rpg/lib/host-session";
-import { startOpeningSceneImage } from "@/rpg/lib/host-scene-image";
 import { createRoomCode } from "@/rpg/lib/room-code";
 import { createTable, openLobby } from "@/rpg/lib/table";
 import { paths } from "@/rpg/paths";
@@ -302,35 +299,11 @@ export function useNewCampaign() {
       return;
     }
 
-    const planResult = await generateCampaignPlan(settings, hostAi);
-    if (!planResult.ok) {
-      setError(planResult.error);
-      setSubmitting(false);
-      return;
-    }
-    const situationResult = await generateOpeningSituation(settings, hostAi, planResult.plan);
-    if (!situationResult.ok) {
-      setError(situationResult.error);
-      setSubmitting(false);
-      return;
-    }
-
     try {
       const roomCode = createRoomCode();
-      let table = createTable(roomCode, settings);
-      table.campaignPlan = planResult.plan;
-      table.situation = situationResult.situation;
-      table.location = situationResult.location;
-      table.journey = rememberJourney(table.journey, {
-        scene: 1,
-        place: situationResult.location.place,
-        encounter: null,
-        events: [],
-      });
-      table.revision = 1;
-      table = startOpeningSceneImage(roomCode, table, hostAi);
-      table = openLobby(table);
+      const table = openLobby({ ...createTable(roomCode, settings), revision: 1 });
       writeHostSession({ roomCode, table });
+      scheduleCampaignPreparation(roomCode);
       router.push(paths.room(roomCode));
     } catch {
       setSubmitting(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { InventoryDialog } from "@/rpg/features/play/inventory-dialog";
@@ -43,6 +43,8 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
   const [actPending, setActPending] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const logScrollRef = useRef<HTMLDivElement>(null);
+  const pinLogRef = useRef(false);
 
   useEffect(() => {
     if (!view || view.link !== "open") return;
@@ -92,6 +94,19 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
       : [];
   const playReady = view?.phase === "play" && view.loadoutReady;
   const gmBusy = view?.gmBusy === true;
+  const gmDraft = view?.gmDraft ?? "";
+
+  useEffect(() => {
+    const node = logScrollRef.current;
+    if (!node) return;
+    pinLogRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+  }, [view?.transcript]);
+
+  useEffect(() => {
+    const node = logScrollRef.current;
+    if (!node || !gmDraft || !pinLogRef.current) return;
+    node.scrollTop = node.scrollHeight;
+  }, [gmDraft]);
   const imageBusy = view?.imageBusy === true;
   const sceneImageUrl = view?.sceneImageUrl ?? null;
   const sceneImageAlt = [view?.location?.place, view?.situation?.slice(0, 120)]
@@ -219,7 +234,15 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          <div
+            ref={logScrollRef}
+            className="min-h-0 flex-1 overflow-y-auto px-6 py-6"
+            onScroll={() => {
+              const node = logScrollRef.current;
+              if (!node) return;
+              pinLogRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+            }}
+          >
             {sceneImageUrl ? (
               <figure className="mx-auto mb-6 w-full max-w-2xl border border-[var(--border)]">
                 <img
@@ -240,6 +263,7 @@ export function CampaignPlay({ roomCode }: CampaignPlayProps) {
               transcript={view?.transcript ?? []}
               situation={view?.situation ?? ""}
               gmBusy={gmBusy}
+              gmDraft={gmDraft}
               characterNames={Object.fromEntries((view?.characters ?? []).map((entry) => [entry.id, entry.name]))}
               onDismissError={(index) => dismissGmError(index)}
             />
@@ -626,12 +650,14 @@ function AgentLog({
   transcript,
   situation,
   gmBusy,
+  gmDraft,
   characterNames,
   onDismissError,
 }: {
   transcript: TranscriptEntry[];
   situation: string;
   gmBusy: boolean;
+  gmDraft: string;
   characterNames: Record<string, string>;
   onDismissError: (index: number) => Promise<string | null>;
 }) {
@@ -654,7 +680,7 @@ function AgentLog({
     });
   }
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && !gmDraft) {
     if (gmBusy) {
       return (
         <div className="mx-auto w-full max-w-2xl">
@@ -676,8 +702,9 @@ function AgentLog({
           onDismiss={transcript.length > 0 && isGmErrorEntry(entry) ? () => dismiss(index) : undefined}
         />
       ))}
+      {gmDraft ? <p className="text-base leading-relaxed text-zinc-100">{gmDraft}</p> : null}
       {dismissError ? <p className="text-sm text-red-200">{dismissError}</p> : null}
-      {gmBusy ? <GmBusyIndicator /> : null}
+      {gmBusy && !gmDraft ? <GmBusyIndicator /> : null}
     </div>
   );
 }

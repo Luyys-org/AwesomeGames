@@ -5,7 +5,7 @@ import {
   buildOpeningSituationUserMessage,
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
-import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
+import { callHostProse, parseJsonContent, truncateText, type HostTextDraft } from "@/rpg/lib/host-model-call";
 import { openingSituationSchema } from "@/rpg/lib/host-response-schema";
 import type { SceneLocation } from "@/rpg/lib/table";
 
@@ -21,6 +21,7 @@ export async function generateOpeningSituation(
   settings: CampaignSettings,
   hostAi: HostAi,
   plan: CampaignPlan,
+  draft?: HostTextDraft,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const startPlace = planStartPlace(plan);
   if (!startPlace) return { ok: false, error: "The campaign plan has no start place." };
@@ -29,6 +30,7 @@ export async function generateOpeningSituation(
     buildOpeningSituationUserMessage(settings, plan),
     settings,
     startPlace.name,
+    draft,
   );
   if (situation.ok) return situation;
   return { ok: false, error: situation.error };
@@ -39,14 +41,20 @@ async function requestSituation(
   user: string,
   settings: CampaignSettings,
   startPlaceName: string,
+  draft?: HostTextDraft,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
-  const response = await callHostChat(hostAi, {
-    role: "gm",
-    temperature: 0,
-    system: buildGmSystemPrompt(settings),
-    user,
-    responseSchema: openingSituationSchema(startPlaceName),
-  });
+  const response = await callHostProse(
+    hostAi,
+    {
+      role: "gm",
+      temperature: 0,
+      system: buildGmSystemPrompt(settings),
+      user,
+      responseSchema: openingSituationSchema(startPlaceName),
+      textField: "situation",
+    },
+    draft,
+  );
   if (!response.ok) return response;
 
   const parsed = parseJsonContent(response.content);

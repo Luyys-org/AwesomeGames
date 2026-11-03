@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import {
-  planBounds,
+  assignSceneRewards,
+  openingSituationFromPlan,
   planForPrompt,
   parseGeneratedPlan,
   parseStoredPlan,
@@ -16,8 +17,47 @@ const settings = {
   objective: "Recover the beacon before the storm hits.",
 } as CampaignSettings;
 
+function action(
+  id: string,
+  effect: "stay" | "next-place" | "clear-scene" | "encounter",
+  encounterId = "",
+) {
+  return {
+    id,
+    label: id.replaceAll("-", " "),
+    stat: "might",
+    difficulty: 10 as const,
+    failure: "setback" as const,
+    abilityId: "",
+    effect,
+    encounterId,
+    certain: effect === "stay",
+    setup: `Try ${id}.`,
+    success: `${id} works.`,
+    miss: `${id} fails.`,
+  };
+}
+
 function place(id: string, name: string, next: string) {
-  return { id, name, summary: `${name} holds the next step of the quest.`, next };
+  const actions = [action(`look-${id}`, "stay")];
+  if (next) actions.push(action(`go-${id}`, "next-place"));
+  else actions.push(action(`finish-${id}`, "clear-scene"));
+  return {
+    id,
+    name,
+    summary: `${name} holds the next step of the quest.`,
+    next,
+    narration: `${name} is the room the party must deal with.`,
+    actions,
+    encounters: [] as {
+      id: string;
+      name: string;
+      summary: string;
+      triggerActionId: string;
+      defeat: { xp: number; currency: number; items: [] };
+      malus: { wounds: 0 | 1 | 2; consequence: string };
+    }[],
+  };
 }
 
 function scene(
@@ -27,12 +67,17 @@ function scene(
   next: string,
   places: ReturnType<typeof place>[],
 ) {
+  const last = places[places.length - 1];
+  if (last && last.next === "" && next !== "") last.actions.push(action(`leave-${last.id}`, "next-place"));
   return {
     id,
     name,
     summary: `${name} is the next step toward the beacon.`,
     objective,
     next,
+    narration: `${name} pursues the next step.`,
+    success: `${name} is finished.`,
+    failure: `${name} holds.`,
     places,
   };
 }
@@ -65,6 +110,12 @@ function plan(): CampaignPlan {
 }
 
 const generated = parseGeneratedPlan(validBody(), settings);
+assert.equal(generated.ok, true);
+if (generated.ok) {
+  const opening = openingSituationFromPlan(generated.value);
+  assert.match(opening, /The Docks pursues the next step/);
+  assert.match(opening, /Outer pier is the room the party must deal with/);
+}
 assert.equal(generated.ok, true);
 if (generated.ok) {
   assert.equal(generated.value.currentSceneId, "docks");
@@ -245,7 +296,85 @@ if (shuffled.ok) {
   assert.equal(shuffled.value.currentPlaceId, "pier");
 }
 
-const schema = campaignPlanSchema(planBounds("standard"));
+const illegalBody = validBody();
+illegalBody.scenes[0]?.places[0]?.actions[0] && (illegalBody.scenes[0].places[0].actions[0].effect = "clear-scene");
+const clearedEarly = parseGeneratedPlan(illegalBody, settings);
+assert.equal(clearedEarly.ok, false);
+
+const brokenBody = validBody();
+const pier = brokenBody.scenes[0]?.places[0];
+if (pier) {
+  pier.encounters.push({
+    id: "rats",
+    name: "Wharf rats",
+    summary: "A pack of rats on the pier.",
+    triggerActionId: "look-pier",
+    defeat: { xp: 10, currency: 0, items: [] },
+    malus: { wounds: 1, consequence: "The rats bite." },
+  });
+}
+const brokenTrigger = parseGeneratedPlan(brokenBody, settings);
+assert.equal(brokenTrigger.ok, false);
+
+const legacy = parseStoredPlan({
+  currentSceneId: "docks",
+  currentPlaceId: "pier",
+  scenes: [
+    {
+      id: "docks",
+      name: "The Docks",
+      summary: "Old docks.",
+      objective: "Find the beacon.",
+      next: "",
+      places: [
+        { id: "pier", name: "Outer pier", summary: "A pier.", next: "warehouse" },
+        { id: "warehouse", name: "Bonded warehouse", summary: "A warehouse.", next: "" },
+      ],
+    },
+  ],
+});
+assert.equal(legacy.ok, true);
+if (legacy.ok) assert.equal(legacy.value.scripted, false);
+
+const rewarded = assignSceneRewards(
+  plan(),
+  {
+    scenes: plan().scenes.map((scene) => ({
+      id: scene.id,
+      rewards: [{ characterId: "pc_aaa", xp: 20, currency: 0, items: [] }],
+    })),
+  },
+  ["pc_aaa"],
+  [{ id: "might", label: "Might" }],
+  { currencyMax: 40, itemMax: 2 },
+);
+assert.equal(rewarded.ok, true);
+if (rewarded.ok) {
+  assert.equal(rewarded.value.scenes[0]?.rewards[0]?.characterId, "pc_aaa");
+  assert.equal(rewarded.value.scenes[0]?.places.length, plan().scenes[0]?.places.length);
+}
+
+const missingReward = assignSceneRewards(
+  plan(),
+  {
+    scenes: plan().scenes.map((scene) => ({
+      id: scene.id,
+      rewards: [{ characterId: "pc_other", xp: 20, currency: 0, items: [] }],
+    })),
+  },
+  ["pc_aaa"],
+  [{ id: "might", label: "Might" }],
+  { currencyMax: 40, itemMax: 2 },
+);
+assert.equal(missingReward.ok, false);
+
+const frequent = parseGeneratedPlan(validBody(), {
+  ...settings,
+  campaignConfiguration: { encounterFrequency: "high" },
+} as CampaignSettings);
+assert.equal(frequent.ok, false);
+
+const schema = campaignPlanSchema(settings);
 const scenes = schema.schema.properties?.scenes as { minItems?: number; maxItems?: number };
 assert.equal(scenes.minItems, 3);
 assert.equal(scenes.maxItems, 3);

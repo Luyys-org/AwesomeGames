@@ -1,9 +1,63 @@
 import type { CampaignSettings, EnemyDifficultyId } from "@/rpg/lib/campaign-settings";
+import type { SettingLevel } from "@/rpg/lib/campaign-tab-config";
+import type { ItemModifier, StatDefinition } from "@/rpg/lib/character-options";
 
 export const PLAN_ID_MAX = 24;
 export const PLAN_NAME_MAX = 40;
 export const PLAN_SUMMARY_MAX = 400;
 export const PLAN_OBJECTIVE_MAX = 280;
+export const PLAN_NARRATION_MAX = 400;
+export const PLAN_LINE_MAX = 200;
+export const PLAN_ACTION_MIN = 2;
+export const PLAN_ACTION_MAX = 4;
+export const PLAN_ENCOUNTER_MAX = 2;
+
+const PLAN_ACTION_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const PLAN_EFFECTS = ["stay", "next-place", "clear-scene", "encounter"] as const;
+const PLAN_FAILURES = ["setback", "harm", "severe"] as const;
+const PLAN_DIFFICULTIES = [8, 10, 12, 15] as const;
+
+export type PlanActionEffect = (typeof PLAN_EFFECTS)[number];
+export type PlanCheckFailure = (typeof PLAN_FAILURES)[number];
+
+export interface PlanLootItem {
+  name: string;
+  slot: string;
+  equipped: boolean;
+  modifiers: ItemModifier[];
+}
+
+export interface PlanAction {
+  id: string;
+  label: string;
+  stat: string;
+  difficulty: (typeof PLAN_DIFFICULTIES)[number];
+  failure: PlanCheckFailure;
+  abilityId: string;
+  effect: PlanActionEffect;
+  encounterId: string;
+  certain: boolean;
+  setup: string;
+  success: string;
+  miss: string;
+}
+
+export interface PlanEncounter {
+  id: string;
+  name: string;
+  summary: string;
+  triggerActionId: string;
+  defeat: { xp: number; currency: number; items: PlanLootItem[] };
+  malus: { wounds: 0 | 1 | 2; consequence: string };
+  resolved: boolean;
+}
+
+export interface PlanSceneReward {
+  characterId: string;
+  xp: number;
+  currency: number;
+  items: PlanLootItem[];
+}
 
 const PLAN_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const OBJECTIVE_STATUSES = ["pending", "cleared"] as const;
@@ -15,6 +69,9 @@ export interface PlanPlace {
   name: string;
   summary: string;
   next: string;
+  narration: string;
+  actions: PlanAction[];
+  encounters: PlanEncounter[];
 }
 
 export interface PlanScene {
@@ -25,12 +82,18 @@ export interface PlanScene {
   next: string;
   places: PlanPlace[];
   objectiveStatus: PlanObjectiveStatus;
+  narration: string;
+  success: string;
+  failure: string;
+  rewards: PlanSceneReward[];
 }
 
 export interface CampaignPlan {
   scenes: PlanScene[];
   currentSceneId: string;
   currentPlaceId: string;
+  /** False on saves written before the room script. Those keep the free game master. */
+  scripted: boolean;
 }
 
 export interface PlanBounds {
@@ -42,12 +105,15 @@ export interface PlanBounds {
   name: number;
   summary: number;
   objective: number;
+  narration: number;
+  line: number;
 }
 
 export interface PlanStartPlace {
   id: string;
   name: string;
   summary: string;
+  narration: string;
   sceneId: string;
   sceneName: string;
   objective: string;
@@ -74,10 +140,14 @@ clearedSceneId is an empty string, or the current scene id when this beat resolv
 Do not narrate the principal quest as finished unless mayFinishObjective is true, or this beat clears the last scene's objective from that scene's last place.
 Aim narration and the next actions at the current scene objective, or at travel along next toward the last place of this scene. Do not skip ahead.`;
 
+const SCRIPTED_RULES = `The room and the scene are already decided. Narrate only the outcome in the user message. Do not add a foe, a reward, a place, or a new problem. Do not choose the next action.`;
+
 const NO_PLAN_RULES =
   "No campaign plan is stored. Return placeId, sceneId, and clearedSceneId as empty strings.";
 
 const LOADOUT_NOTE = `The campaign plan is the map. The party is in currentPlaceId of currentSceneId. The first actions pursue that scene's objective, or travel along next toward the last place of this scene. Do not offer an action that enters the next scene while mayAdvanceScene is false, or that finishes the principal quest while mayFinishObjective is false.`;
+
+const SCRIPTED_LOADOUT_NOTE = `The campaign plan already chose the actions for the current room. Do not invent actions. Write starting gear only.`;
 
 export function planBounds(difficulty: EnemyDifficultyId): PlanBounds {
   return {
@@ -86,7 +156,20 @@ export function planBounds(difficulty: EnemyDifficultyId): PlanBounds {
     name: PLAN_NAME_MAX,
     summary: PLAN_SUMMARY_MAX,
     objective: PLAN_OBJECTIVE_MAX,
+    narration: PLAN_NARRATION_MAX,
+    line: PLAN_LINE_MAX,
   };
+}
+
+/** Player-facing opening for the lobby, taken from the first scene and the first room. */
+export function openingSituationFromPlan(plan: CampaignPlan): string {
+  const scene = plan.scenes[0];
+  const place = scene?.places[0];
+  if (!scene || !place) return "";
+  const sceneText = scene.narration.trim();
+  const placeText = (place.narration || place.summary).trim();
+  if (sceneText && placeText && sceneText !== placeText) return `${sceneText} ${placeText}`.slice(0, 800);
+  return (placeText || sceneText || place.summary).slice(0, 800);
 }
 
 export function planStartPlace(plan: CampaignPlan): PlanStartPlace | null {
@@ -97,6 +180,7 @@ export function planStartPlace(plan: CampaignPlan): PlanStartPlace | null {
     id: place.id,
     name: place.name,
     summary: place.summary,
+    narration: place.narration,
     sceneId: scene.id,
     sceneName: scene.name,
     objective: scene.objective,
@@ -109,13 +193,26 @@ export function planForPrompt(plan: CampaignPlan | null): Record<string, unknown
   const place = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
   const onLastPlace = place?.next === "";
   const onLastScene = scene?.next === "";
+  const nextPlaceName = scriptedNextPlaceName(plan);
   return {
+    scripted: plan.scripted,
     currentSceneId: plan.currentSceneId,
     currentPlaceId: plan.currentPlaceId,
     currentObjective: scene?.objective ?? "",
     mayAdvanceScene: Boolean(scene && scene.next !== "" && scene.objectiveStatus === "cleared"),
     mayFinishObjective: Boolean(scene && onLastScene && onLastPlace && scene.objectiveStatus === "cleared"),
-    scenes: plan.scenes.map((entry) => ({
+    ...(plan.scripted
+      ? {
+          sceneNarration: scene?.narration ?? "",
+          sceneSuccess: scene?.success ?? "",
+          sceneFailure: scene?.failure ?? "",
+          placeNarration: place?.narration ?? "",
+          nextPlaceName,
+        }
+      : {}),
+    scenes: plan.scripted
+      ? []
+      : plan.scenes.map((entry) => ({
       id: entry.id,
       name: entry.name,
       summary: entry.summary,
@@ -133,11 +230,51 @@ export function planForPrompt(plan: CampaignPlan | null): Record<string, unknown
 }
 
 export function planRulesForTurn(plan: CampaignPlan | null): string {
-  return plan ? TURN_RULES : NO_PLAN_RULES;
+  if (!plan) return NO_PLAN_RULES;
+  return plan.scripted ? SCRIPTED_RULES : TURN_RULES;
 }
 
 export function planNoteForLoadout(plan: CampaignPlan | null): string {
-  return plan ? LOADOUT_NOTE : "";
+  if (!plan) return "";
+  return plan.scripted ? SCRIPTED_LOADOUT_NOTE : LOADOUT_NOTE;
+}
+
+export function isScriptedPlan(plan: CampaignPlan | null): plan is CampaignPlan {
+  return plan?.scripted === true;
+}
+
+/** How many rooms may hold an encounter for this frequency. */
+export function encounterPlaceBounds(placeCount: number, frequency: SettingLevel): { min: number; max: number } {
+  if (placeCount <= 0) return { min: 0, max: 0 };
+  if (frequency === "low") return { min: 0, max: Math.max(1, Math.ceil(placeCount / 3)) };
+  if (frequency === "high") {
+    const min = Math.max(1, Math.ceil((placeCount * 2) / 3));
+    return { min, max: placeCount };
+  }
+  const min = placeCount >= 3 ? 1 : 0;
+  const max = Math.max(min, Math.ceil(placeCount / 2));
+  return { min, max };
+}
+
+export function currentPlanNodes(plan: CampaignPlan): { scene: PlanScene; place: PlanPlace } | null {
+  const scene = plan.scenes.find((entry) => entry.id === plan.currentSceneId);
+  const place = scene?.places.find((entry) => entry.id === plan.currentPlaceId);
+  if (!scene || !place) return null;
+  return { scene, place };
+}
+
+/** Actions the party can take in the current room, hiding spent encounters and locked doors. */
+export function offeredPlanActions(plan: CampaignPlan): PlanAction[] {
+  const nodes = currentPlanNodes(plan);
+  if (!nodes) return [];
+  const { scene, place } = nodes;
+  const resolved = new Set(place.encounters.filter((encounter) => encounter.resolved).map((encounter) => encounter.id));
+  return place.actions.filter((action) => {
+    if (action.effect === "encounter" && resolved.has(action.encounterId)) return false;
+    if (action.effect === "clear-scene" && scene.objectiveStatus === "cleared") return false;
+    if (action.effect === "next-place" && place.next === "" && scene.objectiveStatus !== "cleared") return false;
+    return true;
+  });
 }
 
 export interface RoomExit {
@@ -205,12 +342,15 @@ export function parseGeneratedPlan(value: unknown, settings: CampaignSettings): 
   const first = scenes[0];
   const start = first?.places[0];
   if (!first || !start) return { ok: false, error: "The plan needs a first scene and a first place." };
+  const script = validateScript(scenes, settings, true);
+  if (!script.ok) return script;
   return {
     ok: true,
     value: {
-      scenes: scenes.map((scene) => ({ ...scene, objectiveStatus: "pending" })),
+      scenes: script.value.map((scene) => ({ ...scene, objectiveStatus: "pending", rewards: [] })),
       currentSceneId: first.id,
       currentPlaceId: start.id,
+      scripted: true,
     },
   };
 }
@@ -233,7 +373,21 @@ export function parseStoredPlan(value: unknown): Parsed<CampaignPlan> {
     const status = source && isObjectiveStatus(source.objectiveStatus) ? source.objectiveStatus : "pending";
     return { ...entry, objectiveStatus: status };
   });
-  return { ok: true, value: { scenes, currentSceneId, currentPlaceId } };
+  const scripted = scenes.some((scene) => scene.narration.length > 0 || scene.places.some((place) => place.actions.length > 0));
+  if (scripted) {
+    const script = validateScript(scenes, null, true);
+    if (!script.ok) return script;
+    return { ok: true, value: { scenes: script.value, currentSceneId, currentPlaceId, scripted: true } };
+  }
+  return {
+    ok: true,
+    value: {
+      scenes: scenes.map(blankScript),
+      currentSceneId,
+      currentPlaceId,
+      scripted: false,
+    },
+  };
 }
 
 export function readStoredCampaignPlan(value: unknown): CampaignPlan | null {
@@ -333,6 +487,7 @@ export function resolvePlanBeat(
     scenes,
     currentSceneId: destinationScene.id,
     currentPlaceId: destination.id,
+    scripted: plan.scripted,
   };
   if (!moved) {
     const stayed = stayPlace(place, spot.name);
@@ -406,6 +561,14 @@ function readScene(
   if (value.places.length === 0 || value.places.length > 8) {
     return { ok: false, error: "Each scene needs between 1 and 8 places." };
   }
+  const narration = readOptionalLine(value.narration, "Scene narration", PLAN_NARRATION_MAX);
+  if (!narration.ok) return narration;
+  const success = readOptionalLine(value.success, "Scene success", PLAN_LINE_MAX);
+  if (!success.ok) return success;
+  const failure = readOptionalLine(value.failure, "Scene failure", PLAN_LINE_MAX);
+  if (!failure.ok) return failure;
+  const rewards = readRewards(value.rewards);
+  if (!rewards.ok) return rewards;
 
   const places: PlanPlace[] = [];
   for (const entry of value.places) {
@@ -423,6 +586,10 @@ function readScene(
       next: next.value,
       places,
       objectiveStatus: "pending",
+      narration: narration.value,
+      success: success.value,
+      failure: failure.value,
+      rewards: rewards.value,
     },
   };
 }
@@ -442,7 +609,24 @@ function readPlace(value: unknown, seenIds: Set<string>, seenNames: Set<string>)
   if (!summary.ok) return summary;
   const next = readLink(value.next, "Place next");
   if (!next.ok) return next;
-  return { ok: true, value: { id: id.value, name: name.value, summary: summary.value, next: next.value } };
+  const narration = readOptionalLine(value.narration, "Place narration", PLAN_NARRATION_MAX);
+  if (!narration.ok) return narration;
+  const actions = readActions(value.actions);
+  if (!actions.ok) return actions;
+  const encounters = readEncounters(value.encounters);
+  if (!encounters.ok) return encounters;
+  return {
+    ok: true,
+    value: {
+      id: id.value,
+      name: name.value,
+      summary: summary.value,
+      next: next.value,
+      narration: narration.value,
+      actions: actions.value,
+      encounters: encounters.value,
+    },
+  };
 }
 
 function orderLinks<T extends PlanLink>(nodes: T[], noun: string): Parsed<T[]> {
@@ -540,6 +724,397 @@ function sceneSource(value: unknown, id: string): Record<string, unknown> | null
 
 function isObjectiveStatus(value: unknown): value is PlanObjectiveStatus {
   return OBJECTIVE_STATUSES.some((status) => status === value);
+}
+
+function scriptedNextPlaceName(plan: CampaignPlan): string {
+  const nodes = currentPlanNodes(plan);
+  if (!nodes) return "";
+  const { scene, place } = nodes;
+  if (place.next !== "") {
+    return scene.places.find((entry) => entry.id === place.next)?.name ?? "";
+  }
+  if (scene.next === "" || scene.objectiveStatus !== "cleared") return "";
+  const nextScene = plan.scenes.find((entry) => entry.id === scene.next);
+  return nextScene?.places[0]?.name ?? "";
+}
+
+function blankScript(scene: PlanScene): PlanScene {
+  return {
+    ...scene,
+    narration: "",
+    success: "",
+    failure: "",
+    rewards: [],
+    places: scene.places.map((place) => ({ ...place, narration: "", actions: [], encounters: [] })),
+  };
+}
+
+function validateScript(
+  scenes: PlanScene[],
+  settings: CampaignSettings | null,
+  required: boolean,
+): Parsed<PlanScene[]> {
+  const stats = settings?.characterOptions?.stats ?? [];
+  const skills = settings?.characterOptions?.skills ?? [];
+  const caps = settings ? lootCaps(settings) : { currencyMax: 100, itemMax: 3 };
+  const actionIds = new Set<string>();
+  let roomsWithEncounters = 0;
+  let roomCount = 0;
+
+  for (const scene of scenes) {
+    if (required && (scene.narration.length === 0 || scene.success.length === 0 || scene.failure.length === 0)) {
+      return { ok: false, error: `Scene ${scene.id} needs narration, success, and failure.` };
+    }
+    const last = scene.places[scene.places.length - 1];
+    for (const place of scene.places) {
+      roomCount += 1;
+      if (required && place.narration.length === 0) {
+        return { ok: false, error: `Place ${place.id} needs narration.` };
+      }
+      if (place.actions.length < PLAN_ACTION_MIN || place.actions.length > PLAN_ACTION_MAX) {
+        if (place.actions.length === 0 && !required) continue;
+        return {
+          ok: false,
+          error: `Place ${place.id} needs ${PLAN_ACTION_MIN} to ${PLAN_ACTION_MAX} actions.`,
+        };
+      }
+      if (place.encounters.length > PLAN_ENCOUNTER_MAX) {
+        return { ok: false, error: `Place ${place.id} can have at most ${PLAN_ENCOUNTER_MAX} encounters.` };
+      }
+      if (place.encounters.length > 0) roomsWithEncounters += 1;
+      for (const action of place.actions) {
+        if (actionIds.has(action.id)) return { ok: false, error: `Action id ${action.id} is duplicated.` };
+        actionIds.add(action.id);
+        if (stats.length > 0 && !stats.some((stat) => stat.id === action.stat)) {
+          return { ok: false, error: `Action ${action.id} uses an unknown stat.` };
+        }
+        if (action.abilityId && skills.length > 0) {
+          const skill = skills.find((entry) => entry.id === action.abilityId);
+          if (!skill) return { ok: false, error: `Action ${action.id} uses an unknown abilityId.` };
+          if (skill.statId !== action.stat) {
+            return { ok: false, error: `Action ${action.id} abilityId must match the action stat.` };
+          }
+        }
+        const effectError = checkActionEffect(scene, place, last?.id ?? "", action);
+        if (effectError) return { ok: false, error: effectError };
+      }
+      for (const encounter of place.encounters) {
+        const trigger = place.actions.find((action) => action.id === encounter.triggerActionId);
+        if (!trigger || trigger.effect !== "encounter" || trigger.encounterId !== encounter.id) {
+          return {
+            ok: false,
+            error: `Encounter ${encounter.id} must be triggered by an encounter action in ${place.id}.`,
+          };
+        }
+        if (encounter.defeat.currency > caps.currencyMax || encounter.defeat.items.length > caps.itemMax) {
+          return { ok: false, error: `Encounter ${encounter.id} defeat loot is outside the campaign limits.` };
+        }
+      }
+      if (place.next === "" && !place.actions.some((action) => action.effect === "clear-scene")) {
+        return { ok: false, error: `The last place ${place.id} needs a clear-scene action.` };
+      }
+      if (place.next !== "" && !place.actions.some((action) => action.effect === "next-place")) {
+        return { ok: false, error: `Place ${place.id} needs a next-place action.` };
+      }
+      if (place.next === "" && scene.next !== "" && !place.actions.some((action) => action.effect === "next-place")) {
+        return { ok: false, error: `Place ${place.id} needs a next-place action into the next scene.` };
+      }
+    }
+  }
+
+  if (required && settings?.campaignConfiguration) {
+    const bounds = encounterPlaceBounds(roomCount, settings.campaignConfiguration.encounterFrequency);
+    if (roomsWithEncounters < bounds.min || roomsWithEncounters > bounds.max) {
+      return {
+        ok: false,
+        error: `This encounter frequency needs encounters in ${bounds.min} to ${bounds.max} rooms.`,
+      };
+    }
+  }
+
+  return { ok: true, value: scenes };
+}
+
+function checkActionEffect(scene: PlanScene, place: PlanPlace, lastId: string, action: PlanAction): string | null {
+  if (action.effect === "clear-scene" && place.id !== lastId) {
+    return `Action ${action.id} can clear the scene only from its last place.`;
+  }
+  if (action.effect === "next-place" && place.next === "" && scene.next === "") {
+    return `Action ${action.id} has nowhere to go next.`;
+  }
+  if (action.effect === "encounter") {
+    if (action.certain) return `Action ${action.id} cannot be certain and start an encounter.`;
+    if (!place.encounters.some((encounter) => encounter.id === action.encounterId)) {
+      return `Action ${action.id} must name an encounter in ${place.id}.`;
+    }
+  } else if (action.encounterId !== "") {
+    return `Action ${action.id} must leave encounterId empty.`;
+  }
+  return null;
+}
+
+function readOptionalLine(value: unknown, label: string, max: number): Parsed<string> {
+  if (value === undefined || value === null || value === "") return { ok: true, value: "" };
+  return readText(value, label, max);
+}
+
+function readActions(value: unknown): Parsed<PlanAction[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: "Place actions must be an array." };
+  const actions: PlanAction[] = [];
+  for (const entry of value) {
+    const action = readAction(entry);
+    if (!action.ok) return action;
+    actions.push(action.value);
+  }
+  return { ok: true, value: actions };
+}
+
+function readAction(value: unknown): Parsed<PlanAction> {
+  if (!isRecord(value)) return { ok: false, error: "Each action needs id, label, stat, difficulty, and failure." };
+  if (typeof value.id !== "string" || !PLAN_ACTION_ID.test(value.id.trim())) {
+    return { ok: false, error: "Each action id must be a lowercase slug of at most 32 characters." };
+  }
+  const label = readText(value.label, "Action label", 72);
+  if (!label.ok) return label;
+  if (typeof value.stat !== "string" || !PLAN_ID.test(value.stat.trim())) {
+    return { ok: false, error: "Each action stat must be a campaign stat id." };
+  }
+  if (!PLAN_DIFFICULTIES.some((difficulty) => difficulty === value.difficulty)) {
+    return { ok: false, error: "Action difficulty must be 8, 10, 12, or 15." };
+  }
+  if (!PLAN_FAILURES.some((failure) => failure === value.failure)) {
+    return { ok: false, error: "Action failure must be setback, harm, or severe." };
+  }
+  if (!PLAN_EFFECTS.some((effect) => effect === value.effect)) {
+    return { ok: false, error: "Action effect must be stay, next-place, clear-scene, or encounter." };
+  }
+  const ability = readOptionalId(value.abilityId ?? "", "abilityId");
+  if (!ability.ok) return ability;
+  const encounterId = readOptionalId(value.encounterId ?? "", "encounterId");
+  if (!encounterId.ok) return encounterId;
+  if (typeof value.certain !== "boolean") return { ok: false, error: "Each action needs certain true or false." };
+  const setup = readText(value.setup, "Action setup", PLAN_LINE_MAX);
+  if (!setup.ok) return setup;
+  const success = readText(value.success, "Action success", PLAN_LINE_MAX);
+  if (!success.ok) return success;
+  const miss = readText(value.miss, "Action miss", PLAN_LINE_MAX);
+  if (!miss.ok) return miss;
+  return {
+    ok: true,
+    value: {
+      id: value.id.trim(),
+      label: label.value,
+      stat: value.stat.trim(),
+      difficulty: value.difficulty as PlanAction["difficulty"],
+      failure: value.failure as PlanCheckFailure,
+      abilityId: ability.value,
+      effect: value.effect as PlanActionEffect,
+      encounterId: encounterId.value,
+      certain: value.certain,
+      setup: setup.value,
+      success: success.value,
+      miss: miss.value,
+    },
+  };
+}
+
+function readEncounters(value: unknown): Parsed<PlanEncounter[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: "Place encounters must be an array." };
+  const encounters: PlanEncounter[] = [];
+  for (const entry of value) {
+    const encounter = readEncounter(entry);
+    if (!encounter.ok) return encounter;
+    encounters.push(encounter.value);
+  }
+  return { ok: true, value: encounters };
+}
+
+function readEncounter(value: unknown): Parsed<PlanEncounter> {
+  if (!isRecord(value)) return { ok: false, error: "Each encounter needs id, name, summary, and a trigger." };
+  const id = readId(value.id, "Encounter id");
+  if (!id.ok) return id;
+  const name = readText(value.name, "Encounter name", 48);
+  if (!name.ok) return name;
+  const summary = readText(value.summary, "Encounter summary", 200);
+  if (!summary.ok) return summary;
+  if (typeof value.triggerActionId !== "string" || !PLAN_ACTION_ID.test(value.triggerActionId.trim())) {
+    return { ok: false, error: "Each encounter needs a triggerActionId." };
+  }
+  if (!isRecord(value.defeat) || !isRecord(value.malus)) {
+    return { ok: false, error: "Each encounter needs defeat loot and a failure malus." };
+  }
+  const xp = value.defeat.xp;
+  if (typeof xp !== "number" || !Number.isInteger(xp) || xp < 10 || xp > 100) {
+    return { ok: false, error: "Encounter experience must be a whole number from 10 to 100." };
+  }
+  const currency = value.defeat.currency;
+  if (typeof currency !== "number" || !Number.isInteger(currency) || currency < 0) {
+    return { ok: false, error: "Encounter currency must be a whole number from 0." };
+  }
+  const items = readLootItems(value.defeat.items);
+  if (!items.ok) return items;
+  const wounds = value.malus.wounds;
+  if (wounds !== 0 && wounds !== 1 && wounds !== 2) {
+    return { ok: false, error: "Encounter malus wounds must be 0, 1, or 2." };
+  }
+  const consequence = readText(value.malus.consequence, "Encounter malus", PLAN_LINE_MAX);
+  if (!consequence.ok) return consequence;
+  return {
+    ok: true,
+    value: {
+      id: id.value,
+      name: name.value,
+      summary: summary.value,
+      triggerActionId: value.triggerActionId.trim(),
+      defeat: { xp, currency, items: items.value },
+      malus: { wounds, consequence: consequence.value },
+      resolved: value.resolved === true,
+    },
+  };
+}
+
+function readRewards(value: unknown): Parsed<PlanSceneReward[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: "Scene rewards must be an array." };
+  const rewards: PlanSceneReward[] = [];
+  for (const entry of value) {
+    const reward = readReward(entry);
+    if (!reward.ok) return reward;
+    rewards.push(reward.value);
+  }
+  return { ok: true, value: rewards };
+}
+
+function readReward(value: unknown): Parsed<PlanSceneReward> {
+  if (!isRecord(value) || typeof value.characterId !== "string" || value.characterId.trim().length === 0) {
+    return { ok: false, error: "Each scene reward needs a characterId." };
+  }
+  if (typeof value.xp !== "number" || !Number.isInteger(value.xp) || value.xp < 10 || value.xp > 100) {
+    return { ok: false, error: "Scene reward experience must be a whole number from 10 to 100." };
+  }
+  if (typeof value.currency !== "number" || !Number.isInteger(value.currency) || value.currency < 0) {
+    return { ok: false, error: "Scene reward currency must be a whole number from 0." };
+  }
+  const items = readLootItems(value.items);
+  if (!items.ok) return items;
+  return {
+    ok: true,
+    value: { characterId: value.characterId.trim(), xp: value.xp, currency: value.currency, items: items.value },
+  };
+}
+
+function readLootItems(value: unknown): Parsed<PlanLootItem[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: "Loot items must be an array." };
+  const items: PlanLootItem[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.name !== "string") {
+      return { ok: false, error: "Each loot item needs a name." };
+    }
+    const name = entry.name.trim();
+    if (name.length === 0 || name.length > 80) {
+      return { ok: false, error: "Each loot item name must be 1 to 80 characters." };
+    }
+    const modifiers = readPlanModifiers(entry.modifiers);
+    if (!modifiers.ok) return modifiers;
+    const slot = typeof entry.slot === "string" ? entry.slot.trim() : null;
+    if (slot === null || (slot.length > 0 && !/^[a-z][a-z0-9-]{0,23}$/.test(slot))) {
+      return { ok: false, error: "Each loot item slot must be empty or a lowercase slug." };
+    }
+    items.push({ name, slot, equipped: entry.equipped === true, modifiers: modifiers.value });
+  }
+  return { ok: true, value: items };
+}
+
+function readPlanModifiers(value: unknown): Parsed<ItemModifier[]> {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: "Item modifiers must be an array." };
+  const modifiers: ItemModifier[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || (entry.kind !== "stat" && entry.kind !== "roll")) {
+      return { ok: false, error: "Item modifier kind must be stat or roll." };
+    }
+    if (typeof entry.statId !== "string") return { ok: false, error: "Each item modifier needs a statId." };
+    if (typeof entry.amount !== "number" || !Number.isInteger(entry.amount) || entry.amount === 0) {
+      return { ok: false, error: "Item modifier amount must be a non-zero integer from -3 to 3." };
+    }
+    if (entry.amount < -3 || entry.amount > 3) {
+      return { ok: false, error: "Item modifier amount must be from -3 to 3." };
+    }
+    modifiers.push({ kind: entry.kind, statId: entry.statId, amount: entry.amount });
+  }
+  return { ok: true, value: modifiers };
+}
+
+export function assignSceneRewards(
+  plan: CampaignPlan,
+  incoming: unknown,
+  characterIds: string[],
+  stats: StatDefinition[],
+  limits: { currencyMax: number; itemMax: number },
+): Parsed<CampaignPlan> {
+  if (!plan.scripted) return { ok: false, error: "Scene rewards belong on a scripted plan." };
+  if (!isRecord(incoming) || !Array.isArray(incoming.scenes)) {
+    return { ok: false, error: "Scene rewards must list every scene." };
+  }
+  if (incoming.scenes.length !== plan.scenes.length) {
+    return { ok: false, error: "Scene rewards must list every scene once." };
+  }
+  const byId = new Map<string, PlanSceneReward[]>();
+  for (const entry of incoming.scenes) {
+    if (!isRecord(entry) || typeof entry.id !== "string") {
+      return { ok: false, error: "Each scene reward block needs an id." };
+    }
+    if (!plan.scenes.some((scene) => scene.id === entry.id)) {
+      return { ok: false, error: `Scene ${entry.id} is not on the campaign plan.` };
+    }
+    if (byId.has(entry.id)) return { ok: false, error: `Scene ${entry.id} is listed twice.` };
+    const rewards = readRewards(entry.rewards);
+    if (!rewards.ok) return rewards;
+    const seen = new Set<string>();
+    for (const reward of rewards.value) {
+      if (!characterIds.includes(reward.characterId)) {
+        return { ok: false, error: "Scene rewards can name only living characters." };
+      }
+      if (seen.has(reward.characterId)) {
+        return { ok: false, error: "Each character can receive one scene reward." };
+      }
+      seen.add(reward.characterId);
+      if (reward.currency > limits.currencyMax || reward.items.length > limits.itemMax) {
+        return { ok: false, error: "Scene reward loot is outside the campaign limits." };
+      }
+      for (const item of reward.items) {
+        for (const modifier of item.modifiers) {
+          if (modifier.kind === "stat" && !stats.some((stat) => stat.id === modifier.statId)) {
+            return { ok: false, error: "Scene reward modifiers must use campaign stat ids." };
+          }
+        }
+      }
+    }
+    if (characterIds.some((id) => !seen.has(id))) {
+      return { ok: false, error: "Each living character needs a reward in every scene." };
+    }
+    byId.set(entry.id, rewards.value);
+  }
+  return {
+    ok: true,
+    value: {
+      ...plan,
+      scenes: plan.scenes.map((scene) => ({ ...scene, rewards: byId.get(scene.id) ?? [] })),
+    },
+  };
+}
+
+function lootCaps(settings: CampaignSettings): { currencyMax: number; itemMax: number } {
+  const fallback: SettingLevel =
+    settings.lootRarity === "scarce" ? "low" : settings.lootRarity === "abundant" ? "high" : "standard";
+  const currency = settings.campaignConfiguration?.currencyAbundance ?? fallback;
+  const items = settings.campaignConfiguration?.lootQuantity ?? fallback;
+  const currencyMax = currency === "low" ? 12 : currency === "high" ? 100 : 40;
+  const itemMax = items === "low" ? 1 : items === "high" ? 3 : 2;
+  return { currencyMax, itemMax };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

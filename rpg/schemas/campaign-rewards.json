@@ -1,0 +1,38 @@
+{
+  "name": "campaign_rewards",
+  "properties": {
+    "scenes": {
+      "type": "array",
+      "minItems": { "$bind": "sceneCount" },
+      "maxItems": { "$bind": "sceneCount" },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rewards"],
+        "properties": {
+          "id": { "$bind": "sceneIdEnum" },
+          "rewards": {
+            "type": "array",
+            "minItems": { "$bind": "livingCount" },
+            "maxItems": { "$bind": "livingCount" },
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["characterId", "xp", "currency", "items"],
+              "properties": {
+                "characterId": { "$bind": "livingEnum" },
+                "xp": { "type": "integer", "minimum": { "$bind": "xpMin" }, "maximum": { "$bind": "xpMax" } },
+                "currency": { "type": "integer", "minimum": 0, "maximum": { "$bind": "currencyMax" } },
+                "items": {
+                  "type": "array",
+                  "maxItems": { "$bind": "itemMax" },
+                  "items": { "$fragment": "item" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

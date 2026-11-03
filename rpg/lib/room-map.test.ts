@@ -9,8 +9,36 @@ const settings = {
   objective: "Recover the beacon before the storm hits.",
 } as CampaignSettings;
 
+function action(id: string, effect: "stay" | "next-place" | "clear-scene") {
+  return {
+    id,
+    label: id.replaceAll("-", " "),
+    stat: "might",
+    difficulty: 10,
+    failure: "setback",
+    abilityId: "",
+    effect,
+    encounterId: "",
+    certain: effect === "stay",
+    setup: `Try ${id}.`,
+    success: `${id} works.`,
+    miss: `${id} fails.`,
+  };
+}
+
 function place(id: string, name: string, next: string) {
-  return { id, name, summary: `${name} holds the next step of the quest.`, next };
+  const actions = [action(`look-${id}`, "stay")];
+  if (next) actions.push(action(`go-${id}`, "next-place"));
+  else actions.push(action(`finish-${id}`, "clear-scene"));
+  return {
+    id,
+    name,
+    summary: `${name} holds the next step of the quest.`,
+    next,
+    narration: `${name} is the room the party must deal with.`,
+    actions,
+    encounters: [],
+  };
 }
 
 function scene(
@@ -20,12 +48,17 @@ function scene(
   next: string,
   places: ReturnType<typeof place>[],
 ) {
+  const last = places[places.length - 1];
+  if (last && last.next === "" && next !== "") last.actions.push(action(`leave-${last.id}`, "next-place"));
   return {
     id,
     name,
     summary: `${name} is the next step toward the beacon.`,
     objective,
     next,
+    narration: `${name} pursues the next step.`,
+    success: `${name} is finished.`,
+    failure: `${name} holds.`,
     places,
   };
 }
@@ -75,6 +108,7 @@ const laterFirst = roomExits(at(base, "market", "stalls")).map((exit) => exit.pl
 assert.deepEqual(laterFirst, ["warehouse", "office"]);
 
 const single: CampaignPlan = {
+  scripted: false,
   currentSceneId: "only",
   currentPlaceId: "cell",
   scenes: [
@@ -85,7 +119,21 @@ const single: CampaignPlan = {
       objective: "Wait.",
       next: "",
       objectiveStatus: "pending",
-      places: [{ id: "cell", name: "The cell", summary: "A bare cell.", next: "" }],
+      narration: "",
+      success: "",
+      failure: "",
+      rewards: [],
+      places: [
+        {
+          id: "cell",
+          name: "The cell",
+          summary: "A bare cell.",
+          next: "",
+          narration: "",
+          actions: [],
+          encounters: [],
+        },
+      ],
     },
   ],
 };
