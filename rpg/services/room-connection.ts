@@ -170,29 +170,37 @@ registerRoomMapReadyListener((payload) => {
   const busy = isRoomMapGenerating(currentPlace);
   if (!stored && busy === (table.roomMapBusy === true)) return;
 
-  rememberTable(current, {
+  const session = current;
+  rememberTable(session, {
     ...table,
     roomMaps,
     roomMapBusy: busy,
     revision: table.revision + 1,
   });
-  void broadcastSnapshot(current);
-  if (stored) void broadcastRoomMap(current, payload.imageId, payload.dataUrl);
+  void (async () => {
+    if (stored) await broadcastRoomMap(session, payload.imageId, payload.dataUrl);
+    await broadcastSnapshot(session);
+  })();
 });
 
 registerSceneImageReadyListener((payload) => {
   if (!current || current.roomCode !== payload.roomCode || current.role !== "host" || !current.table) return;
   if ((current.table.sceneImageId ?? "") !== payload.imageId) return;
 
-  const table = { ...current.table, imageBusy: false };
-  if (payload.dataUrl.length > 0 && payload.imageId.length > 0) {
-    current.sceneImageUrls.set(payload.imageId, payload.dataUrl);
-  }
-  rememberTable(current, table);
-  if (payload.dataUrl.length > 0 && payload.imageId.length > 0) {
-    void broadcastSceneImage(current, payload.imageId, payload.revision, payload.dataUrl);
-    void broadcastSnapshot(current);
-  }
+  const session = current;
+  const table = session.table;
+  if (!table) return;
+  const hasImage = payload.dataUrl.length > 0 && payload.imageId.length > 0;
+  if (hasImage) session.sceneImageUrls.set(payload.imageId, payload.dataUrl);
+  rememberTable(session, {
+    ...table,
+    imageBusy: false,
+    revision: table.revision + 1,
+  });
+  void (async () => {
+    if (hasImage) await broadcastSceneImage(session, payload.imageId, payload.revision, payload.dataUrl);
+    await broadcastSnapshot(session);
+  })();
 });
 let opening: Promise<void> | null = null;
 const listeners = new Set<() => void>();
@@ -667,7 +675,7 @@ async function sendJoin(session: Session, hostId: string): Promise<void> {
   }
 }
 
-function handleRequest(session: Session, peerId: string, data: JsonValue): JsonValue {
+function handleRequest(session: Session, peerId: string, data: JsonValue): JsonValue | Promise<JsonValue> {
   if (session.role !== "host" || !session.table || !isRecord(data) || typeof data.type !== "string") {
     return { ok: false };
   }
@@ -677,8 +685,11 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (!session.peers.has(peerId)) session.peers.set(peerId, { characterId: null });
     publish(session);
     void sendCurrentRoomMap(session, peerId);
+    void sendCurrentSceneImage(session, peerId);
     return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
   }
+
+  if (data.type === "image") return readRequestedImage(session, data);
 
   if (data.type === "createCharacter") {
     if (session.peers.get(peerId)?.characterId) {
@@ -986,6 +997,7 @@ function applySnapshot(session: Session, snapshot: TableSnapshot): void {
   session.lastRevision = snapshot.revision;
   publish(session, snapshot);
   maybeClaimStoredSeat(session, snapshot);
+  void requestMissingImages(session);
 }
 
 function maybeClaimStoredSeat(session: Session, snapshot: TableSnapshot): void {
@@ -1038,10 +1050,13 @@ async function broadcastSceneImage(
   id: string,
   revision: number,
   dataUrl: string,
+  peerId?: string,
 ): Promise<void> {
-  const targets = [...session.peers.keys()];
-  if (targets.length === 0) return;
-  await session.mesh.broadcast({ type: "sceneImage", id, revision, dataUrl }, targets);
+  await broadcastToEachPeer(
+    session,
+    { type: "sceneImage", id, revision, dataUrl },
+    peerId ? [peerId] : undefined,
+  );
 }
 
 function scheduleRoomMap(session: Session, hostAi: ReturnType<typeof readHostAi>): void {
@@ -1126,13 +1141,31 @@ async function broadcastRoomMap(
   dataUrl: string,
   peerId?: string,
 ): Promise<void> {
-  const targets = peerId ? [peerId] : [...session.peers.keys()];
-  if (targets.length === 0 || dataUrl.length === 0) return;
-  try {
-    await session.mesh.broadcast({ type: "roomMap", id, dataUrl }, targets);
-  } catch {
-    // A later visit sends the stored image again.
+  if (dataUrl.length === 0) return;
+  await broadcastToEachPeer(session, { type: "roomMap", id, dataUrl }, peerId ? [peerId] : undefined);
+}
+
+async function broadcastToEachPeer(
+  session: Session,
+  payload: JsonValue,
+  targets = [...session.peers.keys()],
+): Promise<void> {
+  for (const peerId of targets) {
+    try {
+      await session.mesh.broadcast(payload, [peerId]);
+    } catch {
+      // That guest asks the host for the image from the snapshot.
+    }
   }
+}
+
+async function sendCurrentSceneImage(session: Session, peerId: string): Promise<void> {
+  if (!session.table) return;
+  const id = session.table.sceneImageId;
+  if (!id) return;
+  const dataUrl = await hostedImageData(session, "scene", id);
+  if (!dataUrl || current !== session) return;
+  await broadcastSceneImage(session, id, session.table.sceneImageRevision ?? 0, dataUrl, peerId);
 }
 
 async function sendCurrentRoomMap(session: Session, peerId: string): Promise<void> {
@@ -1142,17 +1175,108 @@ async function sendCurrentRoomMap(session: Session, peerId: string): Promise<voi
     session.table.campaignPlan?.currentPlaceId ?? "",
   );
   if (!cached) return;
-  let dataUrl = session.roomMapUrls.get(cached.imageId) ?? null;
-  if (!dataUrl) {
-    try {
-      dataUrl = await readSceneImageDataUrl(cached.imageId);
-    } catch {
-      dataUrl = null;
-    }
-  }
+  const dataUrl = await hostedImageData(session, "map", cached.imageId);
   if (!dataUrl || current !== session) return;
-  session.roomMapUrls.set(cached.imageId, dataUrl);
   await broadcastRoomMap(session, cached.imageId, dataUrl, peerId);
+}
+
+const imageFetches = new Set<string>();
+
+function requestMissingImages(session: Session): void {
+  if (session.role !== "peer" || !session.hostPeerId || session.hidden) return;
+  const snapshot = session.lastSnapshot;
+  if (!snapshot) return;
+  const wanted: { kind: "scene" | "map"; id: string }[] = [];
+  if (snapshot.sceneImageId && !session.sceneImageUrls.has(snapshot.sceneImageId)) {
+    wanted.push({ kind: "scene", id: snapshot.sceneImageId });
+  }
+  if (snapshot.roomMapId && !session.roomMapUrls.has(snapshot.roomMapId)) {
+    wanted.push({ kind: "map", id: snapshot.roomMapId });
+  }
+  for (const item of wanted) {
+    const key = `${session.roomCode}:${item.kind}:${item.id}`;
+    if (imageFetches.has(key)) continue;
+    imageFetches.add(key);
+    void fetchHostImage(session, item.kind, item.id, key);
+  }
+}
+
+async function fetchHostImage(
+  session: Session,
+  kind: "scene" | "map",
+  id: string,
+  key: string,
+): Promise<void> {
+  try {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (current !== session || session.hidden || !session.hostPeerId) return;
+      if (kind === "scene" ? session.sceneImageUrls.has(id) : session.roomMapUrls.has(id)) return;
+      try {
+        const response = await session.mesh.request(
+          { type: "image", kind, id },
+          { target: session.hostPeerId, timeoutMs: 60_000 },
+        );
+        if (current !== session || session.hidden) return;
+        if (
+          isRecord(response) &&
+          response.ok === true &&
+          response.id === id &&
+          typeof response.dataUrl === "string" &&
+          response.dataUrl.length > 0
+        ) {
+          if (kind === "scene") session.sceneImageUrls.set(id, response.dataUrl);
+          else session.roomMapUrls.set(id, response.dataUrl);
+          publish(session);
+          return;
+        }
+      } catch {
+        // The host may still be drawing this image.
+      }
+      await waitForImageRetry(800 * (attempt + 1));
+    }
+  } finally {
+    imageFetches.delete(key);
+  }
+}
+
+function waitForImageRetry(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function readRequestedImage(session: Session, data: JsonValue): Promise<JsonValue> {
+  if (!isRecord(data) || (data.kind !== "scene" && data.kind !== "map") || typeof data.id !== "string") {
+    return { ok: false };
+  }
+  const dataUrl = await hostedImageData(session, data.kind, data.id);
+  if (!dataUrl) return { ok: false };
+  return { ok: true, id: data.id, dataUrl };
+}
+
+async function hostedImageData(
+  session: Session,
+  kind: "scene" | "map",
+  id: string,
+): Promise<string | null> {
+  if (!session.table || !knownImageId(session, kind, id)) return null;
+  const memory = kind === "scene" ? session.sceneImageUrls : session.roomMapUrls;
+  const cached = memory.get(id);
+  if (cached) return cached;
+  try {
+    const dataUrl = await readSceneImageDataUrl(id);
+    if (!dataUrl || current !== session) return null;
+    memory.set(id, dataUrl);
+    return dataUrl;
+  } catch {
+    return null;
+  }
+}
+
+function knownImageId(session: Session, kind: "scene" | "map", id: string): boolean {
+  if (!session.table) return false;
+  if (kind === "scene") return session.table.sceneImageId === id;
+  return (session.table.roomMaps ?? []).some((entry) => entry.imageId === id);
 }
 
 function scheduleBeatSceneImage(
@@ -1165,9 +1289,10 @@ function scheduleBeatSceneImage(
   if (!hostAi) return;
   const prepared = prepareSceneImageRequest(table, "beat", beat, locationBefore);
   if (!prepared) return;
-  rememberTable(session, prepared);
+  const next = { ...prepared, revision: prepared.revision + 1 };
+  rememberTable(session, next);
   void broadcastSnapshot(session);
-  queueSceneImageGeneration(session.roomCode, prepared, hostAi, beat);
+  queueSceneImageGeneration(session.roomCode, next, hostAi, beat);
 }
 
 async function hydrateSceneImageForSession(session: Session): Promise<void> {
