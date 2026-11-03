@@ -7,12 +7,24 @@ import { progressionRules } from "@/rpg/lib/progression";
 import { readHostAi } from "@/rpg/lib/host-ai";
 import { runGmTurn } from "@/rpg/lib/host-gm-turn";
 import {
+  isRoomMapGenerating,
+  queueRoomMapGeneration,
+  registerRoomMapReadyListener,
+} from "@/rpg/lib/host-room-map";
+import {
   hydrateSceneImageUrl,
   isSceneImageGenerating,
   prepareSceneImageRequest,
   queueSceneImageGeneration,
   registerSceneImageReadyListener,
 } from "@/rpg/lib/host-scene-image";
+import {
+  roomMapDoorLabels,
+  storedRoomMapForPlace,
+  type RoomMapDoorLabel,
+  type StoredRoomMap,
+} from "@/rpg/lib/room-map";
+import { readSceneImageDataUrl } from "@/rpg/lib/scene-image-store";
 import { generateStartingLoadout } from "@/rpg/lib/host-starting-loadout";
 import { downloadCampaignSave } from "@/rpg/lib/host-save";
 import { readHostSession, writeHostSession } from "@/rpg/lib/host-session";
@@ -82,6 +94,9 @@ export interface RoomView {
   scene: number | null;
   sceneImageUrl: string | null;
   imageBusy: boolean;
+  roomMapUrl: string | null;
+  roomMapBusy: boolean;
+  roomMapDoors: RoomMapDoorLabel[];
   seat: RoomSeat | null;
   joiningCount: number;
 }
@@ -132,10 +147,38 @@ interface Session {
   gmPending: number;
   gmQueue: Promise<void>;
   sceneImageUrls: Map<string, string>;
+  roomMapUrls: Map<string, string>;
 }
 
 let current: Session | null = null;
 let view: RoomView | null = null;
+
+registerRoomMapReadyListener((payload) => {
+  if (!current || current.roomCode !== payload.roomCode || current.role !== "host" || !current.table) return;
+
+  const table = current.table;
+  let roomMaps = table.roomMaps ?? [];
+  const stored = payload.dataUrl.length > 0 && payload.imageId.length > 0;
+  if (stored) {
+    current.roomMapUrls.set(payload.imageId, payload.dataUrl);
+    roomMaps = [
+      ...roomMaps.filter((entry) => entry.placeId !== payload.placeId),
+      { placeId: payload.placeId, imageId: payload.imageId, doors: payload.doors },
+    ];
+  }
+  const currentPlace = table.campaignPlan?.currentPlaceId ?? "";
+  const busy = isRoomMapGenerating(currentPlace);
+  if (!stored && busy === (table.roomMapBusy === true)) return;
+
+  rememberTable(current, {
+    ...table,
+    roomMaps,
+    roomMapBusy: busy,
+    revision: table.revision + 1,
+  });
+  void broadcastSnapshot(current);
+  if (stored) void broadcastRoomMap(current, payload.imageId, payload.dataUrl);
+});
 
 registerSceneImageReadyListener((payload) => {
   if (!current || current.roomCode !== payload.roomCode || current.role !== "host" || !current.table) return;
@@ -204,6 +247,7 @@ async function hostRoomNow(roomCode: string): Promise<void> {
   });
   await finishOpen(session);
   void hydrateSceneImageForSession(session);
+  hydrateRoomMapForSession(session);
   requestStartingLoadout(session);
 }
 
@@ -496,6 +540,7 @@ async function openSession(input: {
     gmPending: 0,
     gmQueue: Promise.resolve(),
     sceneImageUrls: new Map(),
+    roomMapUrls: new Map(),
   };
 
   current = session;
@@ -631,6 +676,7 @@ function handleRequest(session: Session, peerId: string, data: JsonValue): JsonV
     if (data.roomCode !== session.roomCode) return { ok: false };
     if (!session.peers.has(peerId)) session.peers.set(peerId, { characterId: null });
     publish(session);
+    void sendCurrentRoomMap(session, peerId);
     return { ok: true, snapshot: toJson(toSnapshot(session.table)) };
   }
 
@@ -809,6 +855,7 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
       }
       return;
     }
+    const placeBefore = session.table.campaignPlan?.currentPlaceId ?? "";
     const locationBefore = session.table.location;
     const turn = await runGmTurn(session.table, hostAi, intent, async (mid) => {
       if (current !== session || session.hidden) return false;
@@ -825,6 +872,10 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
     await broadcastSnapshot(session);
     if (turn.beat) {
       scheduleBeatSceneImage(session, hostAi, turn.beat, locationBefore, nextTable);
+    }
+    const placeAfter = nextTable.campaignPlan?.currentPlaceId ?? "";
+    if (placeAfter.length > 0 && placeAfter !== placeBefore) {
+      scheduleRoomMap(session, hostAi);
     }
   } catch (error) {
     if (current === session && session.table && !session.hidden) {
@@ -858,6 +909,7 @@ function maybeStartCampaign(session: Session): void {
   publish(session);
   void broadcastSnapshot(session);
   requestStartingLoadout(session);
+  scheduleRoomMap(session, readHostAi());
 }
 
 function requestStartingLoadout(session: Session): void {
@@ -917,6 +969,14 @@ function handleFeed(session: Session, data: JsonValue): void {
     if (typeof data.id !== "string" || typeof data.dataUrl !== "string") return;
     if (data.dataUrl.length === 0) return;
     session.sceneImageUrls.set(data.id, data.dataUrl);
+    publish(session);
+    return;
+  }
+
+  if (data.type === "roomMap") {
+    if (typeof data.id !== "string" || typeof data.dataUrl !== "string") return;
+    if (data.dataUrl.length === 0) return;
+    session.roomMapUrls.set(data.id, data.dataUrl);
     publish(session);
   }
 }
@@ -984,6 +1044,117 @@ async function broadcastSceneImage(
   await session.mesh.broadcast({ type: "sceneImage", id, revision, dataUrl }, targets);
 }
 
+function scheduleRoomMap(session: Session, hostAi: ReturnType<typeof readHostAi>): void {
+  if (session.role !== "host" || !session.table || session.hidden) return;
+  const table = session.table;
+  if (table.phase !== "play" || !table.campaignPlan) return;
+  const placeId = table.campaignPlan.currentPlaceId;
+  if (!placeId) return;
+
+  if (isRoomMapGenerating(placeId)) {
+    if (table.roomMapBusy !== true) {
+      rememberTable(session, { ...table, roomMapBusy: true, revision: table.revision + 1 });
+      void broadcastSnapshot(session);
+    }
+    return;
+  }
+
+  const cached = storedRoomMapForPlace(table.roomMaps ?? [], placeId);
+  if (cached) {
+    void publishCachedRoomMap(session, cached);
+    return;
+  }
+
+  if (!hostAi) return;
+  const next = { ...table, roomMapBusy: true, revision: table.revision + 1 };
+  rememberTable(session, next);
+  void broadcastSnapshot(session);
+  queueRoomMapGeneration(session.roomCode, next, hostAi, placeId);
+}
+
+async function publishCachedRoomMap(session: Session, cached: StoredRoomMap): Promise<void> {
+  let dataUrl = session.roomMapUrls.get(cached.imageId) ?? null;
+  if (!dataUrl) {
+    try {
+      dataUrl = await readSceneImageDataUrl(cached.imageId);
+    } catch {
+      dataUrl = null;
+    }
+  }
+  if (current !== session || session.hidden || !session.table) return;
+  const placeId = session.table.campaignPlan?.currentPlaceId ?? "";
+  if (placeId !== cached.placeId) return;
+
+  if (!dataUrl) {
+    const hostAi = readHostAi();
+    if (!hostAi || isRoomMapGenerating(placeId)) return;
+    const next = { ...session.table, roomMapBusy: true, revision: session.table.revision + 1 };
+    rememberTable(session, next);
+    void broadcastSnapshot(session);
+    queueRoomMapGeneration(session.roomCode, next, hostAi, placeId);
+    return;
+  }
+
+  session.roomMapUrls.set(cached.imageId, dataUrl);
+  if (session.table.roomMapBusy === true) {
+    rememberTable(session, {
+      ...session.table,
+      roomMapBusy: false,
+      revision: session.table.revision + 1,
+    });
+    void broadcastSnapshot(session);
+  } else {
+    publish(session);
+  }
+  void broadcastRoomMap(session, cached.imageId, dataUrl);
+}
+
+function hydrateRoomMapForSession(session: Session): void {
+  if (session.role !== "host" || !session.table || session.table.phase !== "play") return;
+  const placeId = session.table.campaignPlan?.currentPlaceId ?? "";
+  if (session.table.roomMapBusy && !isRoomMapGenerating(placeId)) {
+    session.table = { ...session.table, roomMapBusy: false };
+    writeHostSession({ roomCode: session.roomCode, table: session.table });
+    publish(session);
+  }
+  scheduleRoomMap(session, readHostAi());
+}
+
+async function broadcastRoomMap(
+  session: Session,
+  id: string,
+  dataUrl: string,
+  peerId?: string,
+): Promise<void> {
+  const targets = peerId ? [peerId] : [...session.peers.keys()];
+  if (targets.length === 0 || dataUrl.length === 0) return;
+  try {
+    await session.mesh.broadcast({ type: "roomMap", id, dataUrl }, targets);
+  } catch {
+    // A later visit sends the stored image again.
+  }
+}
+
+async function sendCurrentRoomMap(session: Session, peerId: string): Promise<void> {
+  if (!session.table) return;
+  const cached = storedRoomMapForPlace(
+    session.table.roomMaps ?? [],
+    session.table.campaignPlan?.currentPlaceId ?? "",
+  );
+  if (!cached) return;
+  let dataUrl = session.roomMapUrls.get(cached.imageId) ?? null;
+  if (!dataUrl) {
+    try {
+      dataUrl = await readSceneImageDataUrl(cached.imageId);
+    } catch {
+      dataUrl = null;
+    }
+  }
+  if (!dataUrl || current !== session) return;
+  session.roomMapUrls.set(cached.imageId, dataUrl);
+  await broadcastRoomMap(session, cached.imageId, dataUrl, peerId);
+}
+
 function scheduleBeatSceneImage(
   session: Session,
   hostAi: ReturnType<typeof readHostAi>,
@@ -992,7 +1163,7 @@ function scheduleBeatSceneImage(
   table: TableState,
 ): void {
   if (!hostAi) return;
-  const prepared = prepareSceneImageRequest(table, "beat", hostAi, beat, locationBefore);
+  const prepared = prepareSceneImageRequest(table, "beat", beat, locationBefore);
   if (!prepared) return;
   rememberTable(session, prepared);
   void broadcastSnapshot(session);
@@ -1135,6 +1306,25 @@ async function forceClose(session: Session): Promise<void> {
   }
 }
 
+function roomMapView(
+  session: Session,
+  source: TableSnapshot | null | undefined,
+  table: TableState | null,
+): Pick<RoomView, "roomMapUrl" | "roomMapBusy" | "roomMapDoors"> {
+  const stored = table
+    ? storedRoomMapForPlace(table.roomMaps ?? [], table.campaignPlan?.currentPlaceId ?? "")
+    : null;
+  const id = source?.roomMapId ?? stored?.imageId ?? null;
+  const roomMapUrl = id ? session.roomMapUrls.get(id) ?? null : null;
+  const drawing = (source?.roomMapBusy ?? table?.roomMapBusy === true) || (id !== null && roomMapUrl === null);
+  return {
+    roomMapUrl,
+    roomMapBusy: drawing,
+    roomMapDoors:
+      source?.roomMapDoors ?? roomMapDoorLabels(table?.campaignPlan ?? null, stored?.doors ?? []),
+  };
+}
+
 function resolveSceneImageUrl(
   session: Session,
   source: TableSnapshot | null | undefined,
@@ -1178,6 +1368,7 @@ function publish(session: Session, snapshot?: TableSnapshot): void {
     scene: source?.scene ?? table?.scene ?? null,
     sceneImageUrl: resolveSceneImageUrl(session, source, table),
     imageBusy: source?.imageBusy ?? table?.imageBusy === true,
+    ...roomMapView(session, source, table),
     seat: session.seat,
     joiningCount:
       session.role === "host"

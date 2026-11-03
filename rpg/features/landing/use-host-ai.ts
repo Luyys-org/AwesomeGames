@@ -3,18 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  type AiProvider,
   type HostAi,
+  GROK_PLAN_MODEL,
   HOST_AI_STORAGE_KEY,
   clearHostAi,
-  isAiProvider,
   readHostAi,
   writeHostAi,
 } from "@/rpg/lib/host-ai";
 
 export interface HostAiInput {
-  provider: AiProvider;
-  model: string;
   apiKey: string;
   imageModel?: string;
 }
@@ -38,19 +35,12 @@ export function useHostAi() {
 
   const save = useCallback(
     (input: HostAiInput): string | null => {
-      if (!isAiProvider(input.provider)) {
-        return "Choose OpenAI, Anthropic, or Grok.";
-      }
-
-      const model = input.model.trim();
       const apiKey = input.apiKey.trim() || hostAi?.apiKey || "";
-      if (!model) return "Enter a model name.";
       if (!apiKey) return "Enter an API key.";
 
       const imageModel = input.imageModel?.trim();
       const next: HostAi = {
-        provider: input.provider,
-        model,
+        model: GROK_PLAN_MODEL,
         apiKey,
         ...(imageModel ? { imageModel } : {}),
       };
@@ -81,8 +71,6 @@ export function useHostAi() {
   return {
     ready,
     linked: hostAi !== null,
-    provider: hostAi?.provider ?? null,
-    model: hostAi?.model ?? "",
     imageModel: hostAi?.imageModel ?? "",
     save,
     remove,

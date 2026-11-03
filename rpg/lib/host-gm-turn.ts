@@ -13,13 +13,12 @@ import {
 } from "@/rpg/lib/gm-turn";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
-  buildGmOutcomeRetryMessage,
   buildGmOutcomeUserMessage,
-  buildGmReactionRetryMessage,
   buildGmReactionUserMessage,
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
+import { gmOutcomeSchema, gmReactionSchema } from "@/rpg/lib/host-response-schema";
 import type { TableState } from "@/rpg/lib/table";
 
 export interface GmTurnResult {
@@ -81,19 +80,12 @@ async function generateGmReaction(
   hostAi: HostAi,
   intent: GmIntent,
 ): Promise<GmGeneration<GmReaction>> {
-  const first = await requestReaction(hostAi, buildGmReactionUserMessage(table, intent), table, intent);
-  if (first.ok) return first;
-  const second = await requestReaction(
-    hostAi,
-    buildGmReactionRetryMessage(table, intent, first.error),
-    table,
-    intent,
-  );
-  if (second.ok) return second;
+  const reaction = await requestReaction(hostAi, buildGmReactionUserMessage(table, intent), table, intent);
+  if (reaction.ok) return reaction;
   return {
     ok: false,
-    error: second.error,
-    content: formatGmFailureBody(second.error, preferModelContent(second, first)),
+    error: reaction.error,
+    content: formatGmFailureBody(reaction.error, reaction.content),
   };
 }
 
@@ -103,24 +95,17 @@ async function generateGmOutcome(
   intent: GmIntent,
   resolution: Parameters<typeof buildGmOutcomeUserMessage>[2],
 ): Promise<GmGeneration<GmBeat>> {
-  const first = await requestOutcome(
+  const outcome = await requestOutcome(
     hostAi,
     buildGmOutcomeUserMessage(table, intent, resolution),
     table,
     resolution.success,
   );
-  if (first.ok) return first;
-  const second = await requestOutcome(
-    hostAi,
-    buildGmOutcomeRetryMessage(table, intent, resolution, first.error),
-    table,
-    resolution.success,
-  );
-  if (second.ok) return second;
+  if (outcome.ok) return outcome;
   return {
     ok: false,
-    error: second.error,
-    content: formatGmFailureBody(second.error, preferModelContent(second, first)),
+    error: outcome.error,
+    content: formatGmFailureBody(outcome.error, outcome.content),
   };
 }
 
@@ -130,16 +115,33 @@ async function requestReaction(
   table: TableState,
   intent: GmIntent,
 ): Promise<GmGeneration<GmReaction>> {
+  const first = await completeReaction(hostAi, user, table, intent);
+  if (first.ok || !first.validation) return first;
+  const second = await completeReaction(hostAi, `${user}\n\n${first.error}`, table, intent);
+  if (second.ok) return second;
+  return { ok: false, error: second.error, content: preferModelContent(second, first) };
+}
+
+async function completeReaction(
+  hostAi: HostAi,
+  user: string,
+  table: TableState,
+  intent: GmIntent,
+): Promise<GmAttempt<GmReaction>> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,
+    responseSchema: gmReactionSchema(table, intent.characterId),
   });
-  if (!response.ok) return { ok: false, error: response.error, content: response.error };
+  if (!response.ok) return { ok: false, error: response.error, content: response.error, validation: false };
   const parsed = parseJsonContent(response.content);
-  if (parsed === null) return { ok: false, error: "Response JSON must be an object.", content: response.content };
+  if (parsed === null) {
+    return { ok: false, error: "Response JSON must be an object.", content: response.content, validation: false };
+  }
   const read = readGmReaction(repairGmReactionPayload(parsed, table, intent), table, intent);
-  if (!read.ok) return { ok: false, error: read.error, content: response.content };
+  if (!read.ok) return { ok: false, error: read.error, content: response.content, validation: true };
   return { ok: true, value: read.value, content: response.content };
 }
 
@@ -149,20 +151,39 @@ async function requestOutcome(
   table: TableState,
   checkSucceeded: boolean,
 ): Promise<GmGeneration<GmBeat>> {
+  const first = await completeOutcome(hostAi, user, table, checkSucceeded);
+  if (first.ok || !first.validation) return first;
+  const second = await completeOutcome(hostAi, `${user}\n\n${first.error}`, table, checkSucceeded);
+  if (second.ok) return second;
+  return { ok: false, error: second.error, content: preferModelContent(second, first) };
+}
+
+async function completeOutcome(
+  hostAi: HostAi,
+  user: string,
+  table: TableState,
+  checkSucceeded: boolean,
+): Promise<GmAttempt<GmBeat>> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0.7,
     system: buildGmSystemPrompt(table.settings),
     user,
+    responseSchema: gmOutcomeSchema(table, checkSucceeded),
   });
-  if (!response.ok) return { ok: false, error: response.error, content: response.error };
+  if (!response.ok) return { ok: false, error: response.error, content: response.error, validation: false };
   const parsed = parseJsonContent(response.content);
-  if (parsed === null) return { ok: false, error: "Response JSON must be an object.", content: response.content };
+  if (parsed === null) {
+    return { ok: false, error: "Response JSON must be an object.", content: response.content, validation: false };
+  }
   const read = readGmOutcome(repairGmOutcomePayload(parsed), table, checkSucceeded);
-  if (!read.ok) return { ok: false, error: read.error, content: response.content };
+  if (!read.ok) return { ok: false, error: read.error, content: response.content, validation: true };
   return { ok: true, value: read.value, content: response.content };
 }
 
 type GmGeneration<T> = { ok: true; value: T; content: string } | { ok: false; error: string; content: string };
+
+type GmAttempt<T> = GmGeneration<T> & { validation?: boolean };
 
 function preferModelContent(
   latest: { ok: false; error: string; content: string },

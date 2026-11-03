@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "slot", "equipped", "modifiers"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "[^\\r\\n]+" },
+    "slot": {
+      "anyOf": [
+        { "type": "string", "const": "" },
+        { "type": "string", "minLength": 1, "maxLength": 24, "pattern": "[a-z][a-z0-9-]{0,23}" }
+      ]
+    },
+    "equipped": { "type": "boolean" },
+    "modifiers": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "statId", "amount"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["stat", "roll"] },
+          "statId": { "$bind": "modifierStatEnum" },
+          "amount": {
+            "anyOf": [
+              { "type": "integer", "minimum": -3, "maximum": -1 },
+              { "type": "integer", "minimum": 1, "maximum": 3 }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -31,6 +31,15 @@ import {
   type CharacterSituation,
 } from "@/rpg/lib/character-situation";
 import { readStoredCampaignPlan, type CampaignPlan } from "@/rpg/lib/campaign-plan";
+import {
+  normalizeStoredRoomMaps,
+  parseRoomMapDoorLabels,
+  readRoomMapImageId,
+  roomMapDoorLabels,
+  storedRoomMapForPlace,
+  type RoomMapDoorLabel,
+  type StoredRoomMap,
+} from "@/rpg/lib/room-map";
 import { emptyJourney, parseJourney, type JourneyGraph } from "@/rpg/lib/journey";
 import { levelRewardOptions, progressionRules } from "@/rpg/lib/progression";
 
@@ -117,6 +126,8 @@ export interface TableState {
   sceneImageId?: string | null;
   sceneImageRevision?: number;
   imageBusy?: boolean;
+  roomMaps?: StoredRoomMap[];
+  roomMapBusy?: boolean;
 }
 
 export interface PublicCharacter {
@@ -172,6 +183,9 @@ export interface TableSnapshot {
   sceneImageId: string | null;
   sceneImageRevision: number;
   imageBusy: boolean;
+  roomMapId: string | null;
+  roomMapBusy: boolean;
+  roomMapDoors: RoomMapDoorLabel[];
 }
 
 export function emptyLocation(): SceneLocation {
@@ -221,6 +235,18 @@ export function normalizeTable(table: TableState): TableState {
         ? table.sceneImageRevision
         : imageDefaults.sceneImageRevision,
     imageBusy: table.imageBusy === true,
+    roomMaps: normalizeStoredRoomMaps(table.roomMaps),
+    roomMapBusy: table.roomMapBusy === true,
+  };
+}
+
+function snapshotRoomMap(table: TableState): Pick<TableSnapshot, "roomMapId" | "roomMapBusy" | "roomMapDoors"> {
+  const placeId = table.campaignPlan?.currentPlaceId ?? "";
+  const stored = storedRoomMapForPlace(table.roomMaps ?? [], placeId);
+  return {
+    roomMapId: stored?.imageId ?? null,
+    roomMapBusy: table.roomMapBusy === true,
+    roomMapDoors: stored ? roomMapDoorLabels(table.campaignPlan, stored.doors) : [],
   };
 }
 
@@ -259,6 +285,8 @@ export function createTable(roomCode: string, settings: CampaignSettings): Table
     journey: emptyJourney(),
     campaignPlan: null,
     ...defaultSceneImageState(),
+    roomMaps: [],
+    roomMapBusy: false,
   };
 }
 
@@ -618,6 +646,7 @@ export function toSnapshot(table: TableState): TableSnapshot | null {
     sceneImageId: table.sceneImageId ?? null,
     sceneImageRevision: table.sceneImageRevision ?? 0,
     imageBusy: table.imageBusy === true,
+    ...snapshotRoomMap(table),
   };
 }
 
@@ -708,6 +737,9 @@ export function parseSnapshot(value: unknown): TableSnapshot | null {
         ? Math.max(0, value.sceneImageRevision)
         : 0,
     imageBusy: value.imageBusy === true,
+    roomMapId: readRoomMapImageId(value.roomMapId),
+    roomMapBusy: value.roomMapBusy === true,
+    roomMapDoors: parseRoomMapDoorLabels(value.roomMapDoors),
   };
 }
 

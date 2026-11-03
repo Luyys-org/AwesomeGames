@@ -1,0 +1,63 @@
+{
+  "name": "campaign_plan",
+  "properties": {
+    "scenes": {
+      "type": "array",
+      "minItems": { "$bind": "sceneMin" },
+      "maxItems": { "$bind": "sceneMax" },
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "summary", "objective", "next", "places"],
+        "properties": {
+          "id": { "$fragment": "planId" },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planNameMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planSummaryMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": { "$bind": "planObjectiveMax" },
+            "pattern": "[^\\r\\n]+"
+          },
+          "next": { "$fragment": "planLink" },
+          "places": {
+            "type": "array",
+            "minItems": { "$bind": "placeMin" },
+            "maxItems": { "$bind": "placeMax" },
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name", "summary", "next"],
+              "properties": {
+                "id": { "$fragment": "planId" },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": { "$bind": "planNameMax" },
+                  "pattern": "[^\\r\\n]+"
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": { "$bind": "planSummaryMax" },
+                  "pattern": "[^\\r\\n]+"
+                },
+                "next": { "$fragment": "planLink" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

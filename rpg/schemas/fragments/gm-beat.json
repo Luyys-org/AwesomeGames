@@ -1,0 +1,53 @@
+{
+  "narration": { "type": "string", "maxLength": { "$bind": "narrationMax" } },
+  "encounter": { "anyOf": [{ "type": "null" }, { "$fragment": "encounter" }] },
+  "place": { "type": "string", "maxLength": { "$bind": "locationMax" } },
+  "weather": { "type": "string", "maxLength": { "$bind": "locationMax" } },
+  "reputation": { "type": "string", "maxLength": { "$bind": "locationMax" } },
+  "situations": {
+    "type": "array",
+    "maxItems": { "$bind": "livingCount" },
+    "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["characterId", "situation"],
+      "properties": {
+        "characterId": { "$bind": "livingEnum" },
+        "situation": { "$bind": "situationEnum" }
+      }
+    }
+  },
+  "loot": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["characterId", "currency", "items"],
+      "properties": {
+        "characterId": { "$bind": "inSceneEnum" },
+        "currency": { "type": "integer", "minimum": 0, "maximum": { "$bind": "currencyMax" } },
+        "items": {
+          "type": "array",
+          "maxItems": { "$bind": "itemMax" },
+          "items": { "$fragment": "item" }
+        }
+      }
+    }
+  },
+  "actions": { "$fragment": "actions" },
+  "progress": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["characterId", "xp"],
+      "properties": {
+        "characterId": { "$bind": "livingEnum" },
+        "xp": { "type": "integer", "minimum": { "$bind": "xpMin" }, "maximum": { "$bind": "xpMax" } }
+      }
+    }
+  },
+  "placeId": { "$bind": "placeId" },
+  "sceneId": { "$bind": "sceneId" },
+  "clearedSceneId": { "$bind": "clearedSceneId" }
+}

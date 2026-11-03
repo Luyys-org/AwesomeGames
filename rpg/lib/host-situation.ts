@@ -1,12 +1,12 @@
-import type { PlanStartRoom } from "@/rpg/lib/campaign-plan";
+import { planStartPlace, type CampaignPlan } from "@/rpg/lib/campaign-plan";
 import type { CampaignSettings } from "@/rpg/lib/campaign-settings";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
-  buildOpeningSituationRetryMessage,
   buildOpeningSituationUserMessage,
   buildGmSystemPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent, truncateText } from "@/rpg/lib/host-model-call";
+import { openingSituationSchema } from "@/rpg/lib/host-response-schema";
 import type { SceneLocation } from "@/rpg/lib/table";
 
 const SITUATION_MAX = 800;
@@ -20,37 +20,32 @@ export interface OpeningScene {
 export async function generateOpeningSituation(
   settings: CampaignSettings,
   hostAi: HostAi,
-  startRoom: PlanStartRoom,
+  plan: CampaignPlan,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
-  const first = await requestSituation(
+  const startPlace = planStartPlace(plan);
+  if (!startPlace) return { ok: false, error: "The campaign plan has no start place." };
+  const situation = await requestSituation(
     hostAi,
-    buildOpeningSituationUserMessage(settings, startRoom),
+    buildOpeningSituationUserMessage(settings, plan),
     settings,
-    startRoom,
+    startPlace.name,
   );
-  if (first.ok) return first;
-
-  const second = await requestSituation(
-    hostAi,
-    buildOpeningSituationRetryMessage(settings, startRoom, first.error),
-    settings,
-    startRoom,
-  );
-  if (second.ok) return second;
-
-  return { ok: false, error: "The opening situation could not be generated." };
+  if (situation.ok) return situation;
+  return { ok: false, error: situation.error };
 }
 
 async function requestSituation(
   hostAi: HostAi,
   user: string,
   settings: CampaignSettings,
-  startRoom: PlanStartRoom,
+  startPlaceName: string,
 ): Promise<{ ok: true; situation: string; location: SceneLocation } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0,
     system: buildGmSystemPrompt(settings),
     user,
+    responseSchema: openingSituationSchema(startPlaceName),
   });
   if (!response.ok) return response;
 
@@ -60,13 +55,13 @@ async function requestSituation(
     return { ok: false, error: "Response JSON must include a non-empty situation string." };
   }
   const location = readLocation(parsed);
-  if (location.place.trim().toLowerCase() !== startRoom.name.trim().toLowerCase()) {
-    return { ok: false, error: `Place must be the start room name: ${startRoom.name}.` };
+  if (location.place.trim().toLowerCase() !== startPlaceName.trim().toLowerCase()) {
+    return { ok: false, error: `Place must be the start place name: ${startPlaceName}.` };
   }
   return {
     ok: true,
     situation: truncateText(situation, SITUATION_MAX),
-    location: { ...location, place: startRoom.name },
+    location: { ...location, place: startPlaceName },
   };
 }
 

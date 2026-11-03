@@ -1,9 +1,4 @@
 export default `
-Reply with JSON only, matching this schema:
-{
-  "prompt": "string"
-}
-
 Limits:
 {
   "prompt": 1000

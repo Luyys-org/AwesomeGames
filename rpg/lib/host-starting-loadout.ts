@@ -6,12 +6,12 @@ import {
 } from "@/rpg/lib/character-options";
 import type { HostAi } from "@/rpg/lib/host-ai";
 import {
-  buildStartingLoadoutRetryMessage,
   buildStartingLoadoutUserMessage,
   buildGmSystemPrompt,
   type StartingLoadoutCharacterPrompt,
 } from "@/rpg/lib/host-gm-prompt";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
+import { startingLoadoutSchema } from "@/rpg/lib/host-response-schema";
 import {
   currencyLabel,
   currencyRange,
@@ -29,17 +29,10 @@ export async function generateStartingLoadout(
   { ok: true; kits: DraftStartingKit[]; actions: SceneAction[] } | { ok: false; error: string }
 > {
   const prompt = loadoutPrompt(table);
-  const first = await requestLoadout(hostAi, buildStartingLoadoutUserMessage(prompt), table);
-  if (first.ok) return first;
+  const loadout = await requestLoadout(hostAi, buildStartingLoadoutUserMessage(prompt), table);
+  if (loadout.ok) return loadout;
 
-  const second = await requestLoadout(
-    hostAi,
-    buildStartingLoadoutRetryMessage(prompt, first.error),
-    table,
-  );
-  if (second.ok) return second;
-
-  return { ok: false, error: "The starting loadout could not be generated." };
+  return { ok: false, error: loadout.error };
 }
 
 function loadoutPrompt(table: TableState): {
@@ -87,9 +80,12 @@ async function requestLoadout(
   table: TableState,
 ): Promise<{ ok: true; kits: DraftStartingKit[]; actions: SceneAction[] } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "gm",
     temperature: 0.7,
+    maxTokens: 4096,
     system: buildGmSystemPrompt(table.settings),
     user,
+    responseSchema: startingLoadoutSchema(table),
   });
   if (!response.ok) return response;
 

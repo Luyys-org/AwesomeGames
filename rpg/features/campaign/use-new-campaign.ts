@@ -26,7 +26,6 @@ import {
   deathRecoveryFromLegacy,
   emptyCharacterConfigurationInput,
   type CharacterConfigurationInput,
-  type EquipmentValidationRuleId,
 } from "@/rpg/lib/character-tab-config";
 import {
   characterOptionsFor,
@@ -39,7 +38,6 @@ import {
   parseNewCampaignSettingsImport,
 } from "@/rpg/lib/campaign-settings-import-export";
 import { readHostAi } from "@/rpg/lib/host-ai";
-import { planStartRoom } from "@/rpg/lib/campaign-plan";
 import { generateCampaignPlan } from "@/rpg/lib/host-campaign-plan";
 import { generateOpeningSituation } from "@/rpg/lib/host-situation";
 import { rememberJourney } from "@/rpg/lib/journey";
@@ -253,16 +251,6 @@ export function useNewCampaign() {
     });
   }
 
-  function toggleEquipmentValidationRule(rule: EquipmentValidationRuleId, checked: boolean) {
-    setCharacterConfiguration((current) => ({
-      ...current,
-      equipmentValidationRules: {
-        ...current.equipmentValidationRules,
-        [rule]: checked,
-      },
-    }));
-  }
-
   function goToStep(index: number) {
     if (index < 0 || index >= step) return;
     setError(null);
@@ -320,14 +308,7 @@ export function useNewCampaign() {
       setSubmitting(false);
       return;
     }
-    const startRoom = planStartRoom(planResult.plan);
-    if (!startRoom) {
-      setError("The campaign plan could not be generated.");
-      setSubmitting(false);
-      return;
-    }
-
-    const situationResult = await generateOpeningSituation(settings, hostAi, startRoom);
+    const situationResult = await generateOpeningSituation(settings, hostAi, planResult.plan);
     if (!situationResult.ok) {
       setError(situationResult.error);
       setSubmitting(false);
@@ -396,8 +377,6 @@ export function useNewCampaign() {
       edit(() => patchCharacterConfiguration(patch)),
     toggleCampaignTag: (tag: CampaignTagId, checked: boolean) =>
       edit(() => toggleCampaignTag(tag, checked)),
-    toggleEquipmentValidationRule: (rule: EquipmentValidationRuleId, checked: boolean) =>
-      edit(() => toggleEquipmentValidationRule(rule, checked)),
     setOptionsDraft: (update: (current: CharacterOptionsDraft) => CharacterOptionsDraft) =>
       edit(() => setOptionsDraft(update)),
     nextOptionId,

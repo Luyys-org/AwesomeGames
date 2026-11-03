@@ -12,8 +12,6 @@ import {
 import {
   BOSS_DIFFICULTIES,
   CAMPAIGN_TAGS,
-  MISSION_FAILURE_IMPACTS,
-  REPUTATION_TRACKING_OPTIONS,
   GLOBAL_DIFFICULTY_OPTIONS,
   GM_LANGUAGES,
   SETTING_LEVELS,
@@ -21,13 +19,12 @@ import {
 } from "@/rpg/lib/campaign-tab-config";
 import {
   DEATH_RECOVERY_OPTIONS,
-  EQUIPMENT_VALIDATION_RULES,
   type CharacterConfigurationInput,
 } from "@/rpg/lib/character-tab-config";
 
 const STEP_LEADS = [
   "Universe, narrative context, challenge tuning, rewards, exploration, and house rules for the AI game master.",
-  "Party size, creation rules, statistics, equipment, and morality settings for player characters.",
+  "Party size, creation rules, statistics, and starting kit for player characters.",
 ];
 
 const fieldSpanClass = (fullWidth: boolean) => (fullWidth ? "lg:col-span-2" : "");
@@ -462,16 +459,6 @@ function CampaignTabPanel({
           options={BOSS_DIFFICULTIES}
         />
         <SelectField
-          id="boss-difficulty"
-          label="Boss difficulty"
-          description="Bosses global stats (HP, armor, abilities, etc.)."
-          value={config.bossDifficulty}
-          onChange={(value) => patch({ bossDifficulty: value })}
-          required
-          placeholder="Choose boss difficulty"
-          options={BOSS_DIFFICULTIES}
-        />
-        <SelectField
           id="encounter-frequency"
           label="Encounter frequency"
           description="How frequently players encounter enemies or bosses."
@@ -489,26 +476,6 @@ function CampaignTabPanel({
           onChange={(value) => patch({ healingAvailability: value })}
           required
           placeholder="Choose healing availability"
-          options={SETTING_LEVELS}
-        />
-        <SelectField
-          id="resurrection-availability"
-          label="Resurrection availability"
-          description="How easy it is to resurrect dead allies."
-          value={config.resurrectionAvailability}
-          onChange={(value) => patch({ resurrectionAvailability: value })}
-          required
-          placeholder="Choose resurrection availability"
-          options={SETTING_LEVELS}
-        />
-        <SelectField
-          id="investigation-difficulty"
-          label="Investigation difficulty"
-          description="How easy it is to investigate and succeed in ability-based events."
-          value={config.investigationDifficulty}
-          onChange={(value) => patch({ investigationDifficulty: value })}
-          required
-          placeholder="Choose investigation difficulty"
           options={SETTING_LEVELS}
         />
       </FormSection>
@@ -544,36 +511,6 @@ function CampaignTabPanel({
           placeholder="Choose currency abundance"
           options={SETTING_LEVELS}
         />
-        <SelectField
-          id="unique-artifact-frequency"
-          label="Unique artifact frequency"
-          description="How often a unique artifact appears instead of a standard item."
-          value={config.uniqueArtifactFrequency}
-          onChange={(value) => patch({ uniqueArtifactFrequency: value })}
-          required
-          placeholder="Choose unique artifact frequency"
-          options={SETTING_LEVELS}
-        />
-        <SelectField
-          id="resource-scarcity"
-          label="Resource scarcity"
-          description="Global amount of resource scattered per single action."
-          value={config.resourceScarcity}
-          onChange={(value) => patch({ resourceScarcity: value })}
-          required
-          placeholder="Choose resource scarcity"
-          options={SETTING_LEVELS}
-        />
-        <SelectField
-          id="reputation-reward-multiplier"
-          label="Reputation reward multiplier"
-          description="How fast reputation gain increases or decreases."
-          value={config.reputationRewardMultiplier}
-          onChange={(value) => patch({ reputationRewardMultiplier: value })}
-          required
-          placeholder="Choose reputation reward multiplier"
-          options={SETTING_LEVELS}
-        />
       </FormSection>
 
       <FormSection title="Exploration">
@@ -587,23 +524,6 @@ function CampaignTabPanel({
           placeholder="Choose player freedom"
           options={SETTING_LEVELS}
         />
-        <CheckboxField
-          id="fast-travel"
-          label="Fast travel availability"
-          description="If fast travel is permitted, with a cost on use."
-          checked={config.fastTravelAvailable}
-          onChange={(checked) => patch({ fastTravelAvailable: checked })}
-        />
-        <SelectField
-          id="discovery-importance"
-          label="Discovery importance"
-          description="How rewarded discovery is."
-          value={config.discoveryImportance}
-          onChange={(value) => patch({ discoveryImportance: value })}
-          required
-          placeholder="Choose discovery importance"
-          options={SETTING_LEVELS}
-        />
         <SelectField
           id="random-encounter-frequency"
           label="Random encounter frequency"
@@ -613,36 +533,6 @@ function CampaignTabPanel({
           required
           placeholder="Choose random encounter frequency"
           options={SETTING_LEVELS}
-        />
-      </FormSection>
-
-      <FormSection title="Narrative Configuration">
-        <SelectField
-          id="side-quest-density"
-          label="Side quest density"
-          description="How frequently side quests are given."
-          value={config.sideQuestDensity}
-          onChange={(value) => patch({ sideQuestDensity: value })}
-          required
-          placeholder="Choose side quest density"
-          options={SETTING_LEVELS}
-        />
-        <SelectField
-          id="moral-choice-impact"
-          label="Moral choice impact"
-          description="How morality impacts event outcomes."
-          value={config.moralChoiceImpact}
-          onChange={(value) => patch({ moralChoiceImpact: value })}
-          required
-          placeholder="Choose moral choice impact"
-          options={SETTING_LEVELS}
-        />
-        <CheckboxField
-          id="faction-influence"
-          label="Faction influence"
-          description="Whether faction influence is included."
-          checked={config.factionInfluence}
-          onChange={(checked) => patch({ factionInfluence: checked })}
         />
       </FormSection>
 
@@ -661,33 +551,6 @@ function CampaignTabPanel({
           checked={config.theftBetweenPlayers}
           onChange={(checked) => patch({ theftBetweenPlayers: checked })}
         />
-        <CheckboxField
-          id="secret-objectives"
-          label="Secret objectives"
-          description="Whether players can receive secret betrayal win conditions."
-          checked={config.secretObjectives}
-          onChange={(checked) => patch({ secretObjectives: checked })}
-        />
-      </FormSection>
-
-      <FormSection title="Death & Failure">
-        <CheckboxField
-          id="campaign-can-fail"
-          label="Campaign can be failed"
-          description="Whether the campaign can be lost based on predetermined conditions such as player or NPC death."
-          checked={config.campaignCanFail}
-          onChange={(checked) => patch({ campaignCanFail: checked })}
-        />
-        <SelectField
-          id="mission-failure-impact"
-          label="Mission failure impact"
-          description="Impact on NPCs or characters for failing a quest."
-          value={config.missionFailureImpact}
-          onChange={(value) => patch({ missionFailureImpact: value })}
-          required
-          placeholder="Choose mission failure impact"
-          options={MISSION_FAILURE_IMPACTS}
-        />
       </FormSection>
 
       <FormSection title="NPC System">
@@ -698,15 +561,12 @@ function CampaignTabPanel({
           checked={config.npcMortality}
           onChange={(checked) => patch({ npcMortality: checked })}
         />
-        <SelectField
-          id="reputation-tracking"
-          label="Reputation tracking"
-          description="Whether NPC factions track player reputation based on quest success, failure, theft, murder, etc."
-          value={config.reputationTracking}
-          onChange={(value) => patch({ reputationTracking: value })}
-          required
-          placeholder="Choose reputation tracking"
-          options={REPUTATION_TRACKING_OPTIONS}
+        <CheckboxField
+          id="faction-influence"
+          label="Faction influence"
+          description="Whether faction influence is included."
+          checked={config.factionInfluence}
+          onChange={(checked) => patch({ factionInfluence: checked })}
         />
       </FormSection>
 
@@ -832,13 +692,6 @@ function CharacterTabPanel({
           checked={config.injurySystem}
           onChange={(checked) => patch({ injurySystem: checked })}
         />
-        <CheckboxField
-          id="permanent-wounds"
-          label="Permanent wounds"
-          description="Whether characters can be permanently wounded; permanent wounds cannot be cured."
-          checked={config.permanentWounds}
-          onChange={(checked) => patch({ permanentWounds: checked })}
-        />
       </FormSection>
 
       <FormSection title="Statistics">
@@ -857,69 +710,6 @@ function CharacterTabPanel({
           />
         </div>
 
-        <CheckboxField
-          id="equipment-rules"
-          label="Equipment rules"
-          description="Whether equipment needs validation before being equipped."
-          checked={config.equipmentRules}
-          onChange={(checked) => patch({ equipmentRules: checked })}
-        />
-
-        {config.equipmentRules ? (
-          <fieldset className="min-w-0 lg:col-span-2">
-            <legend className="block text-sm text-zinc-300">Equipment validation rules</legend>
-            <FieldDescription>
-              Requirements checked before a character can equip an item.
-            </FieldDescription>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {EQUIPMENT_VALIDATION_RULES.map((entry) => (
-                <label key={entry.id} className="flex items-center gap-2 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    checked={config.equipmentValidationRules[entry.id]}
-                    onChange={(event) =>
-                      campaign.toggleEquipmentValidationRule(entry.id, event.target.checked)
-                    }
-                    className="size-4 rounded border-zinc-600 bg-zinc-900"
-                  />
-                  {entry.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-
-        <CheckboxField
-          id="weight-system"
-          label="Weight system"
-          description="Enable carrying weight; overloading affects stats."
-          checked={config.weightSystem}
-          onChange={(checked) => patch({ weightSystem: checked })}
-        />
-        <CheckboxField
-          id="ammunition-tracking"
-          label="Ammunition tracking"
-          description="Whether ammunition use is tracked."
-          checked={config.ammunitionTracking}
-          onChange={(checked) => patch({ ammunitionTracking: checked })}
-        />
-      </FormSection>
-
-      <FormSection title="Sanity / Morality">
-        <CheckboxField
-          id="morality-tracking"
-          label="Morality tracking"
-          description="Whether the morality system is enabled."
-          checked={config.moralityTracking}
-          onChange={(checked) => patch({ moralityTracking: checked })}
-        />
-        <CheckboxField
-          id="sanity-system"
-          label="Sanity system"
-          description="Whether the sanity system is enabled; useful for horror-based campaigns."
-          checked={config.sanitySystem}
-          onChange={(checked) => patch({ sanitySystem: checked })}
-        />
       </FormSection>
     </div>
   );

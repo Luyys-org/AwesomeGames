@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["characterId", "stat", "difficulty", "failure", "abilityApplies", "setup"],
+  "properties": {
+    "characterId": { "$bind": "actorId" },
+    "stat": { "$bind": "statEnum" },
+    "difficulty": { "type": "integer", "enum": [8, 10, 12, 15] },
+    "failure": { "type": "string", "enum": ["setback", "harm", "severe"] },
+    "abilityApplies": { "type": "boolean" },
+    "setup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": { "$bind": "setupMax" },
+      "pattern": "[^\\r\\n]+"
+    }
+  }
+}

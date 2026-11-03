@@ -4,29 +4,21 @@ import type { HostAi } from "@/rpg/lib/host-ai";
 import { buildGmSystemPrompt, serializeCampaignForGm } from "@/rpg/lib/host-gm-prompt";
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import { callHostChat, parseJsonContent } from "@/rpg/lib/host-model-call";
+import { campaignPlanSchema } from "@/rpg/lib/host-response-schema";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
-import campaignPlanRetryTemplate from "@/rpg/prompts/campaign-plan-retry";
 import campaignPlanTemplate from "@/rpg/prompts/campaign-plan";
 
 export async function generateCampaignPlan(
   settings: CampaignSettings,
   hostAi: HostAi,
 ): Promise<{ ok: true; plan: CampaignPlan } | { ok: false; error: string }> {
-  const first = await requestPlan(hostAi, settings, buildPlanMessage(settings));
-  if (first.ok) return first;
-
-  const second = await requestPlan(hostAi, settings, buildPlanRetryMessage(settings, first.error));
-  if (second.ok) return second;
-
-  return { ok: false, error: "The campaign plan could not be generated." };
+  const plan = await requestPlan(hostAi, settings, buildPlanMessage(settings));
+  if (plan.ok) return plan;
+  return { ok: false, error: plan.error };
 }
 
 function buildPlanMessage(settings: CampaignSettings): string {
   return renderTemplate(campaignPlanTemplate, planVars(settings));
-}
-
-function buildPlanRetryMessage(settings: CampaignSettings, validationError: string): string {
-  return renderTemplate(campaignPlanRetryTemplate, { ...planVars(settings), validationError });
 }
 
 function planVars(settings: CampaignSettings): Record<string, unknown> {
@@ -43,10 +35,12 @@ async function requestPlan(
   user: string,
 ): Promise<{ ok: true; plan: CampaignPlan } | { ok: false; error: string }> {
   const response = await callHostChat(hostAi, {
+    role: "plan",
     temperature: 0,
     maxTokens: 4096,
     system: buildGmSystemPrompt(settings),
     user,
+    responseSchema: campaignPlanSchema(planBounds(settings.enemyDifficulty)),
   });
   if (!response.ok) return response;
 

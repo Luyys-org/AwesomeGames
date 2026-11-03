@@ -181,92 +181,48 @@ export const GLOBAL_DIFFICULTY_OPTIONS: { id: GlobalDifficultyId; label: string 
 type CampaignDropdownPrefill = Pick<
   CampaignConfigurationInput,
   | "enemyDifficulty"
-  | "bossDifficulty"
   | "encounterFrequency"
   | "healingAvailability"
-  | "resurrectionAvailability"
-  | "investigationDifficulty"
   | "lootRarity"
   | "lootQuantity"
   | "currencyAbundance"
-  | "uniqueArtifactFrequency"
-  | "resourceScarcity"
-  | "reputationRewardMultiplier"
   | "playerFreedom"
-  | "discoveryImportance"
   | "randomEncounterFrequency"
-  | "sideQuestDensity"
-  | "moralChoiceImpact"
-  | "missionFailureImpact"
-  | "reputationTracking"
   | "experienceGainMultiplier"
 >;
 
 const GLOBAL_DIFFICULTY_PREFILLS: Record<GlobalDifficultyId, CampaignDropdownPrefill> = {
   easy: {
     enemyDifficulty: "easy",
-    bossDifficulty: "easy",
     encounterFrequency: "low",
     healingAvailability: "high",
-    resurrectionAvailability: "high",
-    investigationDifficulty: "low",
     lootRarity: "high",
     lootQuantity: "high",
     currencyAbundance: "high",
-    uniqueArtifactFrequency: "standard",
-    resourceScarcity: "low",
-    reputationRewardMultiplier: "standard",
     playerFreedom: "high",
-    discoveryImportance: "high",
     randomEncounterFrequency: "low",
-    sideQuestDensity: "standard",
-    moralChoiceImpact: "standard",
-    missionFailureImpact: "low",
-    reputationTracking: "party",
     experienceGainMultiplier: "high",
   },
   default: {
     enemyDifficulty: "standard",
-    bossDifficulty: "standard",
     encounterFrequency: "standard",
     healingAvailability: "standard",
-    resurrectionAvailability: "standard",
-    investigationDifficulty: "standard",
     lootRarity: "standard",
     lootQuantity: "standard",
     currencyAbundance: "standard",
-    uniqueArtifactFrequency: "standard",
-    resourceScarcity: "standard",
-    reputationRewardMultiplier: "standard",
     playerFreedom: "standard",
-    discoveryImportance: "standard",
     randomEncounterFrequency: "standard",
-    sideQuestDensity: "standard",
-    moralChoiceImpact: "standard",
-    missionFailureImpact: "standard",
-    reputationTracking: "party",
     experienceGainMultiplier: "standard",
   },
   hard: {
     enemyDifficulty: "hard",
-    bossDifficulty: "hard",
     encounterFrequency: "high",
     healingAvailability: "low",
-    resurrectionAvailability: "low",
-    investigationDifficulty: "high",
     lootRarity: "low",
     lootQuantity: "low",
     currencyAbundance: "low",
-    uniqueArtifactFrequency: "low",
-    resourceScarcity: "high",
-    reputationRewardMultiplier: "high",
     playerFreedom: "low",
-    discoveryImportance: "standard",
     randomEncounterFrequency: "high",
-    sideQuestDensity: "low",
-    moralChoiceImpact: "high",
-    missionFailureImpact: "high",
-    reputationTracking: "character",
     experienceGainMultiplier: "low",
   },
 };
@@ -308,31 +264,31 @@ export function emptyCampaignConfigurationInput(): CampaignConfigurationInput {
     campaignTags: [],
     gmNotes: "",
     enemyDifficulty: "",
-    bossDifficulty: "",
+    bossDifficulty: "standard",
     encounterFrequency: "",
     healingAvailability: "",
-    resurrectionAvailability: "",
-    investigationDifficulty: "",
+    resurrectionAvailability: "standard",
+    investigationDifficulty: "standard",
     lootRarity: "",
     lootQuantity: "",
     currencyAbundance: "",
-    uniqueArtifactFrequency: "",
-    resourceScarcity: "",
-    reputationRewardMultiplier: "",
+    uniqueArtifactFrequency: "standard",
+    resourceScarcity: "standard",
+    reputationRewardMultiplier: "standard",
     playerFreedom: "",
     fastTravelAvailable: false,
-    discoveryImportance: "",
+    discoveryImportance: "standard",
     randomEncounterFrequency: "",
-    sideQuestDensity: "",
-    moralChoiceImpact: "",
+    sideQuestDensity: "standard",
+    moralChoiceImpact: "standard",
     factionInfluence: false,
     pvpAllowed: false,
     theftBetweenPlayers: false,
     secretObjectives: false,
     campaignCanFail: false,
-    missionFailureImpact: "",
+    missionFailureImpact: "standard",
     npcMortality: false,
-    reputationTracking: "",
+    reputationTracking: "party",
     levelCap: "",
     milestoneProgression: "",
     experienceGainMultiplier: "",
@@ -350,6 +306,16 @@ function readChoice<T extends string>(value: string, options: { id: T }[], error
   const match = options.find((entry) => entry.id === value);
   if (!match) return { ok: false, error };
   return { ok: true, value: match.id };
+}
+
+/** Fields the creation form no longer collects. Empty input keeps a fixed default. */
+function readUnusedChoice<T extends string>(
+  value: string,
+  fallback: T,
+  options: { id: T }[],
+  error: string,
+): Check<T> {
+  return readChoice(value.length > 0 ? value : fallback, options, error);
 }
 
 function readPositiveInt(value: string, empty: string, invalid: string, field: string): Check<number> {
@@ -393,7 +359,12 @@ export function validateCampaignConfiguration(
   const enemyDifficulty = readChoice(input.enemyDifficulty, BOSS_DIFFICULTIES, "Choose enemy difficulty.");
   if (!enemyDifficulty.ok) return enemyDifficulty;
 
-  const bossDifficulty = readChoice(input.bossDifficulty, BOSS_DIFFICULTIES, "Choose boss difficulty.");
+  const bossDifficulty = readUnusedChoice(
+    input.bossDifficulty,
+    "standard",
+    BOSS_DIFFICULTIES,
+    "Choose boss difficulty.",
+  );
   if (!bossDifficulty.ok) return bossDifficulty;
 
   const encounterFrequency = readChoice(
@@ -410,15 +381,17 @@ export function validateCampaignConfiguration(
   );
   if (!healingAvailability.ok) return healingAvailability;
 
-  const resurrectionAvailability = readChoice(
+  const resurrectionAvailability = readUnusedChoice(
     input.resurrectionAvailability,
+    "standard",
     SETTING_LEVELS,
     "Choose resurrection availability.",
   );
   if (!resurrectionAvailability.ok) return resurrectionAvailability;
 
-  const investigationDifficulty = readChoice(
+  const investigationDifficulty = readUnusedChoice(
     input.investigationDifficulty,
+    "standard",
     SETTING_LEVELS,
     "Choose investigation difficulty.",
   );
@@ -437,22 +410,25 @@ export function validateCampaignConfiguration(
   );
   if (!currencyAbundance.ok) return currencyAbundance;
 
-  const uniqueArtifactFrequency = readChoice(
+  const uniqueArtifactFrequency = readUnusedChoice(
     input.uniqueArtifactFrequency,
+    "standard",
     SETTING_LEVELS,
     "Choose unique artifact frequency.",
   );
   if (!uniqueArtifactFrequency.ok) return uniqueArtifactFrequency;
 
-  const resourceScarcity = readChoice(
+  const resourceScarcity = readUnusedChoice(
     input.resourceScarcity,
+    "standard",
     SETTING_LEVELS,
     "Choose resource scarcity.",
   );
   if (!resourceScarcity.ok) return resourceScarcity;
 
-  const reputationRewardMultiplier = readChoice(
+  const reputationRewardMultiplier = readUnusedChoice(
     input.reputationRewardMultiplier,
+    "standard",
     SETTING_LEVELS,
     "Choose reputation reward multiplier.",
   );
@@ -461,8 +437,9 @@ export function validateCampaignConfiguration(
   const playerFreedom = readChoice(input.playerFreedom, SETTING_LEVELS, "Choose player freedom.");
   if (!playerFreedom.ok) return playerFreedom;
 
-  const discoveryImportance = readChoice(
+  const discoveryImportance = readUnusedChoice(
     input.discoveryImportance,
+    "standard",
     SETTING_LEVELS,
     "Choose discovery importance.",
   );
@@ -475,29 +452,33 @@ export function validateCampaignConfiguration(
   );
   if (!randomEncounterFrequency.ok) return randomEncounterFrequency;
 
-  const sideQuestDensity = readChoice(
+  const sideQuestDensity = readUnusedChoice(
     input.sideQuestDensity,
+    "standard",
     SETTING_LEVELS,
     "Choose side quest density.",
   );
   if (!sideQuestDensity.ok) return sideQuestDensity;
 
-  const moralChoiceImpact = readChoice(
+  const moralChoiceImpact = readUnusedChoice(
     input.moralChoiceImpact,
+    "standard",
     SETTING_LEVELS,
     "Choose moral choice impact.",
   );
   if (!moralChoiceImpact.ok) return moralChoiceImpact;
 
-  const missionFailureImpact = readChoice(
+  const missionFailureImpact = readUnusedChoice(
     input.missionFailureImpact,
+    "standard",
     MISSION_FAILURE_IMPACTS,
     "Choose mission failure impact.",
   );
   if (!missionFailureImpact.ok) return missionFailureImpact;
 
-  const reputationTracking = readChoice(
+  const reputationTracking = readUnusedChoice(
     input.reputationTracking,
+    "party",
     REPUTATION_TRACKING_OPTIONS,
     "Choose reputation tracking.",
   );

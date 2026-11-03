@@ -2,8 +2,8 @@ import {
   planForPrompt,
   planNoteForLoadout,
   planRulesForTurn,
+  planStartPlace,
   type CampaignPlan,
-  type PlanStartRoom,
 } from "@/rpg/lib/campaign-plan";
 import { gmLanguageLabel } from "@/rpg/lib/campaign-tab-config";
 import {
@@ -23,6 +23,7 @@ import {
   gmLootLimits,
   injuryEnabled,
   LOCATION_MAX,
+  gmStakeText,
   NARRATION_MAX,
   preferredCheckDifficulty,
   SETUP_MAX,
@@ -32,13 +33,9 @@ import {
 import { XP_AWARD_MAX, XP_AWARD_MIN } from "@/rpg/lib/progression";
 import { renderTemplate } from "@/rpg/lib/prompt-template";
 import { availableActionsForTable } from "@/rpg/lib/table";
-import gmOutcomeRetryTemplate from "@/rpg/prompts/gm-outcome-retry";
 import gmOutcomeTemplate from "@/rpg/prompts/gm-outcome";
-import gmReactionRetryTemplate from "@/rpg/prompts/gm-reaction-retry";
 import gmReactionTemplate from "@/rpg/prompts/gm-reaction";
-import openingSituationRetryTemplate from "@/rpg/prompts/opening-situation-retry";
 import openingSituationTemplate from "@/rpg/prompts/opening-situation";
-import startingLoadoutRetryTemplate from "@/rpg/prompts/starting-loadout-retry";
 import startingLoadoutTemplate from "@/rpg/prompts/starting-loadout";
 import systemTemplate from "@/rpg/prompts/system";
 import { journeyForGm } from "@/rpg/lib/journey";
@@ -116,19 +113,11 @@ function campaignVars(settings: CampaignSettings): Record<string, unknown> {
   };
 }
 
-export function buildOpeningSituationUserMessage(settings: CampaignSettings, startRoom: PlanStartRoom): string {
-  return renderTemplate(openingSituationTemplate, { ...campaignVars(settings), startRoom });
-}
-
-export function buildOpeningSituationRetryMessage(
-  settings: CampaignSettings,
-  startRoom: PlanStartRoom,
-  validationError: string,
-): string {
-  return renderTemplate(openingSituationRetryTemplate, {
+export function buildOpeningSituationUserMessage(settings: CampaignSettings, plan: CampaignPlan): string {
+  return renderTemplate(openingSituationTemplate, {
     ...campaignVars(settings),
-    startRoom,
-    validationError,
+    plan: planForPrompt(plan),
+    startPlace: planStartPlace(plan),
   });
 }
 
@@ -213,6 +202,7 @@ function turnVars(table: TableState, intent: GmIntent, resolution?: CheckResolut
     plan: planForPrompt(table.campaignPlan ?? null),
     planRules: planRulesForTurn(table.campaignPlan ?? null),
     intent: { ...intent, selectedAction },
+    stake: gmStakeText(intent, selectedAction?.label),
     resolution: resolution ?? null,
   };
 }
@@ -364,14 +354,6 @@ export function buildGmReactionUserMessage(table: TableState, intent: GmIntent):
   return renderTemplate(gmReactionTemplate, turnVars(table, intent));
 }
 
-export function buildGmReactionRetryMessage(
-  table: TableState,
-  intent: GmIntent,
-  validationError: string,
-): string {
-  return renderTemplate(gmReactionRetryTemplate, { ...turnVars(table, intent), validationError });
-}
-
 export function buildGmOutcomeUserMessage(
   table: TableState,
   intent: GmIntent,
@@ -380,31 +362,3 @@ export function buildGmOutcomeUserMessage(
   return renderTemplate(gmOutcomeTemplate, turnVars(table, intent, resolution));
 }
 
-export function buildGmOutcomeRetryMessage(
-  table: TableState,
-  intent: GmIntent,
-  resolution: CheckResolution,
-  validationError: string,
-): string {
-  return renderTemplate(gmOutcomeRetryTemplate, {
-    ...turnVars(table, intent, resolution),
-    validationError,
-  });
-}
-
-export function buildStartingLoadoutRetryMessage(
-  input: {
-    settings: CampaignSettings;
-    situation: string;
-    place: string;
-    currencyName: string;
-    characters: StartingLoadoutCharacterPrompt[];
-    plan: CampaignPlan | null;
-  },
-  validationError: string,
-): string {
-  return renderTemplate(startingLoadoutRetryTemplate, {
-    ...loadoutVars(input),
-    validationError,
-  });
-}
