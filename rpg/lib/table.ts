@@ -252,6 +252,16 @@ function snapshotRoomMap(table: TableState): Pick<TableSnapshot, "roomMapId" | "
   };
 }
 
+/** Keep a room map that finished while `next` was branched from an older table. */
+export function retainLiveRoomMap(live: TableState, next: TableState): TableState {
+  return {
+    ...next,
+    roomMaps: live.roomMaps,
+    roomMapBusy: live.roomMapBusy,
+    revision: next.revision > live.revision ? next.revision : live.revision + 1,
+  };
+}
+
 function normalizeTableCharacter(character: TableCharacter): TableCharacter {
   return {
     ...character,

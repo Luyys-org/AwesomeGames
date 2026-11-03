@@ -62,6 +62,7 @@ import {
   emptyLocation,
   markLoadoutFailed,
   parseSnapshot,
+  retainLiveRoomMap,
   setCharacterReady,
   startCampaign,
   toPublicCharacter,
@@ -961,18 +962,18 @@ async function resolveGmIntent(session: Session, intent: GmIntent): Promise<void
       hostAi,
       intent,
       async (mid) => {
-        if (current !== session || session.hidden) return false;
-        rememberTable(session, mid);
+        if (current !== session || session.hidden || !session.table) return false;
+        rememberTable(session, retainLiveRoomMap(session.table, mid));
         await broadcastSnapshot(session);
         return current === session && !session.hidden;
       },
       proseDraft(session),
     );
-    if (current !== session || session.hidden) return;
-    const nextTable: TableState = {
+    if (current !== session || session.hidden || !session.table) return;
+    const nextTable = retainLiveRoomMap(session.table, {
       ...turn.table,
       gmTurnCount: (turn.table.gmTurnCount ?? 0) + 1,
-    };
+    });
     rememberTable(session, nextTable);
     await broadcastSnapshot(session);
     if (turn.beat) {
